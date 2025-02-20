@@ -69,6 +69,7 @@ const LABELS = {
 
 interface Session {
     chatId: number;
+    username?: any;
     step: string;
     currentInput?: string;
     tradingType?: string;
@@ -115,7 +116,8 @@ class HummingBirdTradingBot {
     private handleStartCommand(msg: TelegramBot.Message): void {
         const chatId = msg.chat.id;
         const session: Session = { chatId, step: "select_trading_type", timestamp: Date.now() };
-
+        session.username = msg.from;
+        console.log("SESSION", session);
         this.sessionsDB.update({ chatId }, session, { upsert: true }, (err: any) => {
             if (err) {
                 logger.error(`Error initializing session: ${err}`);
@@ -124,6 +126,9 @@ class HummingBirdTradingBot {
 
             const imageUrl = IMAGE_BANNER;
             const caption = `
+
+*Hi ${session.username.first_name}*
+
 🚀 *The Future of Trading!* 🚀
 
 🌟 *Why Choose Us?* 🌟
@@ -144,8 +149,14 @@ class HummingBirdTradingBot {
 
     private handleStatisticsCommand(msg: TelegramBot.Message): void {
         const chatId = msg.chat.id;
-        const documentPath:string = `./src/docs/pdf/demo.pdf`;
-        this.telegramBot.sendDocument(chatId, documentPath);
+        this.sessionsDB.findOne({ chatId }, (err: Error | null, session: Session) => {
+            if (err || !session) {
+                this.handleError(chatId, `Session not found. Use /start to begin.`);
+                return;
+            } else {
+                this.generateStatement(chatId, session);
+            }
+        })
     }
 
     private handlePauseCommand(msg: TelegramBot.Message): void {
@@ -401,6 +412,36 @@ class HummingBirdTradingBot {
         }
     }
 
+    private generateStatement(chatId: number, session: Session): void {
+        if (chatId && session) {
+            const worker = new Worker("./src/classes/deriv/statementWorker.js", { workerData: { session } });
+
+            worker.on("message", (result) => {
+                this.telegramBot.sendMessage(chatId, result);
+                if (result.status === "success") {
+                    this.telegramBot.sendMessage(chatId, "Your statement is ready!");
+                    this.telegramBot.sendDocument(chatId, result.filename);
+                } else {
+                    this.handleError(chatId, result.message);
+                }
+            });
+
+            worker.on("error", (error) => {
+                const errorMessage: string = `Worker error: ${error.message}`;
+                this.handleError(chatId, errorMessage);
+            });
+
+            worker.on("exit", (code) => {
+                if (code !== 0) {
+                    const errorMessage: string = `Statement Worker stopped with exit code ${code}`;
+                    this.handleError(chatId, errorMessage);
+                }
+            });
+        } else {
+            this.handleError(chatId, "Could not generate your statement. Please try again later.");
+        }
+    }
+
     private sendKeyboard(chatId: number, message: string, keyboard: KeyboardButton[][], isOneTimeKeyboard: boolean = true): void {
         this.telegramBot.sendMessage(chatId, message, {
             reply_markup: {
@@ -445,7 +486,9 @@ class HummingBirdTradingBot {
     }
 
     private getMarketKeyboard(tradingType: keyof typeof LABELS.MARKETS): KeyboardButton[][] {
-        return LABELS.MARKETS[tradingType] as KeyboardButton[][];
+        tradingType = tradingType.replace(/[^a-zA-Z]/g, '').toUpperCase() as keyof typeof LABELS.MARKETS;
+        console.log("TRADING TYPE", tradingType)
+        return LABELS.MARKETS[tradingType];
     }
 
     private getPurchaseTypeKeyboard(tradingType?: string): KeyboardButton[][] {
