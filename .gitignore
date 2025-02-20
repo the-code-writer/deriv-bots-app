@@ -28,3 +28,5 @@ dist-ssr
 *.zip
 *.rar
 *.db
+.vercel
+src/db/sessions/telegram-bot-sessions.json
