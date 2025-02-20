@@ -1,11 +1,13 @@
 import TelegramBot from "node-telegram-bot-api";
 import Datastore from "nedb";
 import { Worker } from "worker_threads";
-import fs from "fs";
-import axios from "axios";
-import dotenv from "dotenv";
+import { env } from "@/common/utils/envConfig";
+import { extractAmount, formatToMoney, isCurrency } from "@/common/utils/snippets";
+import { pino } from "pino";
 
-dotenv.config();
+const logger = pino({ name: "TelegramBot" });
+
+const { TELEGRAM_BOT_TOKEN, TELEGRAM_SESSION_DB } = env;
 
 interface Session {
     chatId: number;
@@ -26,35 +28,40 @@ class HummingBirdTradingBot {
     private bot: TelegramBot;
     private sessionsDB: Datastore;
 
+    private collectedDigits: string = '';
+
     constructor() {
-        const token = process.env.TELEGRAM_BOT_TOKEN;
-        if (!token) {
+        logger.info("Initializing...");
+        if (!TELEGRAM_BOT_TOKEN) {
             throw new Error("Telegram bot token is not defined in environment variables.");
         }
-        this.bot = new TelegramBot(token, { polling: true });
-        this.sessionsDB = new Datastore({ filename: "sessions.db", autoload: true });
-
+        this.bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+        this.sessionsDB = new Datastore({ filename: `./src/db/sessions/${TELEGRAM_SESSION_DB}`, autoload: true });
         this.initializeBot();
+
+        
     }
 
     private initializeBot(): void {
-        this.bot.onText(/\/start/, (msg: string) => this.handleStartCommand(msg));
-        this.bot.onText(/\/stats/, (msg: string) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/pause/, (msg: string) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/cancel/, (msg: string) => this.handleCancelCommand(msg));
-        this.bot.on("message", (msg:string) => this.handleMessage(msg));
-        this.bot.on("polling_error", (error:any) => this.handlePollingError(error));
+        this.bot.onText(/\/start/, (msg: TelegramBot.Message) => this.handleStartCommand(msg));
+        this.bot.onText(/\/stats/, (msg: TelegramBot.Message) => this.handleStatisticsCommand(msg));
+        this.bot.onText(/\/pause/, (msg: TelegramBot.Message) => this.handlePauseCommand(msg));
+        this.bot.onText(/\/cancel/, (msg: TelegramBot.Message) => this.handleCancelCommand(msg));
+        this.bot.on("message", (msg: TelegramBot.Message) => this.handleMessage(msg));
+        this.bot.on("polling_error", (error: any) => this.handlePollingError(error));
 
         setInterval(() => this.cleanupInactiveSessions(), 60 * 1000);
+
+        logger.info("TelegramBot initialized");
     }
 
     private handleStartCommand(msg: TelegramBot.Message): void {
         const chatId = msg.chat.id;
         const session: Session = { chatId, step: "select_trading_type", timestamp: Date.now() };
 
-        this.sessionsDB.update({ chatId }, session, { upsert: true }, (err:any) => {
+        this.sessionsDB.update({ chatId }, session, { upsert: true }, (err: any) => {
             if (err) {
-                console.error(`Error initializing session: ${err}`);
+                logger.error(`Error initializing session: ${err}`);
                 return;
             }
 
@@ -82,7 +89,7 @@ class HummingBirdTradingBot {
         const chatId = msg.chat.id;
         this.sessionsDB.remove({ chatId }, {}, (err: any) => {
             if (err) {
-                console.error(`Error gettings statistics: ${err}`);
+                logger.error(`Error gettings statistics: ${err}`);
                 return;
             }
             this.bot.sendMessage(chatId, "Bot statistics");
@@ -93,7 +100,7 @@ class HummingBirdTradingBot {
         const chatId = msg.chat.id;
         this.sessionsDB.remove({ chatId }, {}, (err: any) => {
             if (err) {
-                console.error(`Error pausing trade: ${err}`);
+                logger.error(`Error pausing trade: ${err}`);
                 return;
             }
             this.bot.sendMessage(chatId, "Your trades have been paused. Use /resume to continue again.");
@@ -102,9 +109,9 @@ class HummingBirdTradingBot {
 
     private handleCancelCommand(msg: TelegramBot.Message): void {
         const chatId = msg.chat.id;
-        this.sessionsDB.remove({ chatId }, {}, (err:any) => {
+        this.sessionsDB.remove({ chatId }, {}, (err: any) => {
             if (err) {
-                console.error(`Error removing session: ${err}`);
+                logger.error(`Error removing session: ${err}`);
                 return;
             }
             this.bot.sendMessage(chatId, "Your session has been reset. Use /start to begin again.");
@@ -113,11 +120,12 @@ class HummingBirdTradingBot {
 
     private handleMessage(msg: TelegramBot.Message): void {
         const chatId = msg.chat.id;
-        const text = msg.text;
+        const text: string = msg.text || '';
 
         this.sessionsDB.findOne({ chatId }, (err: Error | null, session: Session) => {
             if (err || !session) {
                 this.bot.sendMessage(chatId, "Session not found. Use /start to begin.");
+                logger.error(`Session not found. Use /start to begin: ChaitID:${chatId}`);
                 return;
             }
 
@@ -171,97 +179,113 @@ class HummingBirdTradingBot {
         session.purchaseType = text;
         session.step = "enter_stake";
         this.updateSession(chatId, session);
-        this.sendKeyboard(chatId, "Please enter the base stake or investment:", this.getNumericInputKeyboard());
+        this.showBaseStakeKeyboard(chatId);
+    }
+
+
+    private getAutomaticStake(): number {
+
+        return 1;
+
+    }
+
+    private showBaseStakeKeyboard(chatId: number): void {
+
+        this.sendKeyboard(chatId, "Please enter the Base Stake or Investment amount (USD):", this.getNumericInputKeyboard(), true);
+
+    }
+
+    private showTakeProfitThresholdKeyboard(chatId: number): void {
+
+        this.sendKeyboard(chatId, "Please enter your Take Profit amount (USD):", this.getNumericInputKeyboard(), true);
+
+    }
+
+    private showStopLossThresholdKeyboard(chatId: number): void {
+
+        this.sendKeyboard(chatId, "Please enter your Stop Loss amount (USD):", this.getNumericInputKeyboard(), true);
+
+    }
+
+    private showTradeDurationKeyboard(chatId: number): void {
+
+        this.sendKeyboard(chatId, "How long should this trade last?", this.getDurationKeyboard(), true);
+
+    }
+
+    private showTradeUpdateFrequencyKeyboard(chatId: number): void {
+
+        this.sendKeyboard(chatId, "How long should you get the trade updates?", this.getDurationKeyboard(), true);
+
+    }
+
+    private showTradeConfirmKeyboard(chatId: number, message: string): void {
+
+        this.sendKeyboard(chatId, message, this.getTradeConfirmKeyboard(), true);
+
+    }
+
+    private handleError(chatId: number, message: string): void {
+        this.bot.sendMessage(chatId, `An error occurred. Please try again later: ${message}`);
+        logger.error(`Error: ${message}: ChaitID:${chatId}`);
+    }
+
+    private validateAndUpdateAmount(chatId: number, text: string, session: Session, field: keyof Session, nextStep: string, errorMessage: string, showNextKeyboard: any, showCurrentKeyboard: any): void {
+        if (text === "Automatic") {
+            session[field] = this.getAutomaticStake(session.step);
+            session.step = nextStep;
+            this.updateSession(chatId, session);
+            showNextKeyboard();
+            return;
+        }
+        if (isCurrency(text)) {
+            const amount = extractAmount(text);
+            const value = parseFloat(`${amount}`);
+            if (isNaN(value) || value <= 0) {
+                session[field] = 0;
+                this.updateSession(chatId, session);
+                this.bot.sendMessage(chatId, errorMessage);
+                showCurrentKeyboard();
+                return;
+            } else {
+                session[field] = value;
+                session.step = nextStep;
+                this.updateSession(chatId, session);
+                showNextKeyboard();
+                return;
+            }
+        } else {
+            session[field] = 0;
+            this.updateSession(chatId, session);
+            this.bot.sendMessage(chatId, errorMessage);
+            showCurrentKeyboard();
+            return;
+        }
     }
 
     private handleStakeInput(chatId: number, text: string, session: Session): void {
-        if (text === "Cancel") {
-            // Clear the current input
-            session.currentInput = "";
-            this.updateSession(chatId, session);
-            this.bot.sendMessage(chatId, "Input cleared. Please enter the stake again.");
-            return;
-        }
 
-        if (text === "Enter") {
-            // Confirm the input
-            if (!session.currentInput || session.currentInput.length === 0) {
-                this.bot.sendMessage(chatId, "No input detected. Please enter a valid number.");
-                return;
-            }
+        this.validateAndUpdateAmount(chatId, text, session, 'stake', 'enter_take_profit', 'You have entered an invalid amount.', () => this.showTakeProfitThresholdKeyboard(chatId), () => this.showBaseStakeKeyboard(chatId));
 
-            const stake = parseFloat(session.currentInput);
-            if (isNaN(stake)) {
-                this.bot.sendMessage(chatId, "Invalid input. Please enter a valid number.");
-                return;
-            }
-
-            session.stake = stake;
-            session.currentInput = ""; // Reset current input
-            session.step = "enter_take_profit";
-            this.updateSession(chatId, session);
-
-            this.sendKeyboard(
-                chatId,
-                "Please enter the take profit threshold:",
-                this.getNumericInputKeyboard()
-            );
-            return;
-        }
-
-        // Append the digit or decimal to the current input
-        session.currentInput = (session.currentInput || "") + text;
-        this.updateSession(chatId, session);
-
-        // Show the current input to the user
-        this.bot.sendMessage(chatId, `Current input: ${session.currentInput}`);
     }
 
     private handleTakeProfitInput(chatId: number, text: string, session: Session): void {
-        if (text === "C") {
-            session.step = "enter_stake";
-            this.updateSession(chatId, session);
-            this.bot.sendMessage(chatId, "Take profit input cleared. Please re-enter the stake.");
-            return;
-        }
 
-        const takeProfit = parseFloat(text);
-        if (isNaN(takeProfit) || takeProfit <= 0) {
-            this.bot.sendMessage(chatId, "Invalid take profit amount. Please enter a valid number.");
-            return;
-        }
+        this.validateAndUpdateAmount(chatId, text, session, 'takeProfit', 'enter_stop_loss', 'You have entered an invalid amount.', () => this.showStopLossThresholdKeyboard(chatId), () => this.showTakeProfitThresholdKeyboard(chatId));
 
-        session.takeProfit = takeProfit;
-        session.step = "enter_stop_loss";
-        this.updateSession(chatId, session);
-        this.sendKeyboard(chatId, "Please enter the stop loss threshold:", this.getNumericInputKeyboard());
     }
 
     private handleStopLossInput(chatId: number, text: string, session: Session): void {
-        if (text === "C") {
-            session.step = "enter_take_profit";
-            this.updateSession(chatId, session);
-            this.bot.sendMessage(chatId, "Stop loss input cleared. Please re-enter the take profit.");
-            return;
-        }
 
-        const stopLoss = parseFloat(text);
-        if (isNaN(stopLoss) || stopLoss <= 0) {
-            this.bot.sendMessage(chatId, "Invalid stop loss amount. Please enter a valid number.");
-            return;
-        }
+        this.validateAndUpdateAmount(chatId, text, session, 'stopLoss', 'select_trade_duration', 'You have entered an invalid amount.', () => this.showTradeDurationKeyboard(chatId), () => this.showStopLossThresholdKeyboard(chatId));
 
-        session.stopLoss = stopLoss;
-        session.step = "select_trade_duration";
-        this.updateSession(chatId, session);
-        this.sendKeyboard(chatId, "How long should this trade last?", this.getDurationKeyboard());
     }
 
     private handleTradeDurationSelection(chatId: number, text: string, session: Session): void {
         session.tradeDuration = text;
         session.step = "select_update_frequency";
         this.updateSession(chatId, session);
-        this.sendKeyboard(chatId, "How frequent should you get updates?", this.getDurationKeyboard());
+        this.showTradeUpdateFrequencyKeyboard(chatId);
     }
 
     private handleUpdateFrequencySelection(chatId: number, text: string, session: Session): void {
@@ -270,37 +294,42 @@ class HummingBirdTradingBot {
         this.updateSession(chatId, session);
 
         const confirmationMessage = `
-      Please confirm your trade:
-      - Market: ${session.market}
-      - Purchase Type: ${session.purchaseType}
-      - Stake: ${session.stake}
-      - Take Profit: ${session.takeProfit}
-      - Stop Loss: ${session.stopLoss}
-      - Duration: ${session.tradeDuration}
-      - Update Frequency: ${session.updateFrequency}
+      ⚠️ Please confirm your trade:
+
+      🔹 Market: ${session.market}
+
+      🔹 Purchase Type: ${session.purchaseType}
+      🔹 Stake: ${formatToMoney(session.stake)}
+      🔹 Take Profit: ${formatToMoney(session.takeProfit)}
+      🔹 Stop Loss: ${formatToMoney(session.stopLoss)}
+
+      🔹 Duration: ${session.tradeDuration}
+      🔹 Update Frequency: ${session.updateFrequency}
 
       Type /confirm to proceed or /cancel to reset.
     `;
 
-        this.bot.sendMessage(chatId, confirmationMessage);
+        this.showTradeConfirmKeyboard(chatId, confirmationMessage);
+
     }
 
     private handleTradeConfirmation(chatId: number, text: string, session: Session): void {
-        if (text === "/confirm") {
-            const worker = new Worker("./tradeWorker.js", { workerData: { session } });
+        if (text === "/confirm" || text === "✅ Confirm Trade") {
+            const worker = new Worker("./src/classes/deriv/tradeWorker.js", { workerData: { session } });
 
             worker.on("message", (message) => {
                 this.bot.sendMessage(chatId, message);
             });
 
             worker.on("error", (error) => {
-                console.error(`Worker error: ${error.message}`);
-                this.bot.sendMessage(chatId, `Failed to place trade. Please try again later.`);
+                const errorMessage: string = `Worker error: ${error.message}`;
+                this.handleError(chatId, errorMessage);
             });
 
             worker.on("exit", (code) => {
                 if (code !== 0) {
-                    console.error(`Worker stopped with exit code ${code}`);
+                    const errorMessage: string = `Trade Worker stopped with exit code ${code}`;
+                    this.handleError(chatId, errorMessage);
                 }
             });
         } else {
@@ -308,24 +337,24 @@ class HummingBirdTradingBot {
         }
     }
 
-    private sendKeyboard(chatId: number, message: string, keyboard: string[][]): void {
+    private sendKeyboard(chatId: number, message: string, keyboard: string[][] | KeyboardButton[][] | KeyboardButton[] | KeyboardButton, isOneTimeKeyboard: boolean = true): void {
         this.bot.sendMessage(chatId, message, {
             reply_markup: {
                 keyboard: keyboard,
                 resize_keyboard: true,
-                one_time_keyboard: true,
+                one_time_keyboard: isOneTimeKeyboard,
             },
         });
     }
 
     private updateSession(chatId: number, session: Session): void {
-        this.sessionsDB.update({ chatId }, session, {}, (err:any) => {
-            if (err) console.error(`Error updating session: ${err}`);
+        this.sessionsDB.update({ chatId }, session, {}, (err: any) => {
+            if (err) logger.error(`Error updating session: ${err}`);
         });
     }
 
     private handlePollingError(error: Error): void {
-        console.error(`Polling error: ${error.message}`);
+        logger.error(`Polling error: ${error.message}`);
     }
 
     private cleanupInactiveSessions(): void {
@@ -335,8 +364,8 @@ class HummingBirdTradingBot {
 
             sessions.forEach((session) => {
                 if (now - (session.timestamp || 0) > 30 * 60 * 1000) {
-                    this.sessionsDB.remove({ chatId: session.chatId }, {}, (err:any) => {
-                        if (err) console.error(`Error removing inactive session: ${err}`);
+                    this.sessionsDB.remove({ chatId: session.chatId }, {}, (err: any) => {
+                        if (err) logger.error(`Error removing inactive session: ${err}`);
                     });
                 }
             });
@@ -354,20 +383,13 @@ class HummingBirdTradingBot {
         switch (tradingType) {
             case "Forex 🌍":
                 return [
-                    ["AUD/JPY (Australian Dollar / Japanese Yen) 🇦🇺"],
-                    ["AUD/USD (Australian Dollar / US Dollar) 🇦🇺"],
-                    ["EUR/AUD (Euro / Australian Dollar) 🇪🇺"],
-                    ["EUR/CAD (Euro / Canadian Dollar) 🇪🇺"],
-                    ["EUR/CHF (Euro / Swiss Franc) 🇪🇺"],
-                    ["EUR/GBP (Euro / British Pound) 🇪🇺"],
-                    ["EUR/JPY (Euro / Japanese Yen) 🇪🇺"],
-                    ["EUR/USD (Euro / US Dollar) 🇪🇺"],
-                    ["GBP/AUD (British Pound / Australian Dollar) 🇬🇧"],
-                    ["GBP/JPY (British Pound / Japanese Yen) 🇬🇧"],
-                    ["GBP/USD (British Pound / US Dollar) 🇬🇧"],
-                    ["USD/CAD (US Dollar / Canadian Dollar) 🇺🇸"],
-                    ["USD/CHF (US Dollar / Swiss Franc) 🇺🇸"],
-                    ["USD/JPY (US Dollar / Japanese Yen) 🇺🇸"],
+                    ["AUD/JPY 🇦🇺🇯🇵", "AUD/USD 🇦🇺🇺🇸"],
+                    ["EUR/AUD 🇪🇺🇦🇺", "EUR/CAD 🇪🇺🇨🇦"],
+                    ["EUR/CHF 🇪🇺🇨🇭", "EUR/GBP 🇪🇺🇬🇧"],
+                    ["EUR/JPY 🇪🇺🇯🇵", "EUR/USD 🇪🇺🇺🇸"],
+                    ["GBP/AUD 🇬🇧🇦🇺", "GBP/JPY 🇬🇧🇯🇵"],
+                    ["GBP/USD 🇬🇧🇺🇸", "USD/CAD 🇺🇸🇨🇦"],
+                    ["USD/CHF 🇺🇸🇨🇭", "USD/JPY 🇺🇸🇯🇵"]
                 ];
             case "Derivatives 📊":
                 return [
@@ -408,11 +430,13 @@ class HummingBirdTradingBot {
 
     private getNumericInputKeyboard(): string[][] {
         return [
-            ["1", "2", "3"],
-            ["4", "5", "6"],
-            ["7", "8", "9"],
-            [".", "0", ".00"],
-            ["Cancel", "Enter"],
+            ["$0.35", "$0.50", "$0.75"],
+            ["$1.00", "$2.00", "$5.00"],
+            ["$10.00", "$15.00", "$20.00"],
+            ["$25.00", "$50.00", "$75.00"],
+            ["$100.00", "$200.00", "$500.00"],
+            ["$750.00", "$1,000.00", "$2,000.00"],
+            ["$2,500.00", "Automatic", "$5,000.00"],
         ];
     }
 
@@ -424,6 +448,12 @@ class HummingBirdTradingBot {
             ["24hrs ⏱️"],
         ];
     }
+    private getTradeConfirmKeyboard(): string[][] {
+        return [
+            ["✅ Confirm Trade", "❌ Cancel Trade"],
+        ];
+    }
+
 }
 
 export default HummingBirdTradingBot;

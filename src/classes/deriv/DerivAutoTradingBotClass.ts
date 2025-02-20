@@ -5,7 +5,19 @@ const DerivAPI = require('@deriv/deriv-api/dist/DerivAPI');
 import 'dotenv/config';
 
 // Define types for better type safety
-type PurchaseType = 'DIGITDIFF' | 'DIGITUNDEROVER' | 'DIGITUNDER';
+const PurchaseTypeEnum = {
+    DigitDiff: 'DIGITDIFF',
+    DigitOver: 'DIGITOVER',
+    DigitUnder: 'DIGITUNDER',
+    DigitOver0Under9: 'DIGITUNDER9_DIGITOVER_0',
+    DigitOver1Under8: 'DIGITUNDER8_DIGITOVER_1',
+    DigitOver2Under7: 'DIGITUNDER7_DIGITOVER_2',
+    DigitEven: 'EVEN',
+    DigitOdd: 'ODD'
+};
+type PurchaseType = 'DIGITDIFF' | 'DIGITOVER' | 'DIGITUNDER' | 'DIGITUNDER9_DIGITOVER_0' | 'DIGITUNDER8_DIGITOVER_1' | 'DIGITUNDER7_DIGITOVER_2' | 'EVEN' | 'ODD' | PurchaseTypeEnum;
+type TradingType = 'FOREX' | 'VOLATILITY' | 'CRYPTO' | 'COMMODITIES';
+type MarketType = 'R_100';
 type Prediction = 'UNDER' | 'OVER';
 type ContractResponse = {
     buy?: {
@@ -15,7 +27,8 @@ type ContractResponse = {
 
 class DerivAutoTradingBot {
     // Private properties with explicit types
-    private _defaultMarket: string;
+    private _tradingType: TradingType;
+    private _defaultMarket: MarketType;
     private _currentStake: number;
     private _baseStake: number;
     private _maxStake: number;
@@ -34,9 +47,9 @@ class DerivAutoTradingBot {
     private connection: WebSocket;
     private api: any;
 
-    expected_payout = process.env.EXPECTED_PAYOUT || 19;
+    expected_payout = process.env.EXPECTED_PAYOUT || 10.25;
 
-    constructor(defaultMarket: string = 'R_100') {
+    constructor(tradingType: TradingType = 'VOLATILITY', defaultMarket: MarketType = 'R_100') {
         // Initialize Deriv API
         this.connection = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
 
@@ -47,19 +60,14 @@ class DerivAutoTradingBot {
 
         this.api = new DerivAPI({ connection: this.connection });
 
-        const config = {
-            minStake: parseFloat(process.env.MIN_STAKE || '0.35'),
-            maxStake: parseFloat(process.env.MAX_STAKE || '1000'),
-            profitPercentage: parseFloat(process.env.PROFIT_PERCENTAGE || '0.0964'),
-        };
-
         // Initialize private properties with explicit types
+        this._tradingType = tradingType;
         this._defaultMarket = defaultMarket;
-        this._currentStake = 0.35;
-        this._baseStake = 0.35;
-        this._maxStake = 1000;
-        this._minStake = 0.35;
-        this._maxRecoveryTrades = 5;
+        this._currentStake = parseFloat(process.env.MIN_STAKE || '0.35');
+        this._baseStake = parseFloat(process.env.MIN_STAKE || '0.35');
+        this._maxStake = parseFloat(process.env.MAX_STAKE || '1000');
+        this._minStake = parseFloat(process.env.MIN_STAKE || '0.35');
+        this._maxRecoveryTrades = parseInt(process.env.MAX_RECOVERY_TRADES || '5');
         this._recoveryTrades = 0;
         this._profit = 0;
         this._isTrading = false;
@@ -90,23 +98,33 @@ class DerivAutoTradingBot {
 
         const account = await this.api.account(process.env.DERIV_BOT_TOKEN);
 
-        const { balance, currency } = account;
+        const { balance } = account;
 
-        console.log(`Your current balance is: ${balance.currency} ${balance.display}`);
+        console.log(`Balance:`, [balance.currency, parseFloat(balance.display)]);
 
-        balance.onUpdate(() => {
-            console.log(`Your new balance is: ${balance.currency} ${balance.display}`);
+        balance.onUpdate((val:any) => {
+            console.log(`Balance:`, [val.currency, parseFloat(val.value)]);
         });
+
+        return account;
 
     }
 
 
     // Getters and Setters for private properties
-    get defaultMarket(): string {
+    get tradingType(): TradingType {
+        return this._tradingType;
+    }
+
+    set tradingType(value: TradingType) {
+        this._tradingType = value;
+    }
+
+    get defaultMarket(): MarketType {
         return this._defaultMarket;
     }
 
-    set defaultMarket(value: string) {
+    set defaultMarket(value: MarketType) {
         this._defaultMarket = value;
     }
 
@@ -239,39 +257,119 @@ class DerivAutoTradingBot {
             basis: 'stake',
             contract_type: 'DIGITDIFF',
             currency: 'USD',
-            duration: 5,
+            duration: 1,
             duration_unit: 't',
             symbol: this.defaultMarket,
             barrier: predictedDigit.toString(),
         };
 
         // Calculate profit percentage for DIGIT DIFF
-        this.profitPercentage = this.calculateProfitPercentage('DIGITDIFF');
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitDiff, this.currentStake);
 
         return this.purchaseContract(contractParameters);
     }
 
-    // Purchase DIGIT UNDER/OVER contract (private)
-    private async purchaseDigitUnderOver(prediction: Prediction, barrier: number): Promise<ContractResponse> {
+    // Purchase DIGIT OVER contract (private)
+    private async purchaseDigitOver(barrier: number): Promise<ContractResponse> {
         const contractParameters = {
             proposal: 1,
             amount: this.currentStake.toString(),
             basis: 'stake',
-            contract_type: prediction === 'UNDER' ? 'DIGITUNDER' : 'DIGITOVER',
+            contract_type: 'DIGITOVER',
             currency: 'USD',
-            duration: 5,
+            duration: 1,
             duration_unit: 't',
             symbol: this.defaultMarket,
             barrier: barrier.toString(),
         };
 
-        // Calculate profit percentage for DIGIT UNDER/OVER
-        this.profitPercentage = this.calculateProfitPercentage('DIGITUNDEROVER', prediction);
+        // Calculate profit percentage for DIGIT OVER
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitOver, this.currentStake);
 
         return this.purchaseContract(contractParameters);
     }
 
-    // Purchase DIGIT UNDER 9 contract (for recovery) (private)
+    // Purchase DIGIT OVER 0 contract (private)
+    private async purchaseDigitOver0(): Promise<ContractResponse> {
+        const contractParameters = {
+            proposal: 1,
+            amount: this.currentStake.toString(),
+            basis: 'stake',
+            contract_type: 'DIGITOVER',
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: this.defaultMarket,
+            barrier: 0,
+        };
+
+        // Calculate profit percentage for DIGIT UNDER 9
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitOver0Under9, this.currentStake);
+
+        return this.purchaseContract(contractParameters);
+    }
+
+    // Purchase DIGIT OVER 1 contract (private)
+    private async purchaseDigitOver1(): Promise<ContractResponse> {
+        const contractParameters = {
+            proposal: 1,
+            amount: this.currentStake.toString(),
+            basis: 'stake',
+            contract_type: 'DIGITOVER',
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: this.defaultMarket,
+            barrier: 1,
+        };
+
+        // Calculate profit percentage for DIGIT OVER 1
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitOver1Under8, this.currentStake);
+
+        return this.purchaseContract(contractParameters);
+    }
+
+    // Purchase DIGIT OVER 2 contract (private)
+    private async purchaseDigitOver2(): Promise<ContractResponse> {
+        const contractParameters = {
+            proposal: 1,
+            amount: this.currentStake.toString(),
+            basis: 'stake',
+            contract_type: 'DIGITOVER',
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: this.defaultMarket,
+            barrier: 2,
+        };
+
+        // Calculate profit percentage for DIGIT OVER 2
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitOver2Under7, this.currentStake);
+
+        return this.purchaseContract(contractParameters);
+    }
+
+    // Purchase DIGIT UNDER contract (private)
+    private async purchaseDigitUnder(barrier: number): Promise<ContractResponse> {
+        const contractParameters = {
+            proposal: 1,
+            amount: this.currentStake.toString(),
+            basis: 'stake',
+            contract_type: 'DIGITUNDER',
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: this.defaultMarket,
+            barrier: barrier.toString(),
+        };
+
+        // Calculate profit percentage for DIGIT UNDER
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitUnder, this.currentStake);
+
+        return this.purchaseContract(contractParameters);
+    }
+
+    // Purchase DIGIT UNDER 9 contract (private)
     private async purchaseDigitUnder9(): Promise<ContractResponse> {
         const contractParameters = {
             proposal: 1,
@@ -279,14 +377,94 @@ class DerivAutoTradingBot {
             basis: 'stake',
             contract_type: 'DIGITUNDER',
             currency: 'USD',
-            duration: 5,
+            duration: 1,
             duration_unit: 't',
             symbol: this.defaultMarket,
-            barrier: '9',
+            barrier: 9,
         };
 
         // Calculate profit percentage for DIGIT UNDER 9
-        this.profitPercentage = this.calculateProfitPercentage('DIGITUNDER');
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitOver0Under9, this.currentStake);
+
+        return this.purchaseContract(contractParameters);
+    }
+
+    // Purchase DIGIT UNDER 8 contract (private)
+    private async purchaseDigitUnder8(): Promise<ContractResponse> {
+        const contractParameters = {
+            proposal: 1,
+            amount: this.currentStake.toString(),
+            basis: 'stake',
+            contract_type: 'DIGITUNDER',
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: this.defaultMarket,
+            barrier: 8,
+        };
+
+        // Calculate profit percentage for DIGIT UNDER 8
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitOver1Under8, this.currentStake);
+
+        return this.purchaseContract(contractParameters);
+    }
+
+    // Purchase DIGIT UNDER 7 contract (private)
+    private async purchaseDigitUnder7(): Promise<ContractResponse> {
+        const contractParameters = {
+            proposal: 1,
+            amount: this.currentStake.toString(),
+            basis: 'stake',
+            contract_type: 'DIGITUNDER',
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: this.defaultMarket,
+            barrier: 7,
+        };
+
+        // Calculate profit percentage for DIGIT UNDER 7
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitOver2Under7, this.currentStake);
+
+        return this.purchaseContract(contractParameters);
+    }
+
+    // Purchase DIGIT EVEN contract (private)
+    private async purchaseDigitEven(): Promise<ContractResponse> {
+        const contractParameters = {
+            proposal: 1,
+            amount: this.currentStake.toString(),
+            basis: 'stake',
+            contract_type: 'DIGITEVEN',
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: this.defaultMarket,
+            barrier: 'EVEN',
+        };
+
+        // Calculate profit percentage for DIGIT EVEN
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitEven, this.currentStake);
+
+        return this.purchaseContract(contractParameters);
+    }
+
+    // Purchase DIGIT ODD contract (private)
+    private async purchaseDigitOdd(): Promise<ContractResponse> {
+        const contractParameters = {
+            proposal: 1,
+            amount: this.currentStake.toString(),
+            basis: 'stake',
+            contract_type: 'DIGITODD',
+            currency: 'USD',
+            duration: 1,
+            duration_unit: 't',
+            symbol: this.defaultMarket,
+            barrier: 'ODD',
+        };
+
+        // Calculate profit percentage for DIGIT ODD
+        this.profitPercentage = this.calculateProfitPercentage(PurchaseTypeEnum.DigitOdd, this.currentStake);
 
         return this.purchaseContract(contractParameters);
     }
@@ -297,18 +475,141 @@ class DerivAutoTradingBot {
     }
 
     // Calculate profit percentage based on purchase type and prediction (private)
-    private calculateProfitPercentage(purchaseType: PurchaseType, prediction?: Prediction): number {
-        switch (purchaseType) {
-            case 'DIGITDIFF':
-                return 0.0964; // 9.64%
-            case 'DIGITUNDEROVER':
-                return prediction === 'UNDER' ? 0.85 : 0.90; // 85% or 90%
-            case 'DIGITUNDER':
-                return 0.95; // 95%
-            default:
-                console.log('Unknown purchase type. Using default profit percentage.');
-                return 0.0964; // Default to 9.64%
+    private calculateProfitPercentage(purchaseType: PurchaseType, stake: number): number {
+
+        let rewardPercentage: number = 0;
+
+        // Define the reward percentages for Even
+        const evenRewards = [
+            { stake: 0.35, reward: 0.8857 },
+            { stake: 0.50, reward: 0.92 },
+            { stake: 0.75, reward: 0.9467 },
+            { stake: 1, reward: 0.95 },
+            { stake: 2, reward: 0.955 },
+            { stake: 3, reward: 0.9533 },
+            { stake: 4, reward: 0.9525 },
+            { stake: 5, reward: 0.954 }
+        ];
+
+        // Define the reward percentages for Digit Differs
+        const digitDiffersRewards = [
+            { stake: 0.35, reward: 0.0571 },
+            { stake: 0.50, reward: 0.06 },
+            { stake: 0.75, reward: 0.08 },
+            { stake: 1, reward: 0.09 },
+            { stake: 2, reward: 0.095 },
+            { stake: 3, reward: 0.0967 },
+            { stake: 4, reward: 0.0975 },
+            { stake: 5, reward: 0.0967 }
+        ];
+
+        // Define the rewards for Digit Over/Under conditions
+        const digitOverUnderRewards = [
+            { stake: 0.35, reward: 0.0571 },
+            { stake: 0.50, reward: 0.06 },
+            { stake: 0.75, reward: 0.08 },
+            { stake: 1, reward: 0.09 },
+            { stake: 2, reward: 0.095 },
+            { stake: 3, reward: 0.0967 },
+            { stake: 4, reward: 0.0975 },
+            { stake: 5, reward: 0.0967 }
+        ];
+
+        const digitOver1Under8Rewards = [
+            { stake: 0.35, reward: 0.1714 },
+            { stake: 0.50, reward: 0.20 },
+            { stake: 0.75, reward: 0.2133 },
+            { stake: 1, reward: 0.23 },
+            { stake: 2, reward: 0.23 },
+            { stake: 3, reward: 0.23 },
+            { stake: 4, reward: 0.2325 },
+            { stake: 5, reward: 0.232 }
+        ];
+
+        const digitOver2Under7Rewards = [
+            { stake: 0.35, reward: 0.3429 },
+            { stake: 0.50, reward: 0.38 },
+            { stake: 0.75, reward: 0.3867 },
+            { stake: 1, reward: 0.40 },
+            { stake: 2, reward: 0.405 },
+            { stake: 3, reward: 0.4033 },
+            { stake: 4, reward: 0.405 },
+            { stake: 5, reward: 0.404 }
+        ];
+
+        // Determine the appropriate rewards based on purchaseType and stakes
+        if (purchaseType === PurchaseTypeEnum.DigitEven || purchaseType === PurchaseTypeEnum.DigitOdd) {
+            if (stake < evenRewards[evenRewards.length - 1].stake) {
+                for (const entry of evenRewards) {
+                    if (stake < entry.stake) {
+                        break;
+                    }
+                    rewardPercentage = entry.reward;
+                }
+                return (rewardPercentage * 100); // Return percentage as a whole number
+
+            } else {
+                return (evenRewards[evenRewards.length - 1].reward * 100); // Return percentage as a whole number
+            }
         }
+
+        if (purchaseType === PurchaseTypeEnum.DigitDiff) {
+            if (stake < digitDiffersRewards[digitDiffersRewards.length - 1].stake) {
+                for (const entry of digitDiffersRewards) {
+                    if (stake < entry.stake) {
+                        break;
+                    }
+                    rewardPercentage = entry.reward;
+                }
+                return (rewardPercentage * 100); // Return percentage as a whole number
+            } else {
+                return (digitDiffersRewards[digitDiffersRewards.length - 1].reward * 100); // Return percentage as a whole number
+            }
+        }
+
+        if (purchaseType === PurchaseTypeEnum.DigitOver0Under9) {
+            if (stake < digitOverUnderRewards[digitOverUnderRewards.length - 1].stake) {
+                for (const entry of digitOverUnderRewards) {
+                    if (stake < entry.stake) {
+                        break;
+                    }
+                    rewardPercentage = entry.reward;
+                }
+                return (rewardPercentage * 100); // Return percentage as a whole number
+            } else {
+                return (digitOverUnderRewards[digitOverUnderRewards.length - 1].reward * 100); // Return percentage as a whole number
+            }
+        }
+
+        if (purchaseType === PurchaseTypeEnum.DigitOver1Under8) {
+            if (stake < digitOver1Under8Rewards[digitOver1Under8Rewards.length - 1].stake) {
+                for (const entry of digitOver1Under8Rewards) {
+                    if (stake < entry.stake) {
+                        break;
+                    }
+                    rewardPercentage = entry.reward;
+                }
+                return (rewardPercentage * 100); // Return percentage as a whole number
+            } else {
+                return (digitOver1Under8Rewards[digitOver1Under8Rewards.length - 1].reward * 100); // Return percentage as a whole number
+            }
+        }
+
+        if (purchaseType === PurchaseTypeEnum.DigitOver2Under7) {
+            if (stake < digitOver2Under7Rewards[digitOver2Under7Rewards.length - 1].stake) {
+                for (const entry of digitOver2Under7Rewards) {
+                    if (stake < entry.stake) {
+                        break;
+                    }
+                    rewardPercentage = entry.reward;
+                }
+                return (rewardPercentage * 100); // Return percentage as a whole number
+            } else {
+                return (digitOver2Under7Rewards[digitOver2Under7Rewards.length - 1].reward * 100); // Return percentage as a whole number
+            }
+        }
+
+        return -1; // In case of an unsupported purchase type
     }
 
     // Calculate the next trading amount based on previous performance (private)
@@ -338,13 +639,14 @@ class DerivAutoTradingBot {
     }
 
     // Start trading with recovery logic (public)
-    async startTrading(market: string, stake: number, takeProfit: number, stopLoss: number): Promise<void> {
+    async startTrading(market: MarketType, purchaseType: PurchaseType, stake: number, takeProfit: number, stopLoss: number): Promise<void> {
 
         // Input validation
         if (stake <= 0) throw new Error('Stake must be a positive number.');
         if (!market) throw new Error('Market cannot be empty.');
 
         this.defaultMarket = market;
+        this.originalPurchaseType = purchaseType;
         this.baseStake = stake;
         this.currentStake = stake;
         this.takeProfit = takeProfit;
@@ -353,12 +655,8 @@ class DerivAutoTradingBot {
 
         while (this.isTrading) {
             try {
-                // Determine the purchase type
-                let purchaseType: PurchaseType = this.originalPurchaseType || 'DIGITDIFF';
+
                 let response: ContractResponse;
-
-
-
 
                 //TODO
                 /*
@@ -395,6 +693,7 @@ class DerivAutoTradingBot {
                 this.profit += profitAfterSale;
 
                 const individualStopLoss = 10; // Example: Stop loss of $10 per trade
+
                 if (profitAfterSale <= -individualStopLoss) {
                     console.log('Individual Stop Loss reached. Stopping trade.');
                     this.stopTrading();
@@ -427,17 +726,17 @@ class DerivAutoTradingBot {
 
                     //TODO
 
+                    if (this.recoveryTrades >= 3) {
+                        console.log('Max recovery trades reached. Resetting stake.');
+                        this.currentStake = this.baseStake;
+                        this.recoveryTrades = 0;
+                    }
+
                     // Stop trading if max recovery trades reached
                     if (this.recoveryTrades >= this.maxRecoveryTrades) {
                         console.log('Max recovery trades reached. Stopping trading.');
                         this.stopTrading();
                         break;
-                    }
-
-                    if (this.recoveryTrades >= 3) {
-                        console.log('Max recovery trades reached. Resetting stake.');
-                        this.currentStake = this.baseStake;
-                        this.recoveryTrades = 0;
                     }
 
                     // Sleep for 3 seconds after a loss
@@ -460,7 +759,7 @@ class DerivAutoTradingBot {
     async checkContract() {
 
         try {
-            const account = await this.api.account('BOT TOKEN');
+            const account = await this.api.account(process.env.DERIV_BOT_TOKEN);
 
             const { balance, currency } = account;
 

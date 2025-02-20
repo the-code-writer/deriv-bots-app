@@ -11,5 +11,7 @@ export const env = cleanEnv(process.env, {
   COMMON_RATE_LIMIT_MAX_REQUESTS: num({ devDefault: testOnly(1000) }),
   COMMON_RATE_LIMIT_WINDOW_MS: num({ devDefault: testOnly(1000) }),
   TELEGRAM_BOT_TOKEN: str({ devDefault: testOnly("") }),
+  TELEGRAM_SESSION_DB: str({ devDefault: testOnly("") }),
   DERIV_BOT_TOKEN: str({ devDefault: testOnly("") }),
+  APP_CRYPTOGRAPHIC_KEY: str({ devDefault: testOnly("") }),
 });
