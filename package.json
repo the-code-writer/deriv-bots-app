@@ -16,7 +16,7 @@
     "lint:fix": "biome check src/ --fix",
     "format": "biome format src/",
     "test": "vitest run",
-    "prepare": "husky"
+    "prepare": "node_modules/.bin/husky-run install"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.0.0",
@@ -27,7 +27,7 @@
     "crypto-js": "^4.2.0",
     "dotenv": "^16.4.5",
     "envalid": "^8.0.0",
-    "express": "^4.19.2", 
+    "express": "^4.19.2",
     "express-rate-limit": "^7.2.0",
     "helmet": "^8.0.0",
     "html-pdf": "^3.0.1",
@@ -59,7 +59,7 @@
     "tsx": "^4.7.2",
     "typescript": "^5.4.4",
     "vite-tsconfig-paths": "^5.0.0",
-    "vitest": "^2.0.0" 
+    "vitest": "^2.0.0"
   },
   "lint-staged": {
     "*.{js,ts,cjs,mjs,d.cts,d.mts,json,jsonc}": [
