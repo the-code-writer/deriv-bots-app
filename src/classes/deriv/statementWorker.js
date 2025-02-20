@@ -10,7 +10,7 @@ if (!session || !session.market || !session.stake) {
 
 const filename = `./src/docs/pdf/Statement (${session.username.username}).pdf`;
 
-let = table = "";
+let table = "";
 
 table += `
 <!DOCTYPE html>
