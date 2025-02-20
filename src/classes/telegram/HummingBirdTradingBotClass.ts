@@ -126,10 +126,11 @@ class HummingBirdTradingBot {
 
             const imageUrl = IMAGE_BANNER;
             const caption = `
+🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀
 
 *Hi ${session.username.first_name}*
 
-🚀 *The Future of Trading!* 🚀
+ *The Future of Trading!*
 
 🌟 *Why Choose Us?* 🌟
 
@@ -139,7 +140,7 @@ class HummingBirdTradingBot {
 
 - *Secure & Reliable*: Your data and investments are safe with us.
 
-📈 *Start Trading Today!* 📈
+*Start Trading Today!* 
       `;
 
             this.telegramBot.sendPhoto(chatId, imageUrl, { caption: caption, parse_mode: "Markdown" });
