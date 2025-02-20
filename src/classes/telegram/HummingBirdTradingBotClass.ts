@@ -1,4 +1,5 @@
-import TelegramBot from "node-telegram-bot-api";
+import TelegramBot, { KeyboardButton } from "node-telegram-bot-api";
+
 import Datastore from "nedb";
 import { Worker } from "worker_threads";
 import { env } from "@/common/utils/envConfig";
@@ -8,6 +9,63 @@ import { pino } from "pino";
 const logger = pino({ name: "TelegramBot" });
 
 const { TELEGRAM_BOT_TOKEN, TELEGRAM_SESSION_DB, IMAGE_BANNER } = env;
+
+const LABELS = {
+    TRADING_TYPES: {
+        FOREX: "Forex 🌍",
+        DERIVATIVES: "Derivatives 📊",
+        CRYPTO: "Crypto ₿",
+        COMMODITIES: "Commodities 🛢️",
+    },
+    MARKETS: {
+        FOREX: [
+            ["AUD/JPY 🇦🇺🇯🇵", "AUD/USD 🇦🇺🇺🇸"],
+            ["EUR/AUD 🇪🇺🇦🇺", "EUR/CAD 🇪🇺🇨🇦"],
+            ["EUR/CHF 🇪🇺🇨🇭", "EUR/GBP 🇪🇺🇬🇧"],
+            ["EUR/JPY 🇪🇺🇯🇵", "EUR/USD 🇪🇺🇺🇸"],
+            ["GBP/AUD 🇬🇧🇦🇺", "GBP/JPY 🇬🇧🇯🇵"],
+            ["GBP/USD 🇬🇧🇺🇸", "USD/CAD 🇺🇸🇨🇦"],
+            ["USD/CHF 🇺🇸🇨🇭", "USD/JPY 🇺🇸🇯🇵"],
+        ],
+        DERIVATIVES: [
+            ["Volatility 10 📈", "Volatility 10(1s) 📈"],
+            ["Volatility 25 📈", "Volatility 25(1s) 📈"],
+            ["Volatility 50 📈", "Volatility 50(1s) 📈"],
+            ["Volatility 75 📈", "Volatility 75(1s) 📈"],
+            ["Volatility 100 📈", "Volatility 100(1s) 📈"],
+        ],
+        CRYPTO: [["BTC/USD 💵 ₿", "ETH/USD 💵 Ξ"]],
+        COMMODITIES: [["Gold/USD 💵 🥇", "Palladium/USD 💵 🛢️"], ["Platinum/USD 💵 ⚪", "Silver/USD 💵 🥈"]],
+    },
+    PURCHASE_TYPES: {
+        GENERAL: [["Auto Rise/Fall ⬆️⬇️", "Rise ⬆️", "Fall ⬇️"]],
+        DERIVATIVES: [
+            ["Auto ⬆️⬇️", "Rise ⬆️", "Fall ⬇️"],
+            ["Digits Auto 🎲", "Digits Evens 1️⃣", "Digits Odds 0️⃣"],
+            ["Digits ⬇️9️⃣", "Digits ⬇️8️⃣"],
+            ["Digits ⬇️7️⃣", "Digits ⬇️6️⃣"],
+            ["Digits ⬆️0️⃣", "Digits ⬆️1️⃣"],
+            ["Digits ⬆️2️⃣", "Digits ⬆️3️⃣"],
+            ["Digit NOT Last 🔚", "Digit NOT Random 🎲"],
+        ],
+    },
+    NUMERIC_INPUT: [
+        ["$0.35", "$0.50", "$0.75"],
+        ["$1.00", "$2.00", "$5.00"],
+        ["$10.00", "$15.00", "$20.00"],
+        ["$25.00", "$50.00", "$75.00"],
+        ["$100.00", "$200.00", "$500.00"],
+        ["$750.00", "$1,000.00", "$2,000.00"],
+        ["$2,500.00", "Automatic", "$5,000.00"],
+    ],
+    DURATION: [
+        ["1min ⏱️", "2min ⏱️", "5min ⏱️", "10min ⏱️"],
+        ["15min ⏱️", "30min ⏱️", "1hr ⏱️", "2hrs ⏱️"],
+        ["4hrs ⏱️", "8hrs ⏱️", "12hrs ⏱️", "18hrs ⏱️"],
+        ["24hrs ⏱️"],
+    ],
+    TRADE_CONFIRM: [["✅ Confirm Trade", "❌ Cancel Trade"]],
+};
 
 interface Session {
     chatId: number;
@@ -86,13 +144,8 @@ class HummingBirdTradingBot {
 
     private handleStatisticsCommand(msg: TelegramBot.Message): void {
         const chatId = msg.chat.id;
-        this.sessionsDB.remove({ chatId }, {}, (err: any) => {
-            if (err) {
-                this.handleError(chatId, `Error gettings statistics: ${err}`);
-                return;
-            }
-            this.telegramBot.sendMessage(chatId, "Bot statistics");
-        });
+        const documentPath:string = `./src/docs/pdf/demo.pdf`;
+        this.telegramBot.sendDocument(chatId, documentPath);
     }
 
     private handlePauseCommand(msg: TelegramBot.Message): void {
@@ -188,7 +241,7 @@ class HummingBirdTradingBot {
 
     }
 
-    private showMarketTypeKeyboard(chatId: number, tradingType: string | undefined): void {
+    private showMarketTypeKeyboard(chatId: number, tradingType: any ): void {
 
         this.sendKeyboard(chatId, "Select the desired market:", this.getMarketKeyboard(tradingType));
 
@@ -348,7 +401,7 @@ class HummingBirdTradingBot {
         }
     }
 
-    private sendKeyboard(chatId: number, message: string, keyboard: string[][] | KeyboardButton[][] | KeyboardButton[] | KeyboardButton, isOneTimeKeyboard: boolean = true): void {
+    private sendKeyboard(chatId: number, message: string, keyboard: KeyboardButton[][], isOneTimeKeyboard: boolean = true): void {
         this.telegramBot.sendMessage(chatId, message, {
             reply_markup: {
                 keyboard: keyboard,
@@ -384,87 +437,33 @@ class HummingBirdTradingBot {
         });
     }
 
-    private getTradingTypeKeyboard(): string[][] {
+    private getTradingTypeKeyboard(): KeyboardButton[][] {
         return [
-            ["Forex 🌍", "Derivatives 📊"],
-            ["Crypto ₿", "Commodities 🛢️"],
+            [LABELS.TRADING_TYPES.FOREX, LABELS.TRADING_TYPES.DERIVATIVES],
+            [LABELS.TRADING_TYPES.CRYPTO, LABELS.TRADING_TYPES.COMMODITIES],
         ];
     }
 
-    private getMarketKeyboard(tradingType: string | undefined): string[][] {
-        switch (tradingType) {
-            case "Forex 🌍":
-                return [
-                    ["AUD/JPY 🇦🇺🇯🇵", "AUD/USD 🇦🇺🇺🇸"],
-                    ["EUR/AUD 🇪🇺🇦🇺", "EUR/CAD 🇪🇺🇨🇦"],
-                    ["EUR/CHF 🇪🇺🇨🇭", "EUR/GBP 🇪🇺🇬🇧"],
-                    ["EUR/JPY 🇪🇺🇯🇵", "EUR/USD 🇪🇺🇺🇸"],
-                    ["GBP/AUD 🇬🇧🇦🇺", "GBP/JPY 🇬🇧🇯🇵"],
-                    ["GBP/USD 🇬🇧🇺🇸", "USD/CAD 🇺🇸🇨🇦"],
-                    ["USD/CHF 🇺🇸🇨🇭", "USD/JPY 🇺🇸🇯🇵"]
-                ];
-            case "Derivatives 📊":
-                return [
-                    ["Volatility 10 📈", "Volatility 10(1s) 📈"],
-                    ["Volatility 25 📈", "Volatility 25(1s) 📈"],
-                    ["Volatility 50 📈", "Volatility 50(1s) 📈"],
-                    ["Volatility 75 📈", "Volatility 75(1s) 📈"],
-                    ["Volatility 100 📈", "Volatility 100(1s) 📈"],
-                ];
-            case "Crypto ₿":
-                return [["BTC/USD 💵 ₿", "ETH/USD 💵 Ξ"]];
-            case "Commodities 🛢️":
-                return [
-                    ["Gold/USD 💵 🥇", "Palladium/USD 💵 🛢️"],
-                    ["Platinum/USD 💵 ⚪", "Silver/USD 💵 🥈"],
-                ];
-            default:
-                return [];
-        }
+    private getMarketKeyboard(tradingType: keyof typeof LABELS.MARKETS): KeyboardButton[][] {
+        return LABELS.MARKETS[tradingType] as KeyboardButton[][];
     }
 
-    private getPurchaseTypeKeyboard(tradingType?: string): string[][] {
-        if (tradingType === "Forex 🌍" || tradingType === "Crypto ₿" || tradingType === "Commodities 🛢️") {
-            return [["Auto Rise/Fall ⬆️⬇️", "Rise ⬆️", "Fall ⬇️"]];
-        } else if (tradingType === "Derivatives 📊") {
-            return [
-                ["Auto ⬆️⬇️", "Rise ⬆️", "Fall ⬇️"],
-                ["Digits Auto 🎲", "Digits Evens 1️⃣", "Digits Odds 0️⃣"],
-                ["Digits ⬇️9️⃣", "Digits ⬇️8️⃣"],
-                ["Digits ⬇️7️⃣", "Digits ⬇️6️⃣"],
-                ["Digits ⬆️0️⃣", "Digits ⬆️1️⃣"],
-                ["Digits ⬆️2️⃣", "Digits ⬆️3️⃣"],
-                ["Digit NOT Last 🔚", "Digit NOT Random 🎲"],
-            ];
-        }
-        return [];
+    private getPurchaseTypeKeyboard(tradingType?: string): KeyboardButton[][] {
+        return tradingType === LABELS.TRADING_TYPES.DERIVATIVES ? LABELS.PURCHASE_TYPES.DERIVATIVES : LABELS.PURCHASE_TYPES.GENERAL;
     }
 
-    private getNumericInputKeyboard(): string[][] {
-        return [
-            ["$0.35", "$0.50", "$0.75"],
-            ["$1.00", "$2.00", "$5.00"],
-            ["$10.00", "$15.00", "$20.00"],
-            ["$25.00", "$50.00", "$75.00"],
-            ["$100.00", "$200.00", "$500.00"],
-            ["$750.00", "$1,000.00", "$2,000.00"],
-            ["$2,500.00", "Automatic", "$5,000.00"],
-        ];
+    private getNumericInputKeyboard(): KeyboardButton[][] {
+        return LABELS.NUMERIC_INPUT;
     }
 
-    private getDurationKeyboard(): string[][] {
-        return [
-            ["1min ⏱️", "2min ⏱️", "5min ⏱️", "10min ⏱️"],
-            ["15min ⏱️", "30min ⏱️", "1hr ⏱️", "2hrs ⏱️"],
-            ["4hrs ⏱️", "8hrs ⏱️", "12hrs ⏱️", "18hrs ⏱️"],
-            ["24hrs ⏱️"],
-        ];
+    private getDurationKeyboard(): KeyboardButton[][] {
+        return LABELS.DURATION;
     }
-    private getTradeConfirmKeyboard(): string[][] {
-        return [
-            ["✅ Confirm Trade", "❌ Cancel Trade"],
-        ];
+
+    private getTradeConfirmKeyboard(): KeyboardButton[][] {
+        return LABELS.TRADE_CONFIRM;
     }
+
 
 }
 
