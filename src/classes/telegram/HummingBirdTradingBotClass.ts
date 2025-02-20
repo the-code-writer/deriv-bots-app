@@ -7,7 +7,7 @@ import { pino } from "pino";
 
 const logger = pino({ name: "TelegramBot" });
 
-const { TELEGRAM_BOT_TOKEN, TELEGRAM_SESSION_DB } = env;
+const { TELEGRAM_BOT_TOKEN, TELEGRAM_SESSION_DB, IMAGE_BANNER } = env;
 
 interface Session {
     chatId: number;
@@ -25,17 +25,16 @@ interface Session {
 }
 
 class HummingBirdTradingBot {
-    private bot: TelegramBot;
-    private sessionsDB: Datastore;
 
-    private collectedDigits: string = '';
+    private telegramBot: TelegramBot;
+    private sessionsDB: Datastore;
 
     constructor() {
         logger.info("Initializing...");
         if (!TELEGRAM_BOT_TOKEN) {
             throw new Error("Telegram bot token is not defined in environment variables.");
         }
-        this.bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+        this.telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
         this.sessionsDB = new Datastore({ filename: `./src/db/sessions/${TELEGRAM_SESSION_DB}`, autoload: true });
         this.initializeBot();
 
@@ -43,12 +42,12 @@ class HummingBirdTradingBot {
     }
 
     private initializeBot(): void {
-        this.bot.onText(/\/start/, (msg: TelegramBot.Message) => this.handleStartCommand(msg));
-        this.bot.onText(/\/stats/, (msg: TelegramBot.Message) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/pause/, (msg: TelegramBot.Message) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/cancel/, (msg: TelegramBot.Message) => this.handleCancelCommand(msg));
-        this.bot.on("message", (msg: TelegramBot.Message) => this.handleMessage(msg));
-        this.bot.on("polling_error", (error: any) => this.handlePollingError(error));
+        this.telegramBot.onText(/\/start/, (msg: TelegramBot.Message) => this.handleStartCommand(msg));
+        this.telegramBot.onText(/\/stats/, (msg: TelegramBot.Message) => this.handleStatisticsCommand(msg));
+        this.telegramBot.onText(/\/pause/, (msg: TelegramBot.Message) => this.handlePauseCommand(msg));
+        this.telegramBot.onText(/\/cancel/, (msg: TelegramBot.Message) => this.handleCancelCommand(msg));
+        this.telegramBot.on("message", (msg: TelegramBot.Message) => this.handleMessage(msg));
+        this.telegramBot.on("polling_error", (error: any) => this.handlePollingError(error));
 
         setInterval(() => this.cleanupInactiveSessions(), 60 * 1000);
 
@@ -65,7 +64,7 @@ class HummingBirdTradingBot {
                 return;
             }
 
-            const imageUrl = "https://img.freepik.com/free-vector/flying-hummingbird-realistic-concept-with-beautiful-flower-vector-illustration_1284-70314.jpg?t=st=1739800827~exp=1739804427~hmac=fb68c8e1106d840eb2110c473dcd11fe1351953897247fab783c0ac1c2596dac&w=1024";
+            const imageUrl = IMAGE_BANNER;
             const caption = `
 🚀 *The Future of Trading!* 🚀
 
@@ -80,7 +79,7 @@ class HummingBirdTradingBot {
 📈 *Start Trading Today!* 📈
       `;
 
-            this.bot.sendPhoto(chatId, imageUrl, { caption: caption, parse_mode: "Markdown" });
+            this.telegramBot.sendPhoto(chatId, imageUrl, { caption: caption, parse_mode: "Markdown" });
             this.sendKeyboard(chatId, "Please select the type of trading:", this.getTradingTypeKeyboard());
         });
     }
@@ -89,10 +88,10 @@ class HummingBirdTradingBot {
         const chatId = msg.chat.id;
         this.sessionsDB.remove({ chatId }, {}, (err: any) => {
             if (err) {
-                logger.error(`Error gettings statistics: ${err}`);
+                this.handleError(chatId, `Error gettings statistics: ${err}`);
                 return;
             }
-            this.bot.sendMessage(chatId, "Bot statistics");
+            this.telegramBot.sendMessage(chatId, "Bot statistics");
         });
     }
 
@@ -100,10 +99,10 @@ class HummingBirdTradingBot {
         const chatId = msg.chat.id;
         this.sessionsDB.remove({ chatId }, {}, (err: any) => {
             if (err) {
-                logger.error(`Error pausing trade: ${err}`);
+                this.handleError(chatId, `Error pausing trade: ${err}`);
                 return;
             }
-            this.bot.sendMessage(chatId, "Your trades have been paused. Use /resume to continue again.");
+            this.telegramBot.sendMessage(chatId, "Your trades have been paused. Use /resume to continue again.");
         });
     }
 
@@ -112,9 +111,10 @@ class HummingBirdTradingBot {
         this.sessionsDB.remove({ chatId }, {}, (err: any) => {
             if (err) {
                 logger.error(`Error removing session: ${err}`);
+                this.handleError(chatId, `Error removing session: ${err}`);
                 return;
             }
-            this.bot.sendMessage(chatId, "Your session has been reset. Use /start to begin again.");
+            this.handleError(chatId, `Your session has been reset. Use /start to begin again.`);
         });
     }
 
@@ -124,8 +124,7 @@ class HummingBirdTradingBot {
 
         this.sessionsDB.findOne({ chatId }, (err: Error | null, session: Session) => {
             if (err || !session) {
-                this.bot.sendMessage(chatId, "Session not found. Use /start to begin.");
-                logger.error(`Session not found. Use /start to begin: ChaitID:${chatId}`);
+                this.handleError(chatId, `Session not found. Use /start to begin.`);
                 return;
             }
 
@@ -165,14 +164,14 @@ class HummingBirdTradingBot {
         session.tradingType = text;
         session.step = "select_market";
         this.updateSession(chatId, session);
-        this.sendKeyboard(chatId, "Select the desired market:", this.getMarketKeyboard(text));
+        this.showMarketTypeKeyboard(chatId, session.tradingType);
     }
 
     private handleMarketSelection(chatId: number, text: string, session: Session): void {
         session.market = text;
         session.step = "select_purchase_type";
         this.updateSession(chatId, session);
-        this.sendKeyboard(chatId, "Select the purchase type:", this.getPurchaseTypeKeyboard(session.tradingType));
+        this.showPurchaseTypeKeyboard(chatId, session.tradingType);
     }
 
     private handlePurchaseTypeSelection(chatId: number, text: string, session: Session): void {
@@ -186,6 +185,18 @@ class HummingBirdTradingBot {
     private getAutomaticStake(): number {
 
         return 1;
+
+    }
+
+    private showMarketTypeKeyboard(chatId: number, tradingType: string | undefined): void {
+
+        this.sendKeyboard(chatId, "Select the desired market:", this.getMarketKeyboard(tradingType));
+
+    }
+
+    private showPurchaseTypeKeyboard(chatId: number, tradingType: string | undefined): void {
+
+        this.sendKeyboard(chatId, "Select the purchase type:", this.getPurchaseTypeKeyboard(tradingType));
 
     }
 
@@ -226,7 +237,7 @@ class HummingBirdTradingBot {
     }
 
     private handleError(chatId: number, message: string): void {
-        this.bot.sendMessage(chatId, `An error occurred. Please try again later: ${message}`);
+        this.telegramBot.sendMessage(chatId, `An error occurred. Please try again later: ${message}`);
         logger.error(`Error: ${message}: ChaitID:${chatId}`);
     }
 
@@ -244,7 +255,7 @@ class HummingBirdTradingBot {
             if (isNaN(value) || value <= 0) {
                 session[field] = 0;
                 this.updateSession(chatId, session);
-                this.bot.sendMessage(chatId, errorMessage);
+                this.telegramBot.sendMessage(chatId, errorMessage);
                 showCurrentKeyboard();
                 return;
             } else {
@@ -257,7 +268,7 @@ class HummingBirdTradingBot {
         } else {
             session[field] = 0;
             this.updateSession(chatId, session);
-            this.bot.sendMessage(chatId, errorMessage);
+            this.telegramBot.sendMessage(chatId, errorMessage);
             showCurrentKeyboard();
             return;
         }
@@ -294,18 +305,18 @@ class HummingBirdTradingBot {
         this.updateSession(chatId, session);
 
         const confirmationMessage = `
-      ⚠️ Please confirm your trade:
+      ⚠️ *Please confirm your trade:*
 
-      🔹 Market: ${session.market}
+      🔹 *Market:* ${session.market}
 
-      🔹 Purchase Type: ${session.purchaseType}
-      🔹 Stake: ${formatToMoney(session.stake)}
-      🔹 Take Profit: ${formatToMoney(session.takeProfit)}
-      🔹 Stop Loss: ${formatToMoney(session.stopLoss)}
+      🔹 *Purchase Type:* ${session.purchaseType}
+      🔹 *Stake:* ${formatToMoney(session.stake)}
+      🔹 *Take Profit:* ${formatToMoney(session.takeProfit)}
+      🔹 *Stop Loss:* ${formatToMoney(session.stopLoss)}
 
-      🔹 Duration: ${session.tradeDuration}
-      🔹 Update Frequency: ${session.updateFrequency}
-
+      🔹 *Duration:* ${session.tradeDuration}
+      🔹 *Update Frequency:* ${session.updateFrequency}
+      
       Type /confirm to proceed or /cancel to reset.
     `;
 
@@ -318,7 +329,7 @@ class HummingBirdTradingBot {
             const worker = new Worker("./src/classes/deriv/tradeWorker.js", { workerData: { session } });
 
             worker.on("message", (message) => {
-                this.bot.sendMessage(chatId, message);
+                this.telegramBot.sendMessage(chatId, message);
             });
 
             worker.on("error", (error) => {
@@ -333,17 +344,18 @@ class HummingBirdTradingBot {
                 }
             });
         } else {
-            this.bot.sendMessage(chatId, "Trade not confirmed. Use /start to begin again.");
+            this.telegramBot.sendMessage(chatId, "Trade not confirmed. Use /start to begin again.");
         }
     }
 
     private sendKeyboard(chatId: number, message: string, keyboard: string[][] | KeyboardButton[][] | KeyboardButton[] | KeyboardButton, isOneTimeKeyboard: boolean = true): void {
-        this.bot.sendMessage(chatId, message, {
+        this.telegramBot.sendMessage(chatId, message, {
             reply_markup: {
                 keyboard: keyboard,
                 resize_keyboard: true,
                 one_time_keyboard: isOneTimeKeyboard,
             },
+            parse_mode: "Markdown"
         });
     }
 
@@ -379,7 +391,7 @@ class HummingBirdTradingBot {
         ];
     }
 
-    private getMarketKeyboard(tradingType: string): string[][] {
+    private getMarketKeyboard(tradingType: string | undefined): string[][] {
         switch (tradingType) {
             case "Forex 🌍":
                 return [

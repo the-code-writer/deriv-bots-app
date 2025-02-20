@@ -14,4 +14,5 @@ export const env = cleanEnv(process.env, {
   TELEGRAM_SESSION_DB: str({ devDefault: testOnly("") }),
   DERIV_BOT_TOKEN: str({ devDefault: testOnly("") }),
   APP_CRYPTOGRAPHIC_KEY: str({ devDefault: testOnly("") }),
+  IMAGE_BANNER: str({ devDefault: testOnly("") }),
 });
