@@ -8,4 +8,3 @@ export const commonValidations = {
     .refine((num) => num > 0, "ID must be a positive number"),
   // ... other common validations
 };
-

@@ -1,32 +1,32 @@
-const { parentPort, workerData } = require("worker_threads");
-const axios = require("axios");
+const DerivAutoTradingBot = require("./DerivAutoTradingBot.ts");
 
-const { session } = workerData;
+const { parentPort, workerData } = require("node:worker_threads");
 
-if (!session || !session.market || !session.stake) {
-  throw new Error("Invalid session data");
+const { action, meta } = workerData;
+
+if (!action || !meta) {
+  throw new Error("Invalid worker data");
 }
 
-const params = {
-  proposal: 1,
-  amount: session.stake,
-  basis: "stake",
-  contract_type: session.purchaseType,
-  currency: "USD",
-  duration: session.tradeDuration,
-  duration_unit: "m",
-  symbol: session.market,
-};
+if (action === "INIT_TRADE") {
 
-console.log("TRADING", params);
+  if (!meta.session || !meta.session.market || !meta.session.stake) {
+    throw new Error("Invalid session data");
+  }
 
-// Simulate API call (replace with actual Deriv API integration)
-axios
-  .post("https://api.deriv.com/place_trade", params)
-  .then((response) => {
-    const tradeId = response.data.trade_id;
-    parentPort.postMessage(`Trade placed successfully! Trade ID: ${tradeId}`);
-  })
-  .catch((error) => {
-    parentPort.postMessage(`Failed to place trade: ${error.message}`);
+  const deriv = new DerivAutoTradingBot();
+
+  deriv.startTrading(meta.session);
+
+  // Listen for messages from the main thread
+  parentPort.on("message", (message) => {
+    if (message.action === "CONFIRM_TRADE") {
+      deriv.startTrading(meta.session);
+    } else {
+      console.log("Worker received second message:", message);
+      // Send a response back to the main thread
+      parentPort.postMessage({ type: "response", data: message });
+    }
   });
+
+}

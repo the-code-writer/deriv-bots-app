@@ -1,7 +1,7 @@
 import { env } from "@/common/utils/envConfig";
 import { app, logger } from "@/server";
-import HummingBirdTradingBot from "./classes/telegram/HummingBirdTradingBotClass";
-import DerivAutoTradingBotClass from "./classes/deriv/DerivAutoTradingBotClass";
+import TelegramNodeJSBot from "./classes/telegram/TelegramNodeJSBotClass";
+import DerivAutoTradingBotClass from "./classes/deriv/DerivAutoTradingBot";
 
 const server = app.listen(env.PORT, () => {
   const { NODE_ENV, HOST, PORT } = env;
@@ -9,7 +9,7 @@ const server = app.listen(env.PORT, () => {
 
   //start the bot here
 
-  const bot = new HummingBirdTradingBot();
+  const bot = new TelegramNodeJSBot();
 
   //const deriv = new DerivAutoTradingBotClass();
 

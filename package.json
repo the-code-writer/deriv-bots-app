@@ -10,13 +10,13 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts | pino-pretty",
     "build": "tsup",
-    "start": "node dist/index.js",
+    "start": "node --no-deprecation dist/index.cjs",
     "clean": "rimraf dist coverage",
     "lint": "biome check src/",
     "lint:fix": "biome check src/ --fix",
     "format": "biome format src/",
     "test": "vitest run",
-    "prepare": "node_modules/.bin/husky-run install"
+    "prepare": "husky"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.0.0",
@@ -29,15 +29,18 @@
     "envalid": "^8.0.0",
     "express": "^4.19.2",
     "express-rate-limit": "^7.2.0",
+    "express-typescript-boilerplate": "file:",
     "helmet": "^8.0.0",
     "html-pdf": "^3.0.1",
     "http-status-codes": "^2.3.0",
+    "jsan": "^3.1.14",
     "nedb": "^1.8.0",
     "node-telegram-bot-api": "^0.66.0",
     "pino": "^9.4.0",
     "pino-http": "^10.0.0",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.0",
+    "ts-node": "^10.9.2",
     "winston": "^3.17.0",
     "ws": "^8.18.0",
     "zod": "^3.22.4"
@@ -52,18 +55,24 @@
     "@types/swagger-ui-express": "^4.1.6",
     "husky": "^9.0.11",
     "lint-staged": "^15.2.2",
+    "nosql-json-database": "^1.0.0",
     "pino-pretty": "^13.0.0",
     "rimraf": "^6.0.0",
     "supertest": "^7.0.0",
     "tsup": "^8.0.2",
-    "tsx": "^4.7.2",
+    "tsx": "^4.19.3",
     "typescript": "^5.4.4",
     "vite-tsconfig-paths": "^5.0.0",
     "vitest": "^2.0.0"
   },
+  "lint-stagedx": {
+    "*.{js,ts,cjs,mjs,d.cts,d.mts,json,jsonc}": [
+      "biome check --apply --no-errors-on-unmatched"
+    ]
+  },
   "lint-staged": {
     "*.{js,ts,cjs,mjs,d.cts,d.mts,json,jsonc}": [
-      "ls"
+      "ls -l"
     ]
   },
   "tsup": {
