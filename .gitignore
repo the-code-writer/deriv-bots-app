@@ -33,3 +33,4 @@ src/db/sessions/telegram-bot-sessions.json
 assets/docs/~$profit-tables.xlsx
 /files
 /src/db
+/.husky
