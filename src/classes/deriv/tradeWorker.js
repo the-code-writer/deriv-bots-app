@@ -1,4 +1,4 @@
-const DerivAutoTradingBot = require("./DerivAutoTradingBot.ts");
+const DerivAutoTradingBotClass = require("./DerivAutoTradingBotClass.ts");
 
 const { parentPort, workerData } = require("node:worker_threads");
 
@@ -8,25 +8,39 @@ if (!action || !meta) {
   throw new Error("Invalid worker data");
 }
 
-if (action === "INIT_TRADE") {
+const deriv = new DerivAutoTradingBotClass();
 
+if (action === "INIT_TRADE") {
+  
   if (!meta.session || !meta.session.market || !meta.session.stake) {
     throw new Error("Invalid session data");
   }
 
-  const deriv = new DerivAutoTradingBot();
-
   deriv.startTrading(meta.session);
 
-  // Listen for messages from the main thread
-  parentPort.on("message", (message) => {
-    if (message.action === "CONFIRM_TRADE") {
+}
+
+// Listen for messages from the main thread
+parentPort.on("message", (message) => {
+  console.log("NEW_WORKER_MESSAGE", [action, meta]);
+  switch (message.action) {
+    case "CONFIRM_TRADE": {
       deriv.startTrading(meta.session);
-    } else {
+      break;
+    }
+    case "LOGGED_IN": {
+      console.log("LOGGED_IN_IN_WORKER", meta);
+      deriv.setAccount((userAccount) => {
+        // send message with user data to TG for welcome before proceeding
+        parentPort.postMessage({ type: "userAccount", data: userAccount });
+      }, meta.data);
+      break;
+    }
+    default: {
       console.log("Worker received second message:", message);
       // Send a response back to the main thread
       parentPort.postMessage({ type: "response", data: message });
+      break;
     }
-  });
-
-}
+  }
+});

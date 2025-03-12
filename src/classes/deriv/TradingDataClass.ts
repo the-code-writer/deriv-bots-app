@@ -34,7 +34,7 @@ export interface ITradeData {
     longcode: string; // Long code of the trade
     proposal_id: string; // Proposal ID of the trade
     balance_currency: string; // Currency of the balance
-    balance_value: number; // Value of the balance
+    balance_value: number | string; // Value of the balance
     audit_details: Array<{ // Array of audit details
         epoch: number; // Epoch time of the audit
         tick?: number; // Optional tick value

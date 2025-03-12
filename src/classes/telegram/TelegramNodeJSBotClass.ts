@@ -7,6 +7,8 @@ import { pino } from "pino";
 
 import jsan from "jsan";
 
+import sanitizeHtml from "sanitize-html";
+
 import { CONSTANTS } from "@/common/utils/constants";
 import { env } from "@/common/utils/envConfig";
 import {
@@ -15,9 +17,14 @@ import {
     isCurrency,
 } from "@/common/utils/snippets";
 
+import Pusher from "pusher";
+import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
+
+const PusherClient = require("pusher-js");
+
 const logger = pino({ name: "TelegramBot" });
 
-const { TELEGRAM_BOT_TOKEN, TELEGRAM_SESSION_DB, IMAGE_BANNER } = env;
+const { TELEGRAM_BOT_TOKEN, TELEGRAM_SESSION_DB, IMAGE_BANNER, DERIV_APP_LOGIN_URL, DERIV_APP_OAUTH_CHANNEL, PUSHER_TOKEN, PUSHER_CLUSTER, PUSHER_APP_ID, PUSHER_APP_SECRET } = env;
 
 interface Session {
     chatId: number;
@@ -38,9 +45,11 @@ interface Session {
 
 class TelegramNodeJSBot {
     private telegramBot: TelegramBot;
-    private sessionsDB: Datastore;
+    private db: MongoDBConnection;
     private workersOBJ: any;
-    constructor() {
+    private serverUrl: string;
+    constructor(url: string) {
+        this.serverUrl = url;
         logger.info("Initializing...");
         if (!TELEGRAM_BOT_TOKEN) {
             throw new Error(
@@ -48,15 +57,15 @@ class TelegramNodeJSBot {
             );
         }
         this.telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
-        this.sessionsDB = new Datastore({
-            filename: `./src/db/sessions/${TELEGRAM_SESSION_DB}`,
-            autoload: true,
-        });
+        this.db = new MongoDBConnection();
         this.workersOBJ = {};
         this.init();
     }
 
-    private init(): void {
+    private async init(): Promise<void> {
+
+        await this.db.connect(); 
+
         this.telegramBot.onText(/\/start/, (msg: TelegramBot.Message) =>
             this.handleStartCommand(msg)
         );
@@ -76,9 +85,42 @@ class TelegramNodeJSBot {
             this.handlePollingError(error)
         );
 
-        setInterval(() => this.cleanupInactiveSessions(), 60 * 1000);
+        // Handle inline button callbacks
+        this.telegramBot.on("callback_query", (callbackQuery: any) => {
+            const chatId = callbackQuery.message.chat.id;
+            const telegramUserID = callbackQuery.message.chat.username;
+            const data = callbackQuery.data;
+
+            console.log("CBQ", telegramUserID);
+
+            console.log("PUSHER_CB_DATA", data);
+
+            // Respond to the button click
+            if (data === 'exec_login') {
+
+                this.telegramBot.sendMessage(chatId, `
+You are about to login using your Deriv Account.
+To proceed click this link below to proceed:
+
+<b>ChloeFXD</b>
+
+${DERIV_APP_LOGIN_URL}?uid=${telegramUserID}`);
+
+            } else if (data === 'exec_cancel') {
+
+                this.telegramBot.sendMessage(chatId, 'You selected Option 2!');
+
+            }
+
+            // Acknowledge the callback
+            this.telegramBot.answerCallbackQuery(callbackQuery.id);
+
+        });
+
+        setInterval(() => this.cleanupInactiveSessions(), 1.5 * 60 * 60 * 1000);
 
         logger.info("TelegramBot initialized");
+
     }
 
     private initializeSession(chatId: number): void {
@@ -88,26 +130,37 @@ class TelegramNodeJSBot {
         );
     }
 
-    private handleStartCommand(msg: TelegramBot.Message): void {
+    public loggedIn(data: any): void {
+        console.log("LOGGED IN", data);
+        this.postMessageToDerivWorker(
+            "LOGGED_IN",
+            data.chatId,
+            "", //No text
+            {}, //No session
+            data //Meta data
+        )
+    }
+
+    private async handleStartCommand(msg: TelegramBot.Message): Promise<void> {
+
         const chatId = msg.chat.id;
+
         const session: Session = {
             chatId,
             step: "select_trading_type",
             timestamp: Date.now(),
+            username: msg.from,
         };
-        session.username = msg.from;
-        this.sessionsDB.update(
-            { chatId },
-            session,
-            { upsert: true },
-            (err: any) => {
-                if (err) {
-                    logger.error(`Error initializing session: ${err}`);
-                    return;
-                }
 
-                const imageUrl = IMAGE_BANNER;
-                const caption = `
+        // Save session to MongoDB
+        await this.db.getConnection().collection("sessions").updateOne(
+            { chatId },
+            { $set: session },
+            { upsert: true }
+        );
+
+        const imageUrl = IMAGE_BANNER;
+        const caption = `
 
 
 *Hi ${session.username.first_name}*
@@ -125,120 +178,234 @@ class TelegramNodeJSBot {
 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀
 
 `;
-
                 this.telegramBot.sendPhoto(chatId, imageUrl, {
                     caption: caption,
                     parse_mode: "Markdown",
                 });
-                this.sendKeyboard(
-                    chatId,
-                    "Please select the type of trading:",
-                    this.getTradingTypeKeyboard()
-                );
+                setTimeout(() => {
+                    this.telegramBot.sendMessage(chatId, 'Please login using your Deriv Account to proceed:', {
+                        reply_markup: {
+                            inline_keyboard: this.getLoginKeyboard(session.username),
+                        },
+                    });
+                }, 500)
+
             }
-        );
+
+
+    private async handleStartTradingCommand(msg: TelegramBot.Message): Promise<void> {
+        const chatId = msg.chat.id;
+        const session: Session = {
+            chatId,
+            step: "select_trading_type",
+            timestamp: Date.now(),
+            username: msg.from, // Add the username from the message
+        };
+
+        try {
+            // Save or update the session in MongoDB
+            await this.db.getConnection().collection("sessions").updateOne(
+                { chatId },
+                { $set: session },
+                { upsert: true }
+            );
+
+            const imageUrl = IMAGE_BANNER;
+            const caption = `
+*Hi ${session.username.first_name}*
+
+*The Future of Trading Is Here! 🌟*
+
+- *Advanced Algorithms*: Our bots use cutting-edge technology to maximize your profits.
+- *24/7 Support*: We're here to help you anytime, anywhere.
+- *Secure & Reliable*: Your data and investments are safe with us.
+
+*Start Trading Today!*
+
+🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀
+`;
+
+            // Send the image with the caption
+            await this.telegramBot.sendPhoto(chatId, imageUrl, {
+                caption: caption,
+                parse_mode: "Markdown",
+            });
+
+            // Send the trading type keyboard
+            this.sendKeyboard(
+                chatId,
+                "Please select the type of trading:",
+                this.getTradingTypeKeyboard()
+            );
+        } catch (error) {
+            // Handle any errors that occur during the MongoDB operation
+            logger.error(`Error initializing session: ${error}`);
+            this.handleError(chatId, "An error occurred while initializing your session. Please try again.");
+        }
     }
 
-    private handleStatisticsCommand(msg: TelegramBot.Message): void {
+    private async handleStatisticsCommand(msg: TelegramBot.Message): Promise<void> {
         const chatId = msg.chat.id;
-        this.sessionsDB.findOne(
-            { chatId },
-            (err: Error | null, session: Session) => {
-                if (err || !session) {
-                    this.handleError(chatId, `Session not found. Use ${CONSTANTS.COMMANDS.START} to begin.`);
-                    return;
-                } else {
-                    this.generateStatement(chatId, session);
-                }
-            }
-        );
-    }
 
-    private handlePauseCommand(msg: TelegramBot.Message): void {
-        const chatId = msg.chat.id;
-        this.sessionsDB.remove({ chatId }, {}, (err: any) => {
-            if (err) {
-                this.handleError(chatId, `Error pausing trade: ${err}`);
+        try {
+            // Find the session in MongoDB
+            const session:any = await this.db.getConnection().collection("sessions").findOne({ chatId });
+
+            if (!session) {
+                // If no session is found, handle it as an error
+                this.handleError(chatId, `Session not found. Use ${CONSTANTS.COMMANDS.START} to begin.`);
                 return;
             }
+
+            // Generate the statement for the session
+            this.generateStatement(chatId, session);
+        } catch (error) {
+            // Handle any errors that occur during the MongoDB query
+            logger.error(`Error retrieving session: ${error}`);
+            this.handleError(chatId, "An error occurred while retrieving your session. Please try again.");
+        }
+    }
+
+    private async handlePauseCommand(msg: TelegramBot.Message): Promise<void> {
+        const chatId = msg.chat.id;
+
+        try {
+            // Delete the session from MongoDB
+            const result:any = await this.db.getConnection().collection("sessions").deleteOne({ chatId });
+
+            if (result.deletedCount === 0) {
+                // If no session was deleted, handle it as an error
+                this.handleError(chatId, "No active session found to pause.");
+                return;
+            }
+
+            // Notify the user that the session has been paused
             this.telegramBot.sendMessage(
                 chatId,
                 `Your trades have been paused. Use ${CONSTANTS.COMMANDS.RESUME} to continue again.`
             );
-        });
+        } catch (error) {
+            // Handle any errors that occur during the MongoDB operation
+            logger.error(`Error pausing session: ${error}`);
+            this.handleError(chatId, `Error pausing trade: ${error}`);
+        }
     }
 
-    private handleCancelCommand(msg: TelegramBot.Message): void {
+    private async handleCancelCommand(msg: TelegramBot.Message): Promise<void> {
         const chatId = msg.chat.id;
-        this.sessionsDB.remove({ chatId }, {}, (err: any) => {
-            if (err) {
-                logger.error(`Error removing session: ${err}`);
-                this.handleError(chatId, `Error removing session: ${err}`);
+
+        try {
+            // Delete the session from MongoDB
+            const result:any = await this.db.getConnection().collection("sessions").deleteOne({ chatId });
+
+            if (result.deletedCount === 0) {
+                // If no session was deleted, handle it as an error
+                logger.error("No session found to remove.");
+                this.handleError(chatId, "No active session found to cancel.");
                 return;
             }
+
+            // Notify the user that the session has been canceled
             this.handleError(
                 chatId,
                 `Your session has been reset. Use ${CONSTANTS.COMMANDS.START} to begin again.`
             );
-        });
+        } catch (error) {
+            // Handle any errors that occur during the MongoDB operation
+            logger.error(`Error removing session: ${error}`);
+            this.handleError(chatId, `Error removing session: ${error}`);
+        }
     }
 
-    private handleMessage(msg: TelegramBot.Message): void {
+    private sanitizeInput(text: string): string {
+        return sanitizeHtml(text, { allowedTags: [], allowedAttributes: {} });
+    }
+
+    private async handleMessage(msg: TelegramBot.Message): Promise<void> {
         const chatId = msg.chat.id;
-        const text: string = msg.text || "";
+        const text: string = this.sanitizeInput(msg.text || "");
 
-        this.sessionsDB.findOne(
-            { chatId },
-            (err: Error | null, session: Session) => {
-                if (err || !session) {
-                    if (text === CONSTANTS.COMMANDS.START) {
-                        this.initializeSession(chatId);
-                    } else {
-                        this.handleError(chatId, `Session not found. Use ${CONSTANTS.COMMANDS.START} to begin.`);
-                    }
-                    return;
-                }
+        try {
+            // Find the session in MongoDB
+            const session:any = await this.db.getConnection().collection("sessions").findOne({ chatId });
 
-                switch (session.step) {
-                    case "select_trading_type":
-                        this.handleTradingTypeSelection(chatId, text, session);
-                        break;
-                    case "select_market":
-                        this.handleMarketSelection(chatId, text, session);
-                        break;
-                    case "select_purchase_type":
-                        this.handlePurchaseTypeSelection(chatId, text, session);
-                        break;
-                    case "enter_stake":
-                        this.handleStakeInput(chatId, text, session);
-                        break;
-                    case "enter_take_profit":
-                        this.handleTakeProfitInput(chatId, text, session);
-                        break;
-                    case "enter_stop_loss":
-                        this.handleStopLossInput(chatId, text, session);
-                        break;
-                    case "select_trade_duration":
-                        this.handleTradeDurationSelection(chatId, text, session);
-                        break;
-                    case "select_update_frequency":
-                        this.handleUpdateFrequencySelection(chatId, text, session);
-                        break;
-                    case "select_ticks_or_minutes":
-                        this.handleUpdateFrequencySelection(chatId, text, session);
-                        break;
-                    case "select_ticks_or_minutes_duration":
-                        this.handleUpdateFrequencySelection(chatId, text, session);
-                        break;
-                    case "select_auoto_or_manual":
-                        this.handleUpdateFrequencySelection(chatId, text, session);
-                        break;
-                    case "confirm_trade":
-                        this.handleTradeConfirmation(chatId, text, session);
-                        break;
-                }
+            if (!session) {
+                // If no session is found, handle it as a new session
+                this.handleSessionNotFound(chatId, text);
+                return;
             }
-        );
+
+            // Process the session step
+            this.processSessionStep(chatId, text, session);
+        } catch (error) {
+            // Handle any errors that occur during the MongoDB query
+            logger.error(`Error retrieving session: ${error}`);
+            this.handleError(chatId, "An error occurred while retrieving your session. Please try again.");
+        }
+    }
+
+    private handleSessionNotFound(chatId: number, text: string): void {
+        if (text === CONSTANTS.COMMANDS.START) {
+            this.initializeSession(chatId);
+        } else {
+            this.handleError(chatId, `Session not found. Use ${CONSTANTS.COMMANDS.START} to begin.`);
+        }
+    }
+
+    private processSessionStep(chatId: number, text: string, session: Session): void {
+        switch (session.step) {
+            case "login_account":
+                this.handleLoginAccount(chatId, text, session);
+                break;
+            case "select_trading_type":
+                this.handleTradingTypeSelection(chatId, text, session);
+                break;
+            case "select_market":
+                this.handleMarketSelection(chatId, text, session);
+                break;
+            case "select_purchase_type":
+                this.handlePurchaseTypeSelection(chatId, text, session);
+                break;
+            case "enter_stake":
+                this.handleStakeInput(chatId, text, session);
+                break;
+            case "enter_take_profit":
+                this.handleTakeProfitInput(chatId, text, session);
+                break;
+            case "enter_stop_loss":
+                this.handleStopLossInput(chatId, text, session);
+                break;
+            case "select_trade_duration":
+                this.handleTradeDurationSelection(chatId, text, session);
+                break;
+            case "select_update_frequency":
+                this.handleUpdateFrequencySelection(chatId, text, session);
+                break;
+            case "select_ticks_or_minutes":
+                this.handleUpdateFrequencySelection(chatId, text, session);
+                break;
+            case "select_ticks_or_minutes_duration":
+                this.handleUpdateFrequencySelection(chatId, text, session);
+                break;
+            case "select_auoto_or_manual":
+                this.handleUpdateFrequencySelection(chatId, text, session);
+                break;
+            case "confirm_trade":
+                this.handleTradeConfirmation(chatId, text, session);
+                break;
+        }
+
+    }
+
+    private handleLoginAccount(
+        chatId: number,
+        text: string,
+        session: Session
+    ): void {
+        session.loginAccount = text;
+        session.step = "select_trading_type";
+        this.updateSession(chatId, session);
+        this.showMarketTypeKeyboard(chatId, session.tradingType);
     }
 
     private handleTradingTypeSelection(
@@ -498,65 +665,87 @@ https://derivbots.app
         this.showTradeConfirmKeyboard(chatId, confirmationMessage);
     }
 
+    private postMessageToDerivWorker(
+        action: string,
+        chatId: number,
+        text: string,
+        session: any,
+        data: any = {}
+    ) {
+
+        const workerID: string = `WKR_${chatId}`;
+
+        console.log("postMessageToDerivWorker:workerID", workerID, this.workersOBJ);
+
+        if (workerID in this.workersOBJ) {
+
+            this.workersOBJ[workerID].postMessage(
+                {
+                    action: action,
+                    text: text,
+                    meta:
+                    {
+                        chatId,
+                        text,
+                        session,
+                        data
+                    }
+                }
+            )
+
+        } else {
+
+            this.workersOBJ[workerID] = new Worker("./src/classes/deriv/tradeWorker.js", {
+                workerData: {
+                    action: "LOGGED_IN",
+                    text: text,
+                    meta:
+                    {
+                        chatId,
+                        text,
+                        session
+                    }
+                },
+            });
+
+            this.workersOBJ[workerID].on("message", (message: any) => {
+                this.handleWorkerMessage(chatId, message);
+            });
+
+            this.workersOBJ[workerID].on("error", (error: any) => {
+                const errorMessage: string = `Worker error: ${error.message}`;
+                delete this.workersOBJ[workerID];
+                this.handleError(chatId, errorMessage);
+            });
+
+            this.workersOBJ[workerID].on("exit", (code: number) => {
+                if (code !== 0) {
+                    const errorMessage: string = `Trade Worker stopped with exit code ${code}`;
+                    delete this.workersOBJ[workerID];
+                    this.handleError(chatId, errorMessage);
+                }
+            });
+
+        }
+
+        
+        
+    }
+
     private handleTradeConfirmation(
         chatId: number,
         text: string,
         session: Session
     ): void {
 
-        const workerID: string = `WKR_${chatId}`;
-
         if (text === CONSTANTS.COMMANDS.CONFIRM || text === CONSTANTS.TRADE_CONFIRM[0][0]) {
 
-            if (workerID in this.workersOBJ) {
-
-                this.workersOBJ[workerID].postMessage(
-                    {
-                        action: "CONFIRM_TRADE",
-                        text: text,
-                        meta:
-                        {
-                            chatId,
-                            text,
-                            session
-                        }
-                    }
-                )
-
-            } else {
-
-                this.workersOBJ[workerID] = new Worker("./src/classes/deriv/tradeWorker.js", {
-                    workerData: {
-                        action: "INIT_TRADE",
-                        text: text,
-                        meta:
-                        {
-                            chatId,
-                            text,
-                            session
-                        }
-                    },
-                });
-
-                this.workersOBJ[workerID].on("message", (message: any) => {
-                    this.handleWorkerMessage(chatId, message);
-                });
-
-                this.workersOBJ[workerID].on("error", (error: any) => {
-                    const errorMessage: string = `Worker error: ${error.message}`;
-                    delete this.workersOBJ[workerID];
-                    this.handleError(chatId, errorMessage);
-                });
-
-                this.workersOBJ[workerID].on("exit", (code: number) => {
-                    if (code !== 0) {
-                        const errorMessage: string = `Trade Worker stopped with exit code ${code}`;
-                        delete this.workersOBJ[workerID];
-                        this.handleError(chatId, errorMessage);
-                    }
-                });
-
-            }
+            this.postMessageToDerivWorker(
+                "CONFIRM_TRADE",
+                chatId,
+                text,
+                session
+            );
 
         } else {
 
@@ -603,20 +792,28 @@ https://derivbots.app
         }
     }
 
-    private handleWorkerMessage(chatId:number, message:any): any {
+    private handleWorkerMessage(chatId: number, message: any): any {
 
         console.log("WORKER_MESSAGE::", message);
 
-        switch(message.action){
+        switch (message.action) {
 
-            case "sendTelegramMessage" : {
-                if(message.text !== ""){
+            case "sendTelegramMessage": {
+                if (message.text !== "") {
+                    this.telegramBot.sendMessage(chatId, message.text, { parse_mode: "Markdown" });
+                }
+                break;
+            }
+
+            case "generateTelemetry": {
+                if (message.text !== "" && message.meta.user !== undefined && message.meta.audit.length > 0) {
+                    //TODO: compose Telementry from a class
                     this.telegramBot.sendMessage(chatId, message.text);
                 }
                 break;
             }
 
-            default : { 
+            default: {
                 console.log("UNHANDLED_WORKER_MESSAGE::");
                 break;
             }
@@ -640,10 +837,12 @@ https://derivbots.app
         });
     }
 
-    private updateSession(chatId: number, session: Session): void {
-        this.sessionsDB.update({ chatId }, session, {}, (err: any) => {
-            if (err) logger.error(`Error updating session: ${err}`);
-        });
+    private async updateSession(chatId: number, session: Session): Promise<void> {
+        await this.db.getConnection().collection("sessions").updateOne(
+            { chatId },
+            { $set: session },
+            { upsert: true }
+        );
     }
 
     private handlePollingError(error: Error): void {
@@ -653,19 +852,22 @@ https://derivbots.app
         }
     }
 
-    private cleanupInactiveSessions(): void {
+    private async cleanupInactiveSessions(): Promise<void> {
         const now = Date.now();
-        this.sessionsDB.find({}, (err: Error | null, sessions: Session[]) => {
-            if (err) return;
+        const sessions = await this.db.getConnection().collection("sessions").find().toArray();
 
-            sessions.forEach((session) => {
-                if (now - (session.timestamp || 0) > 30 * 60 * 1000) {
-                    this.sessionsDB.remove({ chatId: session.chatId }, {}, (err: any) => {
-                        if (err) logger.error(`Error removing inactive session: ${err}`);
-                    });
-                }
-            });
-        });
+        for (const session of sessions) {
+            if (now - (session.timestamp || 0) > 30 * 60 * 1000) {
+                await this.db.getConnection().collection("sessions").deleteOne({ chatId: session.chatId });
+            }
+        }
+    }
+
+    private getLoginKeyboard(session:any): any {
+        return [
+            [{ text: '🔒 LOGIN', url: `https://google.com/#${DERIV_APP_LOGIN_URL}?telegram_id=${session.id}&telegram_username=${session.username}` }],
+            [{ text: '🚫 CANCEL', callback_data: 'exec_cancel' }],
+        ];
     }
 
     private getTradingTypeKeyboard(): string[][] | KeyboardButton[][] {
