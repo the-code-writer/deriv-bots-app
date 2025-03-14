@@ -13,6 +13,7 @@ import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
 
 const path = require('path');
+
 const cookieParser = require('cookie-parser');
 
 const crypto = require("crypto");
@@ -41,7 +42,7 @@ app.use((req, res, next) => {
     const nonce = crypto.randomBytes(16).toString("base64");
     res.locals.nonce = nonce;
     next();
-  });
+});
   
   // Set CSP header with nonce
   app.use((req, res, next) => {

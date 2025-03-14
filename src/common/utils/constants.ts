@@ -1,4 +1,49 @@
-export const CONSTANTS = {
+import { KeyboardButton } from "node-telegram-bot-api";
+
+interface IForex {
+  FOREX: KeyboardButton[][] | string [][];
+}
+
+interface IDerivatives {
+  DERIVATIVES: KeyboardButton[][] | string [][];
+}
+
+interface ICrypto {
+  CRYPTO: KeyboardButton[][] | string [][];
+}
+
+interface ICommodities {
+  COMMODITIES: KeyboardButton[][] | string [][];
+}
+
+interface IPurchaseTypes {
+  GENERAL: KeyboardButton[][] | string [][];
+  DERIVATIVES: KeyboardButton[][] | string [][];
+}
+
+interface ICommands {
+  START: string;
+  CONFIRM: string;
+  CANCEL: string;
+  HELP: string;
+  RESUME: string;
+}
+
+interface IContants {
+  TRADING_TYPES: any;
+  MARKETS: IForex | IDerivatives | ICrypto | ICommodities ;
+  PURCHASE_TYPES: IPurchaseTypes;
+  NUMERIC_INPUT: KeyboardButton[][] | string [][];
+  DURATION: KeyboardButton[][] | string [][];
+  TRADE_DURATION_T: KeyboardButton[][] | string [][];
+  TRADE_DURATION_M: KeyboardButton[][] | string [][];
+  TRADE_MANUAL_OR_AUTO: KeyboardButton[][] | string [][];
+  TRADE_CONFIRM: KeyboardButton[][] | string [][];
+  TRADE_MANUAL: KeyboardButton[][] | string [][];
+  COMMANDS: ICommands;
+}
+
+export const CONSTANTS: IContants = {
   TRADING_TYPES: {
     FOREX: "Forex 🌍",
     DERIVATIVES: "Derivatives 📊",
@@ -57,13 +102,24 @@ export const CONSTANTS = {
 
     ["1 Tick", "3 Ticks", "5 Ticks", "10 Ticks"],
   ],
-  TRADE_CONFIRM: [["✅ Confirm Trade", "❌ Cancel Trade"]],
-
-
-
-
-
-
+  TRADE_DURATION_T: [
+    ["1 Tick", "2 Ticks", "3 Ticks"],
+    ["4 Ticks", "5 Ticks", "6 Ticks"],
+    ["7 Ticks", "8 Ticks", "9 Ticks"],
+    ["10 Ticks"],
+  ],
+  TRADE_DURATION_M: [
+    ["1min ⏱️", "2min ⏱️", "5min ⏱️", "10min ⏱️"],
+    ["15min ⏱️", "20min ⏱️", "25min ⏱️", "30min ⏱️"],
+    ["35min ⏱️", "40min ⏱️", "45min ⏱️", "50min ⏱️"],
+    ["1hr ⏱️", "2hrs ⏱️", "3hrs ⏱️", "4hrs ⏱️"],
+    ["5hrs ⏱️", "6hrs ⏱️", "7hrs ⏱️", "8hrs ⏱️"],
+    ["9hrs ⏱️", "10hrs ⏱️", "12hrs ⏱️", "8hrs ⏱️"],
+    ["12hrs ⏱️", "16hrs ⏱️", "20hrs ⏱️", "24hrs ⏱️"],
+  ],
+  TRADE_MANUAL_OR_AUTO: [["📈 Manual Trading", "🎲 Auto Trading"]],
+  TRADE_CONFIRM: [["✅ CONFIRM TRADE", "❌ CANCEL TRADE"]],
+  TRADE_MANUAL: [["✅ TRAGE AGAIN", "❌ STOP TRADING"]],
   COMMANDS: {
     START: "/start",
     CONFIRM: "/confirm",
@@ -71,4 +127,5 @@ export const CONSTANTS = {
     HELP: "/help",
     RESUME: "/resume",
   }
+
 };

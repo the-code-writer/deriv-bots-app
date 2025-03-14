@@ -1,11 +1,12 @@
 
 
-import { MongoClient, Db, Collection, MongoClientOptions, InsertOneResult, InsertManyResult, UpdateResult, DeleteResult, Document } from 'mongodb';
+import { MongoClient, Db, Collection, MongoClientOptions, InsertOneResult, InsertManyResult, UpdateResult, DeleteResult, Document, MongoServerError } from 'mongodb';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { env } from "@/common/utils/envConfig";
-const { MONGODB_CONNECTION_STRING, MONGODB_BACKUP_PATH } = env;
+import { logger } from '@/server';
+const { MONGODB_CONNECTION_STRING, MONGODB_BACKUP_PATH, MONGODB_DATABASE_NAME, MONGODB_MAX_RETRIES, MONGODB_RETRY_DELAY } = env;
 // Load environment variables from .env file
 dotenv.config();
 
@@ -106,11 +107,10 @@ export class MongoDBConnection implements DatabaseConnection {
         // Initialize configuration from environment variables
         this.config = {
             uri: MONGODB_CONNECTION_STRING || 'mongodb://localhost:27017',
-            dbName: process.env.MONGODB_DB_NAME || 'default_db',
-            maxRetries: parseInt(process.env.MONGODB_MAX_RETRIES || '5', 10),
-            retryDelay: parseInt(process.env.MONGODB_RETRY_DELAY || '3000', 10),
+            dbName: MONGODB_DATABASE_NAME || 'default_db',
+            maxRetries: MONGODB_MAX_RETRIES || 5,
+            retryDelay: MONGODB_RETRY_DELAY || 3000
         };
-
 
     }
 
@@ -126,10 +126,20 @@ export class MongoDBConnection implements DatabaseConnection {
             } as MongoClientOptions);
             await this.client.connect();
             this.db = this.client.db(this.config.dbName);
-            console.log('Connected to MongoDB successfully!');
-        } catch (error) {
-            console.error('Failed to connect to MongoDB:', error);
-            throw error;
+            logger.info('Connected to MongoDB successfully!');
+        } catch (error: any) {
+            if (error instanceof MongoServerError) {
+                // Handle MongoDB-specific errors
+                if (error.code === 18) { // Error code for authentication failure
+                    logger.error('Authentication failed. Please check your MongoDB credentials.');
+                } else {
+                    logger.error(`MongoDB error: ${error.message}`);
+                }
+            } else {
+                // Handle other errors
+                logger.error(`Failed to connect to MongoDB: ${error.message}`);
+            }
+            throw error; // Re-throw the error to stop the application
         }
     }
 
@@ -141,7 +151,7 @@ export class MongoDBConnection implements DatabaseConnection {
             await this.client.close();
             this.client = null;
             this.db = null;
-            console.log('Disconnected from MongoDB.');
+            logger.info('Disconnected from MongoDB.');
         }
     }
 
@@ -157,7 +167,7 @@ export class MongoDBConnection implements DatabaseConnection {
                 return;
             } catch (error) {
                 this.retryAttempts++;
-                console.warn(`Retry attempt ${this.retryAttempts} failed. Retrying in ${this.config.retryDelay}ms...`);
+                logger.warn(`Retry attempt ${this.retryAttempts} failed. Retrying in ${this.config.retryDelay}ms...`);
                 await new Promise((resolve) => setTimeout(resolve, this.config.retryDelay));
             }
         }
@@ -168,9 +178,14 @@ export class MongoDBConnection implements DatabaseConnection {
      * Returns the current database connection.
      * @throws {Error} If not connected.
      */
-    getConnection(): Db {
+    async getConnection(checkConnection: boolean = false): Promise<Db> {
+
         if (!this.db) {
-            throw new Error('Database not connected. Call connect() first.');
+            if (checkConnection) {
+                await this.connect();
+            } else {
+                throw new Error('Database not connected. Call connect() first.');
+            }
         }
         return this.db;
     }
@@ -181,7 +196,7 @@ export class MongoDBConnection implements DatabaseConnection {
      */
     async createDatabase(dbName: string): Promise<void> {
         this.db = this.client!.db(dbName);
-        console.log(`Database ${dbName} created.`);
+        logger.info(`Database ${dbName} created.`);
     }
 
     /**
@@ -189,7 +204,7 @@ export class MongoDBConnection implements DatabaseConnection {
      */
     async repairDatabase(): Promise<void> {
         // Placeholder for repair logic
-        console.log('Database repair functionality not implemented.');
+        logger.info('Database repair functionality not implemented.');
     }
 
     /**
@@ -280,8 +295,9 @@ export class MongoDBConnection implements DatabaseConnection {
      * @param query - Query to find the item.
      * @returns DeleteResult
      */
-    async deleteItem(collectionName: string, query: Partial<Item>): Promise<DeleteResult> {
+    async deleteItem(collectionName: string, conditions: QueryCondition[]): Promise<DeleteResult> {
         const collection = this.getConnection().collection(collectionName);
+        const query = QueryBuilder.buildQuery({ conditions });
         return await collection.deleteOne(query);
     }
 
@@ -317,14 +333,16 @@ export class MongoDBConnection implements DatabaseConnection {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const backupFileName = `${timestamp}.${this.config.dbName}.mongodb.backup.json`;
             const backupFilePath = path.join(backupPath, backupFileName);
-            console.log("SAVE BAK TO : ", backupFilePath);
+            logger.info("SAVE BAK TO : ", backupFilePath);
             // Write backup data to a JSON file
             fs.writeFileSync(backupFilePath, JSON.stringify(backupData, null, 2));
-            console.log(`Backup saved to: ${backupFilePath}`);
-            return backupFilePath;
+            logger.info(`Backup saved to: ${backupFilePath}`);
+            return {
+                backupPath, backupFileName, backupFilePath
+            };
         } catch (error) {
-            console.error('Failed to backup database:', error);
-            throw error;
+            logger.error('Failed to backup database:', error);
+            //throw error;
         }
     }
 
@@ -348,21 +366,24 @@ export class MongoDBConnection implements DatabaseConnection {
 
             // Iterate through each collection in the backup data
             for (const [collectionName, records] of Object.entries(backupData)) {
+
                 const collection = this.db.collection(collectionName);
+
+                await collection.deleteMany({});
 
                 // Insert records into the collection
                 if (Array.isArray(records)) {
                     await collection.insertMany(records);
-                    console.log(`Restored ${records.length} records into collection: ${collectionName}`);
+                    logger.info(`Restored ${records.length} records into collection: ${collectionName}`);
                 } else {
-                    console.warn(`Skipping invalid data for collection: ${collectionName}`);
+                    logger.warn(`Skipping invalid data for collection: ${collectionName}`);
                 }
             }
 
-            console.log('Database restore completed successfully!');
+            logger.info('Database restore completed successfully!');
         } catch (error) {
-            console.error('Failed to restore database:', error);
-            throw error;
+            logger.error('Failed to restore database:', error);
+            //throw error;
         }
     }
 
@@ -375,10 +396,10 @@ export class MongoDBConnection implements DatabaseConnection {
         }
 
         try {
-            console.log('Starting database optimization...');
+            logger.info('Starting database optimization...');
 
             // 1. Index Optimization
-            console.log('Optimizing indexes...');
+            logger.info('Optimizing indexes...');
             const collections = await this.db.listCollections().toArray();
             for (const collectionInfo of collections) {
                 const collectionName = collectionInfo.name;
@@ -386,44 +407,99 @@ export class MongoDBConnection implements DatabaseConnection {
 
                 // Example: Create an index on the `createdAt` field
                 await collection.createIndex({ createdAt: 1 });
-                console.log(`Created index on 'createdAt' for collection: ${collectionName}`);
+                logger.info(`Created index on 'createdAt' for collection: ${collectionName}`);
             }
 
             // 2. Compact Collections (Reduce Fragmentation)
-            console.log('Compacting collections...');
-            for (const collectionInfo of collections) {
-                const collectionName = collectionInfo.name;
-                await this.db.command({ compact: collectionName });
-                console.log(`Compacted collection: ${collectionName}`);
+            logger.info('Compacting collections...');
+            // Check if the compact command is supported
+            const isCompactSupported = await this.isCompactCommandSupported();
+
+            if (isCompactSupported) {
+                // Run the compact command
+                for (const collectionInfo of collections) {
+                    const collectionName = collectionInfo.name;
+                    await this.db.command({ compact: collectionName });
+                    logger.info(`Compacted collection: ${collectionName}`);
+                }
+                logger.info("Database optimization (compact) completed successfully.");
+            } else {
+                // Fallback: Drop and recreate the collection
+                logger.warn("Compact command not supported. Falling back to drop and recreate.");
+                await this.recreateCollection("sessions");
             }
 
+
             // 3. Rebuild Indexes
-            console.log('Rebuilding indexes...');
+            logger.info('Rebuilding indexes...');
             for (const collectionInfo of collections) {
                 const collectionName = collectionInfo.name;
                 await this.db.command({ reIndex: collectionName });
-                console.log(`Rebuilt indexes for collection: ${collectionName}`);
+                logger.info(`Rebuilt indexes for collection: ${collectionName}`);
             }
 
             // 4. Analyze and Drop Unused Indexes
-            console.log('Analyzing and dropping unused indexes...');
+            logger.info('Analyzing and dropping unused indexes...');
             for (const collectionInfo of collections) {
                 const collectionName = collectionInfo.name;
                 const indexes = await this.db.collection(collectionName).indexes();
 
                 for (const index of indexes) {
-                    const indexName:string | undefined = index.name;
+                    const indexName: string | undefined = index.name;
                     if (indexName !== '_id_') { // Skip the default _id index
                         // Example: Drop indexes that are not frequently used (this is a placeholder logic)
                         await this.db.collection(collectionName).dropIndex(String(indexName));
-                        console.log(`Dropped unused index: ${indexName} in collection: ${collectionName}`);
+                        logger.info(`Dropped unused index: ${indexName} in collection: ${collectionName}`);
                     }
                 }
             }
 
-            console.log('Database optimization completed successfully!');
+            logger.info('Database optimization completed successfully!');
+        } catch (error: any) {
+            logger.error('Failed to optimize database:', error);
+            logger.error(error);
+            //throw error;
+            if (error instanceof MongoServerError && error.code === 59) { // Error code for CMD_NOT_ALLOWED
+                logger.warn("Compact command not allowed in this environment. Falling back to drop and recreate.");
+                await this.recreateCollection("sessions");
+            } else {
+                logger.error(`Error optimizing database: ${error.message}`);
+                throw error;
+            }
+        }
+    }
+
+    private async isCompactCommandSupported(): Promise<boolean> {
+        if (!this.db) {
+            throw new Error('Database not connected. Call connect() first.');
+        }
+
+        try {
+            // Attempt to run a harmless command to check if compact is supported
+            await this.db.command({ ping: 1 });
+            return true;
         } catch (error) {
-            console.error('Failed to optimize database:', error);
+            return false;
+        }
+    }
+
+    private async recreateCollection(collectionName: string): Promise<void> {
+        if (!this.db) {
+            throw new Error('Database not connected. Call connect() first.');
+        }
+
+        try {
+            const collection = this.db.collection(collectionName);
+
+            // Drop the collection
+            await collection.drop();
+            logger.info(`Dropped collection: ${collectionName}`);
+
+            // Recreate the collection
+            await this.db.createCollection(collectionName);
+            logger.info(`Recreated collection: ${collectionName}`);
+        } catch (error: any) {
+            logger.error(`Error recreating collection: ${error.message}`);
             throw error;
         }
     }
@@ -436,8 +512,9 @@ export class MongoDBConnection implements DatabaseConnection {
         return this.client;
     }
 
-
 }
+
+/*
 
 // Example usage
 (async () => {
@@ -448,9 +525,9 @@ export class MongoDBConnection implements DatabaseConnection {
         const user = await db.getItem('users', [
             { field: 'name', operator: 'regex', value: 'John' }, // Case-insensitive regex search
         ]);
-        console.log('Retrieved user:', user);
+        logger.info('Retrieved user:', user);
     } catch (error) {
-        console.error('Error:', error);
+        logger.error('Error:', error);
     } finally {
         await db.disconnect();
     }
@@ -460,7 +537,7 @@ export class MongoDBConnection implements DatabaseConnection {
 (async () => {
     const db = new MongoDBConnection();
     try {
-        await db.connect();
+        await db.connect(); 
 
         // Example: Insert an item
         await db.insertItem('users', { name: 'John Doe', age: 30, createdAt: new Date(), updatedAt: new Date(), isActive: true });
@@ -470,12 +547,12 @@ export class MongoDBConnection implements DatabaseConnection {
             { field: 'age', operator: 'gt', value: 20 },
             { field: 'name', operator: 'regex', value: 'John' }, // Case-insensitive regex search
         ]);
-        console.log('Retrieved users:', users);
+        logger.info('Retrieved users:', users);
 
         // Example: Update items with dynamic query
         await db.updateItems('users', [{ field: 'age', operator: 'lt', value: 40 }], { isActive: false });
     } catch (error) {
-        console.error('Error:', error);
+        logger.error('Error:', error);
     } finally {
         await db.disconnect();
     }
@@ -484,26 +561,25 @@ export class MongoDBConnection implements DatabaseConnection {
 // Example usage
 (async () => {
     const db = new MongoDBConnection();
+    let backupFileObject: any = {};
     try {
         await db.connect();
 
         // Example: Insert an item
         await db.insertItem('users', { name: 'John Doe', age: 30, createdAt: new Date(), updatedAt: new Date(), isActive: true });
 
-        const backupPath = await db.backupDatabase(); 
-        console.error('DB BAK Success:', backupPath);
+        //{ backupPath, backupFileName, backupFilePath }
+        backupFileObject = await db.backupDatabase(); 
+        logger.error('DB BAK Success:', backupFileObject);
     } catch (error) {
-        console.error('DB BAK Error:', error);
+        logger.error('DB BAK Error:', error);
     } finally {
         try {
             await db.connect();
-
-            // Example: Restore the database from a backup file
-            const backupFile = '2025-03-11T19-05-49-020Z.default_db.mongodb.backup.json';
-            await db.restoreDatabase(backupFile);
-            console.error('DB RES Success:', backupFile);
+            await db.restoreDatabase(backupFileObject.backupFileName);
+            logger.error('DB RES Success:', backupFileObject);
         } catch (error) {
-            console.error('DB RES Error:', error);
+            logger.error('DB RES Error:', error);
         } finally {
             await db.disconnect();
         }
@@ -518,8 +594,10 @@ export class MongoDBConnection implements DatabaseConnection {
         // Optimize the database
         await db.optimizeDatabase();
     } catch (error) {
-        console.error('Error:', error);
+        logger.error('Error:', error);
     } finally {
         await db.disconnect();
     }
 })();
+
+*/

@@ -1,64 +1,84 @@
 import { env } from "@/common/utils/envConfig";
 import { app, logger } from "@/server";
-import TelegramNodeJSBot from "./classes/telegram/TelegramNodeJSBotClass";
+import TelegramNodeJSBot from "@/classes/telegram/TelegramNodeJSBotClass";
 import session from 'express-session';
-import MongoStore from 'connect-mongo';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
-const { NODE_ENV, HOST, PORT, APP_CRYPTOGRAPHIC_KEY } = env;
+import { Encryption } from "@/classes/cryptography/EncryptionClass";
+const { NODE_ENV, HOST, PORT, APP_CRYPTOGRAPHIC_KEY, MONGODB_CONNECTION_STRING, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL } = env;
 
 const serverUrl: string = `http://${HOST}:${PORT}`;
 
 const util = require('util');
 
+const MongoDBStore = require('connect-mongodb-session')(session);
+
 // Override util.isArray to use Array.isArray
 util.isArray = Array.isArray;
 
-util.isDate = function (obj:any) {
+util.isDate = function (obj: any) {
   return Object.prototype.toString.call(obj) === '[object Date]';
 };
 
-util.isRegExp = function (obj:any) {
+util.isRegExp = function (obj: any) {
   return Object.prototype.toString.call(obj) === '[object RegExp]';
 };
 
 (async () => {
 
-  app.set("bot", new TelegramNodeJSBot(serverUrl));
-
   const db: any = new MongoDBConnection();
 
   await db.connect();
 
-  await db.createDatabase("sessions_db");
+  await db.createDatabase(MONGODB_DATABASE_NAME);
 
   app.set("db", db);
 
-  // Configure session middleware
-  const sessionMiddleware: any = session({
-    store: MongoStore.create({
-      client: db.getClient(), // Use the MongoDB client
-      dbName: "sessions_db",
-      collectionName: "sessions",
-      ttl: 60 * 60 * 24, // 1 day
-      autoRemove: "native", // Automatically remove expired sessions
-    }),
+  app.set("bot", new TelegramNodeJSBot(serverUrl, db));
+
+  app.set("crypt", new Encryption());
+
+  const sessionStorage = new MongoDBStore(
+    {
+      uri: MONGODB_CONNECTION_STRING,
+      databaseName: MONGODB_DATABASE_NAME,
+      collection: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
+      // By default, sessions expire after 2 weeks. The `expires` option lets
+      // you overwrite that by setting the expiration in milliseconds
+      expires: (1000 * DB_SERVER_SESSIONS_DATABASE_TTL) || 1000 * 60 * 60 * 24 * 1, // 1 day in milliseconds
+
+      // Lets you set options passed to `MongoClient.connect()`. Useful for
+      // configuring connectivity or working around deprecation warnings.
+      connectionOptions: {
+        serverSelectionTimeoutMS: 10000
+      }
+    }
+  );
+
+  const sessionMiddleware: any = {
+    name: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
     secret: APP_CRYPTOGRAPHIC_KEY,
-    resave: false,
+    resave: true,
     saveUninitialized: true,
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       sameSite: "strict",
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
+      maxAge: (1000 * DB_SERVER_SESSIONS_DATABASE_TTL) || 1000 * 60 * 60 * 24 * 1, // 1 day
     },
+    store: sessionStorage
+  };
+
+  // Catch errors
+  sessionStorage.on('error', function (error: any) {
+    logger.error("Session storage error occured!");
+    logger.error(error);
   });
 
-  // Apply the session middleware to the app
-  app.use(sessionMiddleware);
+  app.use(session(sessionMiddleware));
 
   const server = app.listen(env.PORT, () => {
 
-    logger.info(`Server (${NODE_ENV}) running on : ${serverUrl}`);
+    logger.info(`Server now running in (${NODE_ENV}) at : ${serverUrl}`);
 
   });
 
@@ -73,6 +93,5 @@ util.isRegExp = function (obj:any) {
 
   process.on("SIGINT", onCloseSignal);
   process.on("SIGTERM", onCloseSignal);
-
 
 })();

@@ -3,38 +3,34 @@ import { env } from '@/common/utils/envConfig';
 import MongoStore from 'connect-mongo';
 import session from 'express-session';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
-const { DERIV_APP_OAUTH_URL, APP_CRYPTOGRAPHIC_KEY, DB_SERVER_SESSIONS_DATABASE, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL } = env;
+const { DERIV_APP_OAUTH_URL, APP_CRYPTOGRAPHIC_KEY, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, MONGODB_CONNECTION_STRING } = env;
+const MongoDBStore = require('connect-mongodb-session')(session);
 export const oauthRouter: Router = express.Router();
 
-// Get the database instance from the app
-oauthRouter.use((req, res, next) => {
 
-  const db = req.app.get("db") as InstanceType<typeof MongoDBConnection>;
-
-  // Configure and apply the session middleware
-  const sessionMiddleware:any = session({
-    store: MongoStore.create({
-      client: db.getClient(), // Use the MongoDB client
-      dbName: DB_SERVER_SESSIONS_DATABASE,
-      collectionName: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
-      ttl: DB_SERVER_SESSIONS_DATABASE_TTL || 60 * 60 * 24, // 1 day
-      autoRemove: "native", // Automatically remove expired sessions
-    }),
-    secret: APP_CRYPTOGRAPHIC_KEY,
-    resave: false,
-    saveUninitialized: true,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      sameSite: "strict",
-      maxAge: (1000 * DB_SERVER_SESSIONS_DATABASE_TTL) || 86400000, // 1 day
-    },
+  const sessionStorage = new MongoDBStore({
+    uri: MONGODB_CONNECTION_STRING,
+    databaseName: MONGODB_DATABASE_NAME,
+    collection: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
   });
 
-  // Invoke the session middleware
-  sessionMiddleware(req, res, next);
+const sessionMiddleware: any = {
+  name: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
+  secret: APP_CRYPTOGRAPHIC_KEY,
+  resave: true,
+  saveUninitialized: true,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    sameSite: "strict",
+    maxAge: (1000 * DB_SERVER_SESSIONS_DATABASE_TTL) || 86400000, // 1 day
+  },
+  store: sessionStorage
+};
 
-});
+const sessionObject: any = session(sessionMiddleware);
+
+oauthRouter.use(sessionObject);
 
 oauthRouter.get("/", async (req: Request, res: Response) => {
 
@@ -50,17 +46,19 @@ oauthRouter.get("/", async (req: Request, res: Response) => {
 
 oauthRouter.get("/deriv-oauth", async (req: Request, res: Response) => {
 
-  const { telegram_id, telegram_username } = req.query;
+  const { id, username } = req.query;
 
   // @ts-ignore
-  req.session.chatId = telegram_id;
+  req.session.chatId = id;
   // @ts-ignore
-  req.session.username = telegram_username;
+  req.session.username = username;
 
   const data = {
     title: "Deriv Login",
     nonce: res.locals.nonce,
-    derivLoginURL: DERIV_APP_OAUTH_URL
+    derivLoginURL: DERIV_APP_OAUTH_URL,
+    // @ts-ignore
+    params: { id: req.session.chatId, username: req.session.username }
   };
 
   res.render("deriv-oauth-template", { data })
@@ -113,16 +111,20 @@ oauthRouter.get("/deriv-callback", async (req: Request, res: Response) => {
     return res.status(500).send("<h2>Telegram bot is not initialized</h2>");
   }
 
-  // Call the bot's userLoggedIn function
-  bot.loggedIn({
+  const data = {
     nonce: res.locals.nonce,
     accounts: organizedData,
     chatId: session.chatId,
     username: session.username,
-  });
+  };
+
+  // Call the bot's userLoggedIn function
+  bot.loggedIn(data);
 
   // Send a response
   res.status(200).send("<h2>User logged in successfully</h2>");
+
+  res.render("deriv-callback-template", { data })
 
 });
 
