@@ -48,13 +48,317 @@ interface ITelegramBotService {
 }
 
 /**
- * Interface for session service
+ * Interface for trading process flow handlers
  */
 interface ITradingProcessFlow {
-    initializeSession(chatId: number): void;
-    updateSession(chatId: number, session: Session): Promise<void>;
-    cleanupInactiveSessions(): Promise<void>;
-    getSession(chatId: number): Promise<Session | null>;
+    /**
+     * Handle the login account step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleLoginAccount(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the account type selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleAccountTypeSelection(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the trading type selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleTradingTypeSelection(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the market selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleMarketSelection(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the purchase type selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handlePurchaseTypeSelection(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the stake input step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleStakeInput(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the take profit input step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleTakeProfitInput(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the stop loss input step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleStopLossInput(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the trade duration selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleTradeDurationSelection(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the update frequency selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleUpdateFrequencySelection(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the contract duration units selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleUpdateContractDurationUnitsSelection(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the contract duration value selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleUpdateContractDurationValueSelection(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the auto/manual trading selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleAutoManualTrading(chatId: number, text: string, session: Session): void;
+
+    /**
+     * Handle the trade confirmation step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     */
+    handleTradeConfirmation(chatId: number, text: string, session: Session): void;
+}
+
+/**
+ * Interface for Telegram bot command handlers
+ */
+interface ITelegramBotCommandHandlers {
+    /**
+     * Handle the /start command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleStartCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /confirm command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleConfirmCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /cancel command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleCancelCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /help command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleHelpCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /resume command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleResumeCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /pause command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handlePauseCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /stop command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleStopCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /withdraw command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleWithdrawCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /deposit command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleDepositCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /wallet command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleWalletCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /accounts command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleAccountsCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /profile command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleProfileCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /settings command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleSettingsCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /logout command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleLogoutCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /status command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleStatusCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /history command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleHistoryCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /balance command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleBalanceCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /info command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleInfoCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /support command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleSupportCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /update command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleUpdateCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /news command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleNewsCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /alerts command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleAlertsCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /risk-management command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleRiskManagementCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /strategies command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleStrategiesCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /faq command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleFaqCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /telemetry command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleTelemetryCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /profits command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleProfitsCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /statement command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleStatementCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /reset command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleResetCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /pricing command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handlePricingCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /subscribe command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleSubscribeCommand(msg: Message): Promise<void>;
+
+    /**
+     * Handle the /health-check command
+     * @param {Message} msg - The message object from Telegram
+     */
+    handleHealthCheckCommand(msg: Message): Promise<void>;
 }
 
 /**
@@ -115,25 +419,35 @@ class TelegramBotService implements ITelegramBotService {
 
     private setupEventListeners(): void {
         this.bot.onText(/\/start/, (msg) => this.handleStartCommand(msg));
-        this.bot.onText(/\/telemetry/, (msg) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/profits/, (msg) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/statement/, (msg) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/reset/, (msg) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/pricing/, (msg) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/subscribe/, (msg) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/health-check/, (msg) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/help/, (msg) => this.handleStatisticsCommand(msg));
-        this.bot.onText(/\/resume/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/withdraw/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/deposit/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/wallet/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/accounts/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/profile/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/settings/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/logout/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/pause/, (msg) => this.handlePauseCommand(msg));
-        this.bot.onText(/\/stop/, (msg) => this.handlePauseCommand(msg));
+        this.bot.onText(/\/telemetry/, (msg) => this.handleTelemetryCommand(msg));
+        this.bot.onText(/\/profits/, (msg) => this.handleProfitsCommand(msg));
+        this.bot.onText(/\/statement/, (msg) => this.handleStatementCommand(msg));
+        this.bot.onText(/\/reset/, (msg) => this.handleResetCommand(msg));
+        this.bot.onText(/\/pricing/, (msg) => this.handlePricingCommand(msg));
+        this.bot.onText(/\/subscribe/, (msg) => this.handleSubscribeCommand(msg));
+        this.bot.onText(/\/health-check/, (msg) => this.handleHealthCheckCommand(msg));
+        this.bot.onText(/\/help/, (msg) => this.handleHelpCommand(msg));
+        this.bot.onText(/\/pause|\/stop/, (msg) => this.handlePauseCommand(msg));
+        this.bot.onText(/\/resume/, (msg) => this.handleResumeCommand(msg));
+        this.bot.onText(/\/withdraw/, (msg) => this.handleWithdrawCommand(msg));
+        this.bot.onText(/\/deposit/, (msg) => this.handleDepositCommand(msg));
+        this.bot.onText(/\/wallet/, (msg) => this.handleWalletCommand(msg));
+        this.bot.onText(/\/accounts/, (msg) => this.handleAccountsCommand(msg));
+        this.bot.onText(/\/profile/, (msg) => this.handleProfileCommand(msg));
+        this.bot.onText(/\/settings/, (msg) => this.handleSettingsCommand(msg));
+        this.bot.onText(/\/logout/, (msg) => this.handleLogoutCommand(msg));
         this.bot.onText(/\/cancel/, (msg) => this.handleCancelCommand(msg));
+        this.bot.onText(/\/status/, (msg) => this.handleStatusCommand(msg));
+        this.bot.onText(/\/history/, (msg) => this.handleHistoryCommand(msg));
+        this.bot.onText(/\/balance/, (msg) => this.handleBalanceCommand(msg));
+        this.bot.onText(/\/info/, (msg) => this.handleInfoCommand(msg));
+        this.bot.onText(/\/support/, (msg) => this.handleSupportCommand(msg));
+        this.bot.onText(/\/update/, (msg) => this.handleUpdateCommand(msg));
+        this.bot.onText(/\/news/, (msg) => this.handleNewsCommand(msg));
+        this.bot.onText(/\/alerts/, (msg) => this.handleAlertsCommand(msg));
+        this.bot.onText(/\/risk-management/, (msg) => this.handleRiskManagementCommand(msg));
+        this.bot.onText(/\/strategies/, (msg) => this.handleStrategiesCommand(msg));
+        this.bot.onText(/\/faq/, (msg) => this.handleFAQCommand(msg));
         this.bot.on("message", (msg) => this.handleMessage(msg));
         this.bot.on("callback_query", (callbackQuery) => this.handleCallbackQuery(callbackQuery));
     }
@@ -165,13 +479,10 @@ class TelegramBotService implements ITelegramBotService {
     async handleStatisticsCommand(msg: Message): Promise<void> {
         const chatId = msg.chat.id;
         const session = await this.sessionService.getSession(chatId);
-
         if (!session) {
             this.bot.sendMessage(chatId, `Session not found. Use ${CONSTANTS.COMMANDS.START} to begin.`);
             return;
         }
-
-        // Generate and send statement
         this.workerService.postMessageToDerivWorker("GENERATE_STATEMENT", chatId, "", session);
     }
 
@@ -266,6 +577,8 @@ class TelegramBotService implements ITelegramBotService {
             case "confirm_trade":
                 this.handleTradeConfirmation(chatId, text, session);
                 break;
+            default:
+                break;
         }
     }
 
@@ -284,7 +597,7 @@ class SessionService implements ISessionService {
 
     async initializeSession(chatId: number): Promise<void> {
         const session: Session = { chatId, step: "select_trading_type", timestamp: Date.now() };
-        await this.updateSession(chatId, session);
+        await this.sessionService.updateSession(chatId, session);
     }
 
     async updateSession(chatId: number, session: Session): Promise<void> {
@@ -314,24 +627,50 @@ class TradingProcessFlowHandlers implements ITradingProcessFlow {
     
     private telegramBot:any;
     
+    private sessionService:any;
+
+    private keyboardService: any;
+
     constructor() { }
     
-    setBot(bot: any) {
-        this.telegramBot = bot;
+    setBot(telegramBot: any) {
+        this.telegramBot = telegramBot;
     }
-    
+
+    setSessionService(sessionService: any) {
+        this.sessionService = sessionService;
+    }
+
+    setKeyboardService(keyboardService: any) {
+        this.keyboardService = keyboardService;
+    }
+
     /**
-     * Handle the login account step
+ * Handle the login account step
+ * @param {number} chatId - The chat ID of the user
+ * @param {string} text - The text of the message
+ * @param {Session} session - The current session
+ * @private
+ */
+    public handleLoginAccount(chatId: number, text: string, session: Session): void {
+        session.loginAccount = text;
+        session.step = "select_account_type";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showAccountTypeKeyboard(chatId, session.loginAccount);
+    }
+
+    /**
+     * Handle the account type selection step
      * @param {number} chatId - The chat ID of the user
      * @param {string} text - The text of the message
      * @param {Session} session - The current session
      * @private
      */
-    private handleLoginAccount(chatId: number, text: string, session: Session): void {
-        session.loginAccount = text;
+    private handleAccountTypeSelection(chatId: number, text: string, session: Session): void {
+        session.accountType = text;
         session.step = "select_trading_type";
-        this.updateSession(chatId, session);
-        this.showMarketTypeKeyboard(chatId, session.tradingType);
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showTradingTypeKeyboard(chatId, session.accountType);
     }
 
     /**
@@ -344,8 +683,8 @@ class TradingProcessFlowHandlers implements ITradingProcessFlow {
     private handleTradingTypeSelection(chatId: number, text: string, session: Session): void {
         session.tradingType = text;
         session.step = "select_market";
-        this.updateSession(chatId, session);
-        this.showMarketTypeKeyboard(chatId, session.tradingType);
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showMarketTypeKeyboard(chatId, session.tradingType);
     }
 
     /**
@@ -358,8 +697,8 @@ class TradingProcessFlowHandlers implements ITradingProcessFlow {
     private handleMarketSelection(chatId: number, text: string, session: Session): void {
         session.market = text;
         session.step = "select_purchase_type";
-        this.updateSession(chatId, session);
-        this.showPurchaseTypeKeyboard(chatId, session.tradingType);
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showPurchaseTypeKeyboard(chatId, session.market);
     }
 
     /**
@@ -372,11 +711,682 @@ class TradingProcessFlowHandlers implements ITradingProcessFlow {
     private handlePurchaseTypeSelection(chatId: number, text: string, session: Session): void {
         session.purchaseType = text;
         session.step = "enter_stake";
-        this.updateSession(chatId, session);
-        this.showBaseStakeKeyboard(chatId);
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showStakeInputKeyboard(chatId, session.purchaseType);
     }
 
+    /**
+     * Handle the stake input step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleStakeInput(chatId: number, text: string, session: Session): void {
+        session.stake = parseFloat(text);
+        session.step = "enter_take_profit";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showTakeProfitInputKeyboard(chatId, session.stake);
+    }
+
+    /**
+     * Handle the take profit input step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleTakeProfitInput(chatId: number, text: string, session: Session): void {
+        session.takeProfit = parseFloat(text);
+        session.step = "enter_stop_loss";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showStopLossInputKeyboard(chatId, session.takeProfit);
+    }
+
+    /**
+     * Handle the stop loss input step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleStopLossInput(chatId: number, text: string, session: Session): void {
+        session.stopLoss = parseFloat(text);
+        session.step = "select_trade_duration";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showTradeDurationKeyboard(chatId, session.stopLoss);
+    }
+
+    /**
+     * Handle the trade duration selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleTradeDurationSelection(chatId: number, text: string, session: Session): void {
+        session.tradeDuration = text;
+        session.step = "select_update_frequency";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showUpdateFrequencyKeyboard(chatId, session.tradeDuration);
+    }
+
+    /**
+     * Handle the update frequency selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleUpdateFrequencySelection(chatId: number, text: string, session: Session): void {
+        session.updateFrequency = text;
+        session.step = "select_ticks_or_minutes";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showContractDurationUnitsKeyboard(chatId, session.updateFrequency);
+    }
+
+    /**
+     * Handle the contract duration units selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleUpdateContractDurationUnitsSelection(chatId: number, text: string, session: Session): void {
+        session.contractDurationUnits = text;
+        session.step = "select_ticks_or_minutes_duration";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showContractDurationValueKeyboard(chatId, session.contractDurationUnits);
+    }
+
+    /**
+     * Handle the contract duration value selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleUpdateContractDurationValueSelection(chatId: number, text: string, session: Session): void {
+        session.contractDurationValue = text;
+        session.step = "select_auto_or_manual";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showAutoManualTradingKeyboard(chatId, session.contractDurationValue);
+    }
+
+    /**
+     * Handle the auto/manual trading selection step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleAutoManualTrading(chatId: number, text: string, session: Session): void {
+        session.tradingMode = text;
+        session.step = "confirm_trade";
+        this.sessionService.updateSession(chatId, session);
+        this.keyboardService.showTradeConfirmationKeyboard(chatId, session.tradingMode);
+    }
+
+    /**
+     * Handle the trade confirmation step
+     * @param {number} chatId - The chat ID of the user
+     * @param {string} text - The text of the message
+     * @param {Session} session - The current session
+     * @private
+     */
+    private handleTradeConfirmation(chatId: number, text: string, session: Session): void {
+        if (text === CONSTANTS.COMMANDS.CONFIRM) {
+            this.workerService.postMessageToDerivWorker("CONFIRM_TRADE", chatId, "", session);
+        } else {
+            this.telegramBot.sendMessage(chatId, `Trade not confirmed. Use ${CONSTANTS.COMMANDS.START} to begin again.`);
+        }
+    }
     
+}
+
+/**
+ * Telegram bot command handler class
+ */
+class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
+    private sessionService: ISessionService;
+    private workerService: IWorkerService;
+
+    constructor(sessionService: ISessionService, workerService: IWorkerService) {
+        this.sessionService = sessionService;
+        this.workerService = workerService;
+    }
+
+    /**
+     * Handle the /start command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleStartCommand(msg: Message): Promise<void> {
+        const chatId = msg.chat.id;
+        const session = await this.sessionService.getSession(chatId);
+
+        if (!session) {
+            // If session is not found, initialize a new session
+            await this.sessionService.initializeSession(chatId);
+            this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.START, chatId, "", session);
+        } else {
+            // If session exists, send a welcome message
+            this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.START, chatId, "Welcome back!", session);
+        }
+    }
+
+    /**
+     * Handle the /confirm command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async getChatSession(msg: Message): Promise<any> {
+        const chatId = msg.chat.id;
+        const session = await this.sessionService.getSession(chatId);
+
+        if (!session) {
+            // If session is not found, throw an error
+            this.bot.sendMessage(chatId, `Session not found. Use ${CONSTANTS.COMMANDS.START} to begin.`, session);
+            return {chatId: null, session: null};
+        }
+
+        return { chatId, session };
+
+    }
+
+    /**
+     * Handle the /confirm command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleConfirmCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Confirm the action (e.g., trade confirmation)
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.CONFIRM, chatId, "", session);
+    }
+
+    /**
+     * Handle the /cancel command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleCancelCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Cancel the current action (e.g., cancel a trade)
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.CANCEL, chatId, "", session);
+    }
+
+    /**
+     * Handle the /help command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleHelpCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Send help information to the user
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.HELP, chatId, "Here is some help information.", session);
+    }
+
+    /**
+     * Handle the /resume command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleResumeCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Resume a paused action (e.g., resume trading)
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.RESUME, chatId, "", session);
+    }
+
+    /**
+     * Handle the /pause command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handlePauseCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Pause the current action (e.g., pause trading)
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.PAUSE, chatId, "", session);
+    }
+
+    /**
+     * Handle the /stop command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleStopCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Stop the current action (e.g., stop trading)
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.STOP, chatId, "", session);
+    }
+
+    /**
+     * Handle the /withdraw command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleWithdrawCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Withdraw amounts into your account
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.WITHDRAW, chatId, "", session);
+    }
+
+    /**
+     * Handle the /deposit command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleDepositCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Deposit amounts into your account
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.DEPOSIT, chatId, "", session);
+    }
+
+    /**
+     * Handle the /wallet command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleWalletCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display wallet information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.WALLET, chatId, "", session);
+    }
+
+    /**
+     * Handle the /accounts command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleAccountsCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display account information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.ACCOUNTS, chatId, "", session);
+    }
+
+    /**
+     * Handle the /profile command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleProfileCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display profile information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.PROFILE, chatId, "", session);
+    }
+
+    /**
+     * Handle the /settings command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleSettingsCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display settings information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.SETTINGS, chatId, "", session);
+    }
+
+    /**
+     * Handle the /logout command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleLogoutCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Logout the user
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.LOGOUT, chatId, "", session);
+    }
+
+    /**
+     * Handle the /status command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleStatusCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display status information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.STATUS, chatId, "", session);
+    }
+
+    /**
+     * Handle the /history command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleHistoryCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display history information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.HISTORY, chatId, "", session);
+    }
+
+    /**
+     * Handle the /balance command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleBalanceCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display balance information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.BALANCE, chatId, "", session);
+    }
+
+    /**
+     * Handle the /info command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleInfoCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.INFO, chatId, "", session);
+    }
+
+    /**
+     * Handle the /support command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleSupportCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display support information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.SUPPORT, chatId, "", session);
+    }
+
+    /**
+     * Handle the /update command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleUpdateCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Perform an update (e.g., update settings or data)
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.UPDATE, chatId, "", session);
+    }
+
+    /**
+     * Handle the /news command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleNewsCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display news information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.NEWS, chatId, "", session);
+    }
+
+    /**
+     * Handle the /alerts command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleAlertsCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display alerts information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.ALERTS, chatId, "", session);
+    }
+
+    /**
+     * Handle the /risk-management command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleRiskManagementCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display risk management information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.RISK_MANAGEMENT, chatId, "", session);
+    }
+
+    /**
+     * Handle the /strategies command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleStrategiesCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display strategies information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.STRATEGIES, chatId, "", session);
+    }
+
+    /**
+     * Handle the /faq command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleFaqCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display FAQ information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.FAQ, chatId, "", session);
+    }
+
+    /**
+     * Handle the /telemetry command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleTelemetryCommand(msg: Message): Promise<void> {
+        
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if(!chatId || !session){
+            return;
+        }
+
+        // Display telemetry information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.TELEMETRY, chatId, "", session);
+    }
+
+    /**
+     * Handle the /profits command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleProfitsCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display profits information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.PROFITS, chatId, "", session);
+    }
+
+    /**
+     * Handle the /statement command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleStatementCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display statement information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.STATEMENT, chatId, "", session);
+    }
+
+    /**
+     * Handle the /reset command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleResetCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Reset the session or settings
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.RESET, chatId, "", session);
+    }
+
+    /**
+     * Handle the /pricing command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handlePricingCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Display pricing information
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.PRICING, chatId, "", session);
+    }
+
+    /**
+     * Handle the /subscribe command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleSubscribeCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Subscribe the user to a service
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.SUBSCRIBE, chatId, "", session);
+    }
+
+    /**
+     * Handle the /health-check command
+     * @param {Message} msg - The message object from Telegram
+     */
+    async handleHealthCheckCommand(msg: Message): Promise<void> {
+
+        const { chatId, session } = await this.getChatSession(msg);
+
+        if (!chatId || !session) {
+            return;
+        }
+
+        // Perform a health check
+        this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.HEALTH_CHECK, chatId, "", session);
+    }
 }
 
 /**
@@ -443,8 +1453,6 @@ class KeyboardService implements IKeyboardService {
 
     getLoginKeyboard(session: any): KeyboardButton[][] | string [][] | any {
 
-        //TODO : secure the id and username by tmp encrypt
-
         const id:string = Encryption.encryptAES(session.id, APP_CRYPTOGRAPHIC_KEY);
 
         const username:string = Encryption.encryptAES(session.username, APP_CRYPTOGRAPHIC_KEY);
@@ -458,7 +1466,14 @@ class KeyboardService implements IKeyboardService {
 
     }
 
-    getTradingTypeKeyboard(): KeyboardButton[][] | string [][] {
+    getAccountTypeKeyboard(userAccounts:any): KeyboardButton[][] | string [][] {
+        //TODO ; generate it from the user
+        return [
+            [],
+        ];
+    }
+
+    getTradingTypeKeyboard(): KeyboardButton[][] | string[][] {
         return [
             [CONSTANTS.TRADING_TYPES.FOREX, CONSTANTS.TRADING_TYPES.DERIVATIVES],
             [CONSTANTS.TRADING_TYPES.CRYPTO, CONSTANTS.TRADING_TYPES.COMMODITIES],

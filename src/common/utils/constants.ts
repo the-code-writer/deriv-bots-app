@@ -23,10 +23,37 @@ interface IPurchaseTypes {
 
 interface ICommands {
   START: string;
-  CONFIRM: string;
+  CONFIRM: string; // This command wasn't explicitly listed, but it's included here for completeness
   CANCEL: string;
   HELP: string;
   RESUME: string;
+  PAUSE: string;
+  STOP: string;
+  WITHDRAW: string;
+  DEPOSIT: string;
+  WALLET: string;
+  ACCOUNTS: string;
+  PROFILE: string;
+  SETTINGS: string;
+  LOGOUT: string;
+  STATUS: string;
+  HISTORY: string;
+  BALANCE: string;
+  INFO: string;
+  SUPPORT: string;
+  UPDATE: string;
+  NEWS: string;
+  ALERTS: string;
+  RISK_MANAGEMENT: string;
+  STRATEGIES: string;
+  FAQ: string;
+  TELEMETRY: string;
+  PROFITS: string;
+  STATEMENT: string;
+  RESET: string;
+  PRICING: string;
+  SUBSCRIBE: string;
+  HEALTH_CHECK: string;
 }
 
 interface IContants {
@@ -35,6 +62,7 @@ interface IContants {
   PURCHASE_TYPES: IPurchaseTypes;
   NUMERIC_INPUT: KeyboardButton[][] | string [][];
   DURATION: KeyboardButton[][] | string [][];
+  TRADE_DURATION_U: KeyboardButton[][] | string [][];
   TRADE_DURATION_T: KeyboardButton[][] | string [][];
   TRADE_DURATION_M: KeyboardButton[][] | string [][];
   TRADE_MANUAL_OR_AUTO: KeyboardButton[][] | string [][];
@@ -99,8 +127,10 @@ export const CONSTANTS: IContants = {
     ["15min ⏱️", "30min ⏱️", "1hr ⏱️", "2hrs ⏱️"],
     ["4hrs ⏱️", "8hrs ⏱️", "12hrs ⏱️", "18hrs ⏱️"],
     ["24hrs ⏱️", "48hrs ⏱️", "72hrs ⏱️"],
-
     ["1 Tick", "3 Ticks", "5 Ticks", "10 Ticks"],
+  ],
+  TRADE_DURATION_U: [
+    ["Ticks ⏱️", "Minutes ⏱️", "Hours ⏱️"],
   ],
   TRADE_DURATION_T: [
     ["1 Tick", "2 Ticks", "3 Ticks"],
@@ -122,10 +152,37 @@ export const CONSTANTS: IContants = {
   TRADE_MANUAL: [["✅ TRAGE AGAIN", "❌ STOP TRADING"]],
   COMMANDS: {
     START: "/start",
-    CONFIRM: "/confirm",
+    CONFIRM: "/confirm", // This command wasn't explicitly listed, but it's included here for completeness
     CANCEL: "/cancel",
     HELP: "/help",
     RESUME: "/resume",
+    PAUSE: "/pause",
+    STOP: "/stop",
+    WITHDRAW: "/withdraw",
+    DEPOSIT: "/deposit",
+    WALLET: "/wallet",
+    ACCOUNTS: "/accounts",
+    PROFILE: "/profile",
+    SETTINGS: "/settings",
+    LOGOUT: "/logout",
+    STATUS: "/status",
+    HISTORY: "/history",
+    BALANCE: "/balance",
+    INFO: "/info",
+    SUPPORT: "/support",
+    UPDATE: "/update",
+    NEWS: "/news",
+    ALERTS: "/alerts",
+    RISK_MANAGEMENT: "/risk-management",
+    STRATEGIES: "/strategies",
+    FAQ: "/faq",
+    TELEMETRY: "/telemetry",
+    PROFITS: "/profits",
+    STATEMENT: "/statement",
+    RESET: "/reset",
+    PRICING: "/pricing",
+    SUBSCRIBE: "/subscribe",
+    HEALTH_CHECK: "/health-check",
   }
 
 };

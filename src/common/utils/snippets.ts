@@ -83,3 +83,34 @@ export const parseTimeToSeconds = (time: string): number => {
     }
   }
 }
+
+/**
+ * Replaces placeholders in a string with values from an object.
+ * 
+ * @param str The input string containing placeholders.
+ * @param variables An object containing key-value pairs to replace placeholders.
+ * @returns The modified string with placeholders replaced.
+ */
+export const replaceStringVariables = (str: string, variables: any): string => {
+  // Check if the input string is not null or undefined
+  if (!str) {
+    throw new Error("Input string cannot be null or undefined.");
+  }
+
+  // Check if the variables object is not null or undefined
+  if (!variables) {
+    throw new Error("Variables object cannot be null or undefined.");
+  }
+
+  // Use a regular expression to match placeholders in the string
+  return str.replace(/{([^}]+)}/g, (match, key) => {
+    // For each match, check if the key exists in the variables object
+    if (key in variables) {
+      // If the key exists, return its value
+      return variables[key];
+    } else {
+      // If the key does not exist, return the original placeholder
+      return match;
+    }
+  });
+}
