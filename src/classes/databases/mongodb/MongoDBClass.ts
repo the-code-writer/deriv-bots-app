@@ -339,7 +339,6 @@ export class MongoDBConnection implements DatabaseConnection {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const backupFileName = `${timestamp}.${this.config.dbName}.mongodb.backup.json`;
             const backupFilePath = path.join(backupPath, backupFileName);
-            logger.info("SAVE BAK TO : ", backupFilePath);
             // Write backup data to a JSON file
             fs.writeFileSync(backupFilePath, JSON.stringify(backupData, null, 2));
             logger.info(`Backup saved to: ${backupFilePath}`);
@@ -582,16 +581,18 @@ export class MongoDBConnection implements DatabaseConnection {
 
         //{ backupPath, backupFileName, backupFilePath }
         backupFileObject = await db.backupDatabase(); 
-        logger.error('DB BAK Success:', backupFileObject);
+        logger.info('Database backup completed successfully!', backupFileObject);
     } catch (error) {
-        logger.error('DB BAK Error:', error);
+        logger.error('Database backup error');
+        logger.error(error);
     } finally {
         try {
             await db.connect();
             await db.restoreDatabase(backupFileObject.backupFileName);
-            logger.error('DB RES Success:', backupFileObject);
+            logger.info('Database restoration completed successfully!', backupFileObject);
         } catch (error) {
-            logger.error('DB RES Error:', error);
+            logger.error('Database restoration error');
+            logger.error(error);
         } finally {
             await db.disconnect();
         }

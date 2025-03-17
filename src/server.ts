@@ -3,7 +3,6 @@ import express, { type Express } from "express";
 import helmet from "helmet";
 import { pino } from "pino";
 
-import { oauthRouter } from "@/deriv-app/oauthRouter";
 import { openAPIRouter } from "@/api-docs/openAPIRouter";
 import { healthCheckRouter } from "@/api/healthCheck/healthCheckRouter";
 import { userRouter } from "@/api/user/userRouter";
@@ -11,6 +10,7 @@ import errorHandler from "@/common/middleware/errorHandler";
 import rateLimiter from "@/common/middleware/rateLimiter";
 import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
+import { AttachRoutes } from '@/routes/AttachRoutes';
 
 const path = require('path');
 
@@ -63,15 +63,19 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
+
+// Initialize the AttachRoutes class with the app
+const attachRoutes = new AttachRoutes(app);
+
+// Attach all routes to the app
+attachRoutes.initializeRoutes();
+
 app.use("/health-check", healthCheckRouter);
 
 app.use("/users", userRouter);
 
 // Swagger UI
 app.use(openAPIRouter);
-
-// OAuth Router
-app.use(oauthRouter);
 
 // Error handlers
 app.use(errorHandler());

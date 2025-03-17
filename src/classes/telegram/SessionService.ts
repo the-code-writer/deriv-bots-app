@@ -7,7 +7,7 @@ const MongoDBStore = require('connect-mongodb-session')(session);
 const logger = pino({ name: "SessionService" });
 
 // Environment variables
-const { DERIV_APP_OAUTH_URL, APP_CRYPTOGRAPHIC_KEY, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, MONGODB_CONNECTION_STRING } = env;
+const { DERIV_APP_OAUTH_URL, APP_CRYPTOGRAPHIC_KEY, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_TG_BOT_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, MONGODB_CONNECTION_STRING } = env;
 
 /**
  * Interface representing a user session
@@ -71,22 +71,24 @@ export class SessionService implements ISessionService {
             logger.error(error);
         });
 
+        const expiryTime: number = 1000 * 60 * 60 * 24 * 7 * 1;
+
         const sessionMiddleware: any = {
             name: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
             secret: APP_CRYPTOGRAPHIC_KEY,
             resave: false,
-            saveUninitialized: true,
+            saveUninitialized: false,
             cookie: {
                 secure: process.env.NODE_ENV === "production",
                 httpOnly: true,
                 sameSite: "strict",
-                maxAge: (1000 * DB_SERVER_SESSIONS_DATABASE_TTL) || 86400000, // 1 day
-                originalMaxAge: (1000 * DB_SERVER_SESSIONS_DATABASE_TTL) || 86400000, // 1 day
+                originalMaxAge: DB_SERVER_SESSIONS_DATABASE_TTL || expiryTime,
+                maxAge: DB_SERVER_SESSIONS_DATABASE_TTL || expiryTime,
+                expires: DB_SERVER_SESSIONS_DATABASE_TTL || expiryTime,
                 path: "/",
                 domain: null,
                 priority: null,
                 partitioned: null,
-                expires: (1000 * DB_SERVER_SESSIONS_DATABASE_TTL) || 86400000, // 1 day,
             },
             store: sessionStorage
         };
@@ -96,21 +98,25 @@ export class SessionService implements ISessionService {
     }
     
     async updateSession(chatId: number, session: Session): Promise<void> {
-        await this.db.updateItems('tg_sessions', [{ field: 'chatId', operator: 'eq', value: chatId }], { $set: session });
+        await this.db.updateItems(DB_TG_BOT_SESSIONS_DATABASE_COLLECTION, [{ field: 'chatId', operator: 'eq', value: chatId }], { $set: session });
     }
 
     async cleanupInactiveSessions(): Promise<void> {
         const now = Date.now();
-        const sessions = await this.db.getAllItems('tg_sessions', []); //TODO : toArray()
+        const sessions = await this.db.getAllItems(DB_TG_BOT_SESSIONS_DATABASE_COLLECTION, []); //TODO : toArray()
 
         for (const session of sessions) {
             if (now - (session.timestamp || 0) > 30 * 60 * 1000) {
-                await this.db.deleteItem('tg_sessions', [{ field: 'chatId', operator: 'eq', value: session.chatId }]);
+                await this.db.deleteItem(DB_TG_BOT_SESSIONS_DATABASE_COLLECTION, [{ field: 'chatId', operator: 'eq', value: session.chatId }]);
             }
         }
     }
 
+    async deleteSession(chatId: number): Promise<void> {
+        await this.db.deleteItem(DB_TG_BOT_SESSIONS_DATABASE_COLLECTION, [{ field: 'chatId', operator: 'eq', value: chatId }]);
+    }
+
     async getSession(chatId: number): Promise<Session | null> {
-        return await this.db.getItem('tg_sessions', [{ field: 'chatId', operator: 'eq', value: chatId }]);
+        return await this.db.getItem(DB_TG_BOT_SESSIONS_DATABASE_COLLECTION, [{ field: 'chatId', operator: 'eq', value: chatId }]);
     }
 }

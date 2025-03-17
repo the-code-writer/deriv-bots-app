@@ -11,13 +11,11 @@ import { KeyboardService } from "@/classes/telegram/KeyboardService";
 import { TelegramBotCommandHandlers } from "@/classes/telegram/TelegramBotCommandHandlers";
 import { TradingProcessFlowHandlers } from "@/classes/telegram/TradingProcessFlowHandlers";
 import { TelegramBotService } from "@/classes/telegram/TelegramBotService";
-const { NODE_ENV, HOST, PORT, APP_CRYPTOGRAPHIC_KEY, MONGODB_CONNECTION_STRING, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, TELEGRAM_BOT_TOKEN } = env;
+const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, TELEGRAM_BOT_TOKEN } = env;
 
 const serverUrl: string = `http://${HOST}:${PORT}`;
 
 const util = require('util');
-
-const MongoDBStore = require('connect-mongodb-session')(session);
 
 // Override util.isArray to use Array.isArray
 util.isArray = Array.isArray;
@@ -85,7 +83,7 @@ util.isRegExp = function (obj: any) {
   };
 
   process.on("SIGINT", onCloseSignal);
-  
+
   process.on("SIGTERM", onCloseSignal);
 
 })();
