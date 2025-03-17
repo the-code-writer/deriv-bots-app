@@ -42,8 +42,6 @@ export class AttachRoutes {
      */
     public initializeOAuthRouter(): void {
 
-        console.log("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-
         // Initialize the OAuthRouter
         const oauthRouter = new OAuthRouter(this.app);
 
@@ -51,7 +49,7 @@ export class AttachRoutes {
         const oauthRouterInstance = oauthRouter.getRouter();
 
         // Attach the OAuth router to the app using RouterGenerator
-        this.routerGenerator.attachRouter('/xxx', oauthRouterInstance);
+        this.routerGenerator.attachRouter('/oauth', oauthRouterInstance);
 
         const routes = this.routerGenerator.getRegisteredRoutes();
 

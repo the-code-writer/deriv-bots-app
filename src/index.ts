@@ -63,10 +63,6 @@ util.isRegExp = function (obj: any) {
 
   app.set("bot", bot);
 
-  app.set("crypt", new Encryption());
-
-  logger.info("Services ready...");
-
   const server = app.listen(env.PORT, () => {
 
     logger.info(`Server now running in (${NODE_ENV}) at : ${serverUrl}`);

@@ -93,7 +93,8 @@ export class OAuthRouter {
          * Route: GET /deriv-oauth
          * Handles the Deriv OAuth flow and stores session data.
          */
-        this.router.get('/deriv-oauth', async (req: Request, res: Response) => {
+        this.router.get('/login', async (req: Request, res: Response) => {
+
             const { encid, encuser } = req.query; // Extract query parameters
 
             // Store encid and encuser in the session
@@ -118,7 +119,7 @@ export class OAuthRouter {
          * Handles the Deriv OAuth callback, organizes account data, and interacts with the bot.
          */
         // @ts-ignore
-        this.router.get('/deriv-callback', async (req: Request, res: Response) => {
+        this.router.get('/callback', async (req: Request, res: Response) => {
             const queryParams = req.query; // Extract all query parameters
             // @ts-ignore
             const session: any = req.session; // Extract session data
