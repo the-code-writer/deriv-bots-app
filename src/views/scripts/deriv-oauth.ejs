@@ -10,6 +10,8 @@
 <!-- Inline script with nonce -->
 <script nonce="<%= data.nonce %>">
     console.log("This script is allowed to run because of the nonce.");
-    alert("Hello from an inline script!");
+    setTimeout(()=>{
+        window.location.href = derivLoginURL;
+    })
 </script>
 

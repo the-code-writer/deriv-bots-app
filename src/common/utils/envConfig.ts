@@ -28,8 +28,8 @@ export const env = cleanEnv(process.env, {
   DB_DERIV_TRADE_RESULT_DATABASE_COLLECTION: str({ devDefault: testOnly("dv_trade_results") }),
 
   // Number variables
-  COMMON_RATE_LIMIT_MAX_REQUESTS: num({ devDefault: testOnly(20) }),
-  COMMON_RATE_LIMIT_WINDOW_MS: num({ devDefault: testOnly(1000) }),
+  COMMON_RATE_LIMIT_MAX_REQUESTS: num({ devDefault: testOnly(1000) }),
+  COMMON_RATE_LIMIT_WINDOW_MS: num({ devDefault: testOnly(3600) }),
   PORT: num({ devDefault: testOnly(8080) }),
   CONNECTION_MAXIMUM_ATTEMPTS: num({ devDefault: testOnly(5) }),
   CONNECTION_ATTEMPTS_TIMEOUT: num({ devDefault: testOnly(3000) }),

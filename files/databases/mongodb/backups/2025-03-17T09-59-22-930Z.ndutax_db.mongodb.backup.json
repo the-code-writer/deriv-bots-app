@@ -1,0 +1,194 @@
+{
+  "sessions": [
+    {
+      "_id": "67d32fb8370ca8117a58906b",
+      "chatId": 7542095001,
+      "step": "select_trading_type",
+      "timestamp": 1741894917913,
+      "username": {
+        "id": 7542095001,
+        "is_bot": false,
+        "first_name": "CodeWriter",
+        "username": "the_code_writer",
+        "language_code": "en"
+      },
+      "tradingType": "/start"
+    }
+  ],
+  "users": [
+    {
+      "_id": "67d7de34dfc0e20813a04cfe",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T08:32:52.505Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7de34dfc0e20813a04d00",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T08:32:52.508Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7de34dfc0e20813a04cff",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T08:32:52.508Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f2523327c05e4333e016",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:58:42.805Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f2523327c05e4333e018",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:58:42.859Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f2523327c05e4333e017",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:58:42.858Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f269fb417f3b7e3c590d",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:59:05.713Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f269fb417f3b7e3c590e",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:59:05.791Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f269fb417f3b7e3c590f",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:59:05.828Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f27a083f9c8c8a3ffb8d",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:59:22.629Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f27a083f9c8c8a3ffb8c",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:59:22.627Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    },
+    {
+      "_id": "67d7f27a083f9c8c8a3ffb8e",
+      "name": "John Doe",
+      "age": 30,
+      "createdAt": "2025-03-17T09:59:22.675Z",
+      "updatedAt": "2025-03-17T09:59:22.767Z",
+      "isActive": false
+    }
+  ],
+  "sv_sessions": [
+    {
+      "_id": "XBge1ck2_Ek6Fc7UHiTebp2cNfJ7E3eV",
+      "expires": "2025-03-17T18:48:25.584Z",
+      "session": {
+        "cookie": {
+          "originalMaxAge": 86400000,
+          "partitioned": null,
+          "priority": null,
+          "expires": "2025-03-17T18:48:25.584Z",
+          "secure": false,
+          "httpOnly": true,
+          "domain": null,
+          "path": "/",
+          "sameSite": "strict"
+        },
+        "chatId": "U2FsdGVkX1 xsIxhPL0gumjShuRL3cGmqdTfJAxtJY0=",
+        "username": "U2FsdGVkX18mQdRKFJEH2teN/Y9mJq2e2HA95v5Ayhg="
+      }
+    },
+    {
+      "_id": "oQVLHoJJva_fJGh0RhXjhTAk7d0HcqXE",
+      "expires": "2025-03-17T18:48:28.148Z",
+      "session": {
+        "cookie": {
+          "originalMaxAge": 86400000,
+          "partitioned": null,
+          "priority": null,
+          "expires": "2025-03-17T18:48:28.148Z",
+          "secure": false,
+          "httpOnly": true,
+          "domain": null,
+          "path": "/",
+          "sameSite": "strict"
+        },
+        "chatId": "U2FsdGVkX1 xsIxhPL0gumjShuRL3cGmqdTfJAxtJY0=",
+        "username": "U2FsdGVkX18mQdRKFJEH2teN/Y9mJq2e2HA95v5Ayhg="
+      }
+    },
+    {
+      "_id": "ZcKHvjfL5sHDt-QIdYwveGEW3To70LrP",
+      "expires": "2025-03-17T19:07:19.640Z",
+      "session": {
+        "cookie": {
+          "originalMaxAge": 86400000,
+          "partitioned": null,
+          "priority": null,
+          "expires": "2025-03-17T19:07:19.640Z",
+          "secure": false,
+          "httpOnly": true,
+          "domain": null,
+          "path": "/",
+          "sameSite": "strict"
+        },
+        "chatId": "U2FsdGVkX1 xsIxhPL0gumjShuRL3cGmqdTfJAxtJY0=",
+        "username": "U2FsdGVkX18mQdRKFJEH2teN/Y9mJq2e2HA95v5Ayhg="
+      }
+    },
+    {
+      "_id": "KZVjsooxBjuf5yPcjH8krWJnpgiKUF--",
+      "expires": "2025-03-18T09:25:41.620Z",
+      "session": {
+        "cookie": {
+          "originalMaxAge": 86400000,
+          "partitioned": null,
+          "priority": null,
+          "expires": "2025-03-18T09:25:41.620Z",
+          "secure": false,
+          "httpOnly": true,
+          "domain": null,
+          "path": "/",
+          "sameSite": "strict"
+        },
+        "chatId": "U2FsdGVkX19 tJeb75dvoNvm0qpYKYVuFuIj/qqWuek=",
+        "username": "U2FsdGVkX1/ijgWuNbqX169hbU1Cf ETHcavic/nag4="
+      }
+    }
+  ]
+}

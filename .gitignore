@@ -31,5 +31,3 @@ dist-ssr
 .vercel
 src/db/sessions/telegram-bot-sessions.json
 assets/docs/~$profit-tables.xlsx
-/src/db
-/files

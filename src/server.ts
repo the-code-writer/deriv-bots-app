@@ -64,6 +64,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
 app.use("/health-check", healthCheckRouter);
+
 app.use("/users", userRouter);
 
 // Swagger UI

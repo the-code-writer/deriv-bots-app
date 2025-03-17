@@ -1,11 +1,17 @@
 
 
-import { MongoClient, Db, Collection, MongoClientOptions, InsertOneResult, InsertManyResult, UpdateResult, DeleteResult, Document, MongoServerError } from 'mongodb';
+import { MongoClient, Db, Collection, MongoClientOptions, InsertOneResult, InsertManyResult, UpdateResult, DeleteResult, Document, MongoServerError, WithId } from 'mongodb';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { env } from "@/common/utils/envConfig";
-import { logger } from '@/server';
+import { pino } from 'pino';
+
+// Logger
+const logger = pino({ name: "MongoDBConnection" });
+
+// Environment variables
+
 const { MONGODB_CONNECTION_STRING, MONGODB_BACKUP_PATH, MONGODB_DATABASE_NAME, MONGODB_MAX_RETRIES, MONGODB_RETRY_DELAY } = env;
 // Load environment variables from .env file
 dotenv.config();
@@ -29,19 +35,19 @@ interface DatabaseConnection {
     connect(): Promise<void>;
     disconnect(): Promise<void>;
     retryConnection(): Promise<void>;
-    getConnection(): Db;
+    getConnection(checkConnection: boolean): Promise<Db | null>;
     createDatabase(dbName: string): Promise<void>;
     repairDatabase(): Promise<void>;
     optimizeDatabase(): Promise<void>;
     backupDatabase(backupPath: string): Promise<void>;
     restoreDatabase(backupPath: string): Promise<void>;
-    insertItem(collectionName: string, item: Item): Promise<InsertOneResult>;
-    insertBulk(collectionName: string, items: Item[]): Promise<InsertManyResult>;
+    insertItem(collectionName: string, item: any): Promise<InsertOneResult<Document> | undefined>;
+    insertBulk(collectionName: string, items: any[]): Promise<InsertManyResult<Document> | undefined>;
     getItem(collectionName: string, query: Partial<Item>): Promise<Item | null>;
-    getAllItems(collectionName: string): Promise<Item[]>;
-    updateItem(collectionName: string, query: Partial<Item>, updates: Partial<Item>): Promise<UpdateResult>;
-    updateItems(collectionName: string, query: Partial<Item>, updates: Partial<Item>): Promise<UpdateResult>;
-    deleteItem(collectionName: string, query: Partial<Item>): Promise<DeleteResult>;
+    getAllItems(collectionName: string, conditions: QueryCondition[]): Promise<WithId<Document>[] | undefined>;
+    updateItem(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult | undefined>;
+    updateItems(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult | undefined>;
+    deleteItem(collectionName: string, conditions: QueryCondition[]): Promise<DeleteResult | undefined>;
 }
 
 interface QueryCondition {
@@ -178,7 +184,7 @@ export class MongoDBConnection implements DatabaseConnection {
      * Returns the current database connection.
      * @throws {Error} If not connected.
      */
-    async getConnection(checkConnection: boolean = false): Promise<Db> {
+    async getConnection(checkConnection: boolean = false): Promise<Db | null> {
 
         if (!this.db) {
             if (checkConnection) {
@@ -213,12 +219,12 @@ export class MongoDBConnection implements DatabaseConnection {
      * @param item - Item to insert.
      * @returns InsertOneResult
      */
-    async insertItem(collectionName: string, item: any): Promise<InsertOneResult> {
-        const collection = this.getConnection().collection(collectionName);
+    async insertItem(collectionName: string, item: any): Promise<InsertOneResult<Document> | undefined> {
+        const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         item.createdAt = new Date();
         item.updatedAt = new Date();
         item.isActive = true;
-        return await collection.insertOne(item);
+        return await collection?.insertOne(item);
     }
 
     /**
@@ -227,14 +233,14 @@ export class MongoDBConnection implements DatabaseConnection {
      * @param items - Array of items to insert.
      * @returns InsertManyResult
      */
-    async insertBulk(collectionName: string, items: any[]): Promise<InsertManyResult> {
-        const collection = this.getConnection().collection(collectionName);
+    async insertBulk(collectionName: string, items: any[]): Promise<InsertManyResult<Document> | undefined> {
+        const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         items.forEach((item) => {
             item.createdAt = new Date();
             item.updatedAt = new Date();
             item.isActive = true;
         });
-        return await collection.insertMany(items);
+        return await collection?.insertMany(items);
     }
 
     /**
@@ -244,9 +250,9 @@ export class MongoDBConnection implements DatabaseConnection {
        * @returns Item or null if not found.
        */
     async getItem(collectionName: string, conditions: QueryCondition[]): Promise<any | null> {
-        const collection = this.getConnection().collection(collectionName);
+        const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         const query = QueryBuilder.buildQuery({ conditions });
-        return await collection.findOne(query);
+        return await collection?.findOne(query);
     }
 
     /**
@@ -255,10 +261,10 @@ export class MongoDBConnection implements DatabaseConnection {
      * @param conditions - Query conditions.
      * @returns Array of items.
      */
-    async getAllItems(collectionName: string, conditions: QueryCondition[] = []): Promise<any[]> {
-        const collection = this.getConnection().collection(collectionName);
+    async getAllItems(collectionName: string, conditions: QueryCondition[] = []): Promise<WithId<Document>[] | undefined> {
+        const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         const query = QueryBuilder.buildQuery({ conditions });
-        return await collection.find(query).toArray();
+        return await collection?.find(query).toArray();
     }
 
     /**
@@ -268,11 +274,11 @@ export class MongoDBConnection implements DatabaseConnection {
      * @param updates - Updates to apply.
      * @returns UpdateResult
      */
-    async updateItem(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult> {
-        const collection = this.getConnection().collection(collectionName);
+    async updateItem(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult | undefined> {
+        const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         const query = QueryBuilder.buildQuery({ conditions });
         updates.updatedAt = new Date();
-        return await collection.updateOne(query, { $set: updates });
+        return await collection?.updateOne(query, { $set: updates });
     }
 
     /**
@@ -282,11 +288,11 @@ export class MongoDBConnection implements DatabaseConnection {
      * @param updates - Updates to apply.
      * @returns UpdateResult
      */
-    async updateItems(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult> {
-        const collection = this.getConnection().collection(collectionName);
+    async updateItems(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult | undefined> {
+        const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         const query = QueryBuilder.buildQuery({ conditions });
         updates.updatedAt = new Date();
-        return await collection.updateMany(query, { $set: updates });
+        return await collection?.updateMany(query, { $set: updates });
     }
 
     /**
@@ -295,10 +301,10 @@ export class MongoDBConnection implements DatabaseConnection {
      * @param query - Query to find the item.
      * @returns DeleteResult
      */
-    async deleteItem(collectionName: string, conditions: QueryCondition[]): Promise<DeleteResult> {
-        const collection = this.getConnection().collection(collectionName);
+    async deleteItem(collectionName: string, conditions: QueryCondition[]): Promise<DeleteResult | undefined> {
+        const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         const query = QueryBuilder.buildQuery({ conditions });
-        return await collection.deleteOne(query);
+        return await collection?.deleteOne(query);
     }
 
     /**
@@ -320,7 +326,7 @@ export class MongoDBConnection implements DatabaseConnection {
             // Iterate through each collection and retrieve its records
             for (const collectionInfo of collections) {
                 const collectionName = collectionInfo.name;
-                const collection = this.db.collection(collectionName);
+                const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
                 const records = await collection.find().toArray();
                 backupData[collectionName] = records;
             }
@@ -367,7 +373,7 @@ export class MongoDBConnection implements DatabaseConnection {
             // Iterate through each collection in the backup data
             for (const [collectionName, records] of Object.entries(backupData)) {
 
-                const collection = this.db.collection(collectionName);
+                const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
 
                 await collection.deleteMany({});
 
@@ -403,7 +409,7 @@ export class MongoDBConnection implements DatabaseConnection {
             const collections = await this.db.listCollections().toArray();
             for (const collectionInfo of collections) {
                 const collectionName = collectionInfo.name;
-                const collection = this.db.collection(collectionName);
+                const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
 
                 // Example: Create an index on the `createdAt` field
                 await collection.createIndex({ createdAt: 1 });
@@ -442,13 +448,13 @@ export class MongoDBConnection implements DatabaseConnection {
             logger.info('Analyzing and dropping unused indexes...');
             for (const collectionInfo of collections) {
                 const collectionName = collectionInfo.name;
-                const indexes = await this.db.collection(collectionName).indexes();
+                const indexes = await this.db?.collection(collectionName).indexes();
 
                 for (const index of indexes) {
                     const indexName: string | undefined = index.name;
                     if (indexName !== '_id_') { // Skip the default _id index
                         // Example: Drop indexes that are not frequently used (this is a placeholder logic)
-                        await this.db.collection(collectionName).dropIndex(String(indexName));
+                        await this.db?.collection(collectionName).dropIndex(String(indexName));
                         logger.info(`Dropped unused index: ${indexName} in collection: ${collectionName}`);
                     }
                 }
@@ -489,7 +495,7 @@ export class MongoDBConnection implements DatabaseConnection {
         }
 
         try {
-            const collection = this.db.collection(collectionName);
+            const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
 
             // Drop the collection
             await collection.drop();
@@ -505,7 +511,15 @@ export class MongoDBConnection implements DatabaseConnection {
     }
 
     /**
-   * Returns the MongoDB client (for session storage).
+   * Returns the MongoDB DB.
+   */
+    getDB(): Db {
+        if (!this.db) throw new Error('Database not initialized.');
+        return this.db;
+    }
+
+    /**
+   * Returns the MongoDB Client.
    */
     getClient(): MongoClient {
         if (!this.client) throw new Error('Database not connected.');
@@ -513,9 +527,7 @@ export class MongoDBConnection implements DatabaseConnection {
     }
 
 }
-
-/*
-
+ 
 // Example usage
 (async () => {
     const db = new MongoDBConnection();
@@ -599,5 +611,4 @@ export class MongoDBConnection implements DatabaseConnection {
         await db.disconnect();
     }
 })();
-
-*/
+ 

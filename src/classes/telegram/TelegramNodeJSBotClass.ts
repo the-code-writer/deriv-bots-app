@@ -187,7 +187,7 @@ ${DERIV_APP_LOGIN_URL}?uid=${telegramUserID}`);
         setTimeout(() => {
             this.telegramBot.sendMessage(chatId, 'Please login using your Deriv Account to proceed:', {
                 reply_markup: {
-                    inline_keyboard: this.getLoginKeyboard(session.username),
+                    inline_keyboard: this.getLoginKeyboard(session),
                 },
             });
         }, 500);
@@ -915,7 +915,7 @@ https://derivbots.app
      */
     private getLoginKeyboard(session: any): any {
         return [
-            [{ text: '🔒 LOGIN', url: `${DERIV_APP_LOGIN_URL}?id=${session.id}&username=${session.username}` }],
+            [{ text: '🔒 LOGIN', url: `${DERIV_APP_LOGIN_URL}?encid=${session.id}&encuser=${session.username}` }],
             [{ text: '🚫 CANCEL', callback_data: 'exec_cancel' }],
         ];
     }

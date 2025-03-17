@@ -1,38 +1,23 @@
 import express, { Request, Response, Router } from 'express';
 import { env } from '@/common/utils/envConfig';
-import MongoStore from 'connect-mongo';
 import session from 'express-session';
+import { SessionService } from '@/classes/telegram/SessionService';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
 const { DERIV_APP_OAUTH_URL, APP_CRYPTOGRAPHIC_KEY, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, MONGODB_CONNECTION_STRING } = env;
 const MongoDBStore = require('connect-mongodb-session')(session);
 export const oauthRouter: Router = express.Router();
 
+const db = new MongoDBConnection();
 
-  const sessionStorage = new MongoDBStore({
-    uri: MONGODB_CONNECTION_STRING,
-    databaseName: MONGODB_DATABASE_NAME,
-    collection: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
-  });
+const sessionService = new SessionService(db);
 
-const sessionMiddleware: any = {
-  name: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
-  secret: APP_CRYPTOGRAPHIC_KEY,
-  resave: true,
-  saveUninitialized: true,
-  cookie: {
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    sameSite: "strict",
-    maxAge: (1000 * DB_SERVER_SESSIONS_DATABASE_TTL) || 86400000, // 1 day
-  },
-  store: sessionStorage
-};
+const sessionMiddleware = sessionService.getSessionMiddleware();
 
 const sessionObject: any = session(sessionMiddleware);
 
 oauthRouter.use(sessionObject);
 
-oauthRouter.get("/", async (req: Request, res: Response) => {
+oauthRouter.get("/", async (_: Request, res: Response) => {
 
   const data = {
     title: "Deriv Trading Bot",
@@ -46,25 +31,26 @@ oauthRouter.get("/", async (req: Request, res: Response) => {
 
 oauthRouter.get("/deriv-oauth", async (req: Request, res: Response) => {
 
-  const { id, username } = req.query;
+  const { encid, encuser } = req.query;
 
   // @ts-ignore
-  req.session.chatId = id;
+  req.session.encid = encid;
   // @ts-ignore
-  req.session.username = username;
+  req.session.encuser = encuser;
 
   const data = {
     title: "Deriv Login",
     nonce: res.locals.nonce,
     derivLoginURL: DERIV_APP_OAUTH_URL,
     // @ts-ignore
-    params: { id: req.session.chatId, username: req.session.username }
+    params: { session: req.session }
   };
 
   res.render("deriv-oauth-template", { data })
 
 });
 
+// @ts-ignore
 oauthRouter.get("/deriv-callback", async (req: Request, res: Response) => {
 
   // Extract all query parameters
@@ -73,6 +59,14 @@ oauthRouter.get("/deriv-callback", async (req: Request, res: Response) => {
   // Extract all cookies
   // @ts-ignore
   const session: any = req.session;
+
+  const session2: any = res.session;
+
+  console.log("OAUTH_ROUTER_SESSION::queryParams::", queryParams);
+
+  console.log("OAUTH_ROUTER_SESSION::session::", session);
+
+  console.log("OAUTH_ROUTER_SESSION::session2::", session);
 
   // Initialize an empty object to store the organized data
   const organizedData: any = {};
@@ -114,8 +108,8 @@ oauthRouter.get("/deriv-callback", async (req: Request, res: Response) => {
   const data = {
     nonce: res.locals.nonce,
     accounts: organizedData,
-    chatId: session.chatId,
-    username: session.username,
+    encid: session.encid,
+    encusername: session.encusername,
   };
 
   // Call the bot's userLoggedIn function

@@ -1,24 +1,24 @@
 import { KeyboardButton } from "node-telegram-bot-api";
 
 interface IForex {
-  FOREX: KeyboardButton[][] | string [][];
+  FOREX: KeyboardButton[][] | string[][];
 }
 
 interface IDerivatives {
-  DERIVATIVES: KeyboardButton[][] | string [][];
+  DERIVATIVES: KeyboardButton[][] | string[][];
 }
 
 interface ICrypto {
-  CRYPTO: KeyboardButton[][] | string [][];
+  CRYPTO: KeyboardButton[][] | string[][];
 }
 
 interface ICommodities {
-  COMMODITIES: KeyboardButton[][] | string [][];
+  COMMODITIES: KeyboardButton[][] | string[][];
 }
 
 interface IPurchaseTypes {
-  GENERAL: KeyboardButton[][] | string [][];
-  DERIVATIVES: KeyboardButton[][] | string [][];
+  GENERAL: KeyboardButton[][] | string[][];
+  DERIVATIVES: KeyboardButton[][] | string[][];
 }
 
 interface ICommands {
@@ -56,22 +56,59 @@ interface ICommands {
   HEALTH_CHECK: string;
 }
 
+interface ISessionSteps {
+  LOGIN_ACCOUNT: string;
+  SELECT_ACCOUNT_TYPE: string;
+  SELECT_TRADING_TYPE: string;
+  SELECT_MARKET: string;
+  SELECT_PURCHASE_TYPE: string;
+  ENTER_STAKE: string;
+  ENTER_TAKE_PROFIT: string;
+  ENTER_STOP_LOSS: string;
+  SELECT_TRADE_DURATION: string;
+  SELECT_UPDATE_FREQUENCY: string;
+  SELECT_TICKS_OR_MINUTES: string;
+  SELECT_TICKS_OR_MINUTES_DURATION: string;
+  SELECT_AUTO_OR_MANUAL: string;
+  CONFIRM_TRADE: string;
+  MANUAL_TRADE: string;
+}
+
 interface IContants {
-  TRADING_TYPES: any;
-  MARKETS: IForex | IDerivatives | ICrypto | ICommodities ;
+  SESSION_STEPS: ISessionSteps;
+  TRADING_TYPES: IForex | IDerivatives | ICrypto | ICommodities | any;
+  MARKETS: IForex | IDerivatives | ICrypto | ICommodities;
   PURCHASE_TYPES: IPurchaseTypes;
-  NUMERIC_INPUT: KeyboardButton[][] | string [][];
-  DURATION: KeyboardButton[][] | string [][];
-  TRADE_DURATION_U: KeyboardButton[][] | string [][];
-  TRADE_DURATION_T: KeyboardButton[][] | string [][];
-  TRADE_DURATION_M: KeyboardButton[][] | string [][];
-  TRADE_MANUAL_OR_AUTO: KeyboardButton[][] | string [][];
-  TRADE_CONFIRM: KeyboardButton[][] | string [][];
-  TRADE_MANUAL: KeyboardButton[][] | string [][];
+  NUMERIC_INPUT: KeyboardButton[][] | string[][];
+  DURATION: KeyboardButton[][] | string[][];
+  TRADE_DURATION_U: KeyboardButton[][] | string[][];
+  TRADE_DURATION_T: KeyboardButton[][] | string[][];
+  TRADE_DURATION_M: KeyboardButton[][] | string[][];
+  TRADE_DURATION_H: KeyboardButton[][] | string[][];
+  TRADE_MANUAL_OR_AUTO: KeyboardButton[][] | string[][];
+  TRADE_CONFIRM: KeyboardButton[][] | string[][];
+  TRADE_MANUAL: KeyboardButton[][] | string[][];
   COMMANDS: ICommands;
 }
 
 export const CONSTANTS: IContants = {
+  SESSION_STEPS: {
+    LOGIN_ACCOUNT: "LOGIN_ACCOUNT",
+    SELECT_ACCOUNT_TYPE: "ACCOUNT_TYPE_SELECTION",
+    SELECT_TRADING_TYPE: "TRADING_TYPE_SELECTION",
+    SELECT_MARKET: "MARKET_SELECTION",
+    SELECT_PURCHASE_TYPE: "PURCHASE_TYPE_SELECTION",
+    ENTER_STAKE: "STAKE_INPUT",
+    ENTER_TAKE_PROFIT: "TAKE_PROFIT_INPUT",
+    ENTER_STOP_LOSS: "STOP_LOSS_INPUT",
+    SELECT_TRADE_DURATION: "TRADE_DURATION_SELECTION",
+    SELECT_UPDATE_FREQUENCY: "UPDATE_FREQUENCY_SELECTION",
+    SELECT_TICKS_OR_MINUTES: "UPDATE_CONTRACT_DURATION_UNIT_SSELECTION",
+    SELECT_TICKS_OR_MINUTES_DURATION: "UPDATE_CONTRACT_DURATION_VALUE_SELECTION",
+    SELECT_AUTO_OR_MANUAL: "AUTO_MANUAL_TRADING",
+    CONFIRM_TRADE: "TRADE_CONFIRMATION",
+    MANUAL_TRADE: "TRADE_MANUAL",
+  },
   TRADING_TYPES: {
     FOREX: "Forex 🌍",
     DERIVATIVES: "Derivatives 📊",
@@ -141,7 +178,9 @@ export const CONSTANTS: IContants = {
   TRADE_DURATION_M: [
     ["1min ⏱️", "2min ⏱️", "5min ⏱️", "10min ⏱️"],
     ["15min ⏱️", "20min ⏱️", "25min ⏱️", "30min ⏱️"],
-    ["35min ⏱️", "40min ⏱️", "45min ⏱️", "50min ⏱️"],
+    ["35min ⏱️", "40min ⏱️", "45min ⏱️", "60min ⏱️"],
+  ],
+  TRADE_DURATION_H: [
     ["1hr ⏱️", "2hrs ⏱️", "3hrs ⏱️", "4hrs ⏱️"],
     ["5hrs ⏱️", "6hrs ⏱️", "7hrs ⏱️", "8hrs ⏱️"],
     ["9hrs ⏱️", "10hrs ⏱️", "12hrs ⏱️", "8hrs ⏱️"],
