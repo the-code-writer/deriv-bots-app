@@ -65,9 +65,7 @@ const setupSessionMiddleware = (sessionService: SessionService) => {
 
   const sessionMiddleware = sessionService.getSessionMiddleware();
 
-  const sessionObject = session(sessionMiddleware);
-
-  app.use(sessionObject);
+  app.use(sessionMiddleware);
 
 };
 

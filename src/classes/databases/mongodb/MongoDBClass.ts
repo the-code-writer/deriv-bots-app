@@ -526,6 +526,8 @@ export class MongoDBConnection implements DatabaseConnection {
     }
 
 }
+
+/*
  
 // Example usage
 (async () => {
@@ -613,3 +615,4 @@ export class MongoDBConnection implements DatabaseConnection {
     }
 })();
  
+*/

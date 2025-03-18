@@ -4,6 +4,7 @@ import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
 import session from "express-session";
 import { calculateExpiry } from "@/common/utils/snippets";
 const MongoDBStore = require('connect-mongodb-session')(session);
+const MongoStore = require('connect-mongo');
 // Logger
 const logger = pino({ name: "SessionService" });
 
@@ -36,7 +37,7 @@ export interface Session {
  */
 export interface ISessionService {
     initializeSession(chatId: number): void;
-    getSessionMiddleware(): any;
+    getSessionMiddleware(sessionId:string): any;
     updateSession(chatId: number, session: Session): Promise<void>;
     cleanupInactiveSessions(): Promise<void>;
     getSession(chatId: number): Promise<Session | null>;
@@ -61,45 +62,58 @@ export class SessionService implements ISessionService {
 
     getSessionMiddleware(): any {
 
-        const sessionStorage = new MongoDBStore({
+        const sessionStoragex = new MongoDBStore({
             uri: MONGODB_CONNECTION_STRING,
             databaseName: MONGODB_DATABASE_NAME,
             collection: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
         });
 
-        sessionStorage.on('error', function (error: any) {
-            logger.error("Session storage error occured!");
-            logger.error(error);
+        const sessionStorage = MongoStore.create({
+            mongoUrl: `${MONGODB_CONNECTION_STRING}${MONGODB_DATABASE_NAME}`, // MongoDB connection URL
+            collectionName: DB_SERVER_SESSIONS_DATABASE_COLLECTION, // Collection to store sessions in MongoDB
+            ttl: 14 * 24 * 60 * 60, // Session TTL (time to live) in seconds (14 days)
         });
-
-        const expiryTime: number = calculateExpiry("1 week");
-        console.log(DB_SERVER_SESSIONS_DATABASE_TTL);
-        console.log(expiryTime);
 
         const sessionMiddleware: any = {
             name: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
             secret: APP_CRYPTOGRAPHIC_KEY,
-            resave: true,
+            resave: false,
             saveUninitialized: true,
-            cookie: {
-                secure: process.env.NODE_ENV === "production",
-                httpOnly: true,
-                sameSite: "strict",
-                originalMaxAge: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
-                maxAge: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
-                expires: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
-                path: "/",
-                domain: null,
-                priority: null,
-                partitioned: null,
-            },
+            cookie: this.generateCookieParams(),
             store: sessionStorage
         };
 
-        return sessionMiddleware;
+        return session(sessionMiddleware);
 
     }
-    
+
+    generateCookieParams(): any {
+
+        const expiryTime: number = calculateExpiry("1 week");
+
+        return {
+            secure: process.env.NODE_ENV === "production",
+            httpOnly: true,
+            sameSite: "strict",
+            originalMaxAge: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
+            maxAge: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
+            expires: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
+            path: "/",
+            domain: null,
+            priority: null,
+            partitioned: null,
+        }
+
+    }
+
+    generateCookieSessionID(encid: any): any {
+
+        const cookieSessionId = encid; // Generate a unique session ID
+
+        return { cookieSessionId, cookieParams: this.generateCookieParams() }
+
+    }
+
     async updateSession(chatId: number, session: Session): Promise<void> {
         await this.db.updateItems(DB_TG_BOT_SESSIONS_DATABASE_COLLECTION, [{ field: 'chatId', operator: 'eq', value: chatId }], { $set: session });
     }

@@ -3,8 +3,9 @@ import { env } from '@/common/utils/envConfig';
 import session from 'express-session';
 import { SessionService } from '@/classes/telegram/SessionService';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
+const cookieParser = require('cookie-parser');
 
-const { DERIV_APP_OAUTH_URL } = env;
+const { DERIV_APP_OAUTH_URL, DB_SERVER_SESSIONS_DATABASE_COLLECTION } = env;
 
 /**
  * Interface for the data object passed to EJS templates.
@@ -43,7 +44,7 @@ export class OAuthRouter {
      * Constructor for the OAuthRouter class.
      * Initializes the router, database connection, and session service.
      */
-    constructor(app:any) {
+    constructor(app: any) {
         this.app = app;
         this.router = express.Router(); // Create a new Express router
         this.db = new MongoDBConnection(); // Initialize MongoDB connection
@@ -64,6 +65,18 @@ export class OAuthRouter {
         // Apply the session middleware to the OAuth router
         this.router.use(sessionObject);
 
+        this.router.use(cookieParser());
+
+        this.router.use((req: Request, res: Response, next: any) => {
+
+            console.log('Session at start of request:', JSON.stringify(req.session));
+
+            console.log('Session at start of request:', JSON.stringify(req.cookies));
+
+            next();
+
+        });
+
         // Define routes
         this.defineRoutes();
 
@@ -78,7 +91,11 @@ export class OAuthRouter {
          * Route: GET /
          * Renders the index page with a nonce and Deriv OAuth URL.
          */
-        this.router.get('/', async (_: Request, res: Response) => {
+        this.router.get('/', async (req: Request, res: Response) => {
+
+            console.log('Session ID:', req.sessionID);
+            console.log('Session Data:', req.session);
+
             const data: TemplateData = {
                 title: 'Deriv Trading Bot',
                 nonce: res.locals.nonce, // Nonce for CSP
@@ -97,29 +114,55 @@ export class OAuthRouter {
 
             const { encid, encuser } = req.query; // Extract query parameters
 
+            let sessionId = req.cookies.sessionId;
+
+            if (!sessionId) {
+
+                const { cookieSessionId, cookieParams } = this.sessionService.generateCookieSessionID(req.sessionID); // Generate a unique session ID
+
+                // Set a cookie in the client's browser
+                res.cookie('sessionId', cookieSessionId, cookieParams);
+
+                sessionId = cookieSessionId;
+
+            }
+
             // Store encid and encuser in the session
             // @ts-ignore
             req.session.encid = encid;
             // @ts-ignore
             req.session.encuser = encuser;
+            // @ts-ignore
+            req.session.sessionId = sessionId;
+
+
+            await this.db.insertItem(DB_SERVER_SESSIONS_DATABASE_COLLECTION, req.session);
+
 
             req.session.save((err) => {
                 if (err) {
                     console.error('Error saving session:', err);
                 } else {
                     console.log('Session saved successfully');
+
+                    console.log('sessionId:', sessionId);
+                    console.log('Session ID:', req.sessionID);
+                    console.log('Session Data:', req.session);
+
+
                 }
+                const data: TemplateData = {
+                    title: 'Deriv Login',
+                    nonce: res.locals.nonce, // Nonce for CSP
+                    derivLoginURL: DERIV_APP_OAUTH_URL, // Deriv OAuth URL from environment
+                    params: { session: req.session }, // Pass session data to the template
+                };
+
+                // Render the deriv-oauth-template EJS template with the data
+                res.render('deriv-oauth-template', { data });
+
             });
 
-            const data: TemplateData = {
-                title: 'Deriv Login',
-                nonce: res.locals.nonce, // Nonce for CSP
-                derivLoginURL: DERIV_APP_OAUTH_URL, // Deriv OAuth URL from environment
-                params: { session: req.session }, // Pass session data to the template
-            };
-
-            // Render the deriv-oauth-template EJS template with the data
-            res.render('deriv-oauth-template', { data });
         });
 
         /**
@@ -128,12 +171,29 @@ export class OAuthRouter {
          */
         // @ts-ignore
         this.router.get('/callback', async (req: Request, res: Response) => {
-            const queryParams = req.query; // Extract all query parameters
-            // @ts-ignore
-            const session: any = req.session; // Extract session data
 
-            console.log('OAUTH_ROUTER_SESSION::queryParams::', queryParams);
-            console.log('OAUTH_ROUTER_SESSION::session::', session);
+            const queryParams = req.query; // Extract all query parameters
+
+            console.log('req.cookies:', req.cookies.sessionId);
+            console.log('req.session:', req.session.sessionId);
+            console.log('Session ID:', req.sessionID);
+            console.log('Session Data:', req.session);
+
+            const sessionId = req.cookies.sessionId;
+
+            if (!sessionId) {
+
+                console.error('Missing cookie data:', req.session);
+
+            }
+
+            const session = await this.db.getItem(DB_SERVER_SESSIONS_DATABASE_COLLECTION, [{ field: 'sessionId', operator: 'eq', value: sessionId }]);
+
+            // @ts-ignore
+            if (!req.session.encid || !req.session.encuser) {
+                console.error('Missing session data:', req.session);
+                return res.status(400).send('Session data is missing');
+            }
 
             const organizedData: OrganizedAccountData = {}; // Initialize an object to organize account data
 
