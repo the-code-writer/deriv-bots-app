@@ -1,7 +1,6 @@
 import { env } from "@/common/utils/envConfig";
 import { app, logger } from "@/server";
-// @ts-ignore
-import session from 'express-session';
+import session from "express-session";
 import TelegramBot from "node-telegram-bot-api";
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
 import { Encryption } from "@/classes/cryptography/EncryptionClass";
@@ -11,59 +10,72 @@ import { KeyboardService } from "@/classes/telegram/KeyboardService";
 import { TelegramBotCommandHandlers } from "@/classes/telegram/TelegramBotCommandHandlers";
 import { TradingProcessFlowHandlers } from "@/classes/telegram/TradingProcessFlowHandlers";
 import { TelegramBotService } from "@/classes/telegram/TelegramBotService";
+
 const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, TELEGRAM_BOT_TOKEN } = env;
 
 const serverUrl: string = `http://${HOST}:${PORT}`;
 
-const util = require('util');
+// Utility function to override util methods
+const overrideUtilMethods = () => {
+  
+  const util = require('util');
+  util.isArray = Array.isArray;
+  util.isDate = (obj: any) => Object.prototype.toString.call(obj) === '[object Date]';
+  util.isRegExp = (obj: any) => Object.prototype.toString.call(obj) === '[object RegExp]';
 
-// Override util.isArray to use Array.isArray
-util.isArray = Array.isArray;
-
-util.isDate = function (obj: any) {
-  return Object.prototype.toString.call(obj) === '[object Date]';
 };
 
-util.isRegExp = function (obj: any) {
-  return Object.prototype.toString.call(obj) === '[object RegExp]';
-};
+// Initialize MongoDB connection and set it on the app
+const initializeDatabase = async () => {
 
-(async () => {
-
-  const db: any = new MongoDBConnection();
-
+  const db = new MongoDBConnection();
   await db.connect();
-
   await db.createDatabase(MONGODB_DATABASE_NAME);
-
   app.set("db", db);
+  return db;
 
-  // Initialize services
+};
+
+// Initialize services required for the application
+const initializeServices = (db: MongoDBConnection, telegramBot: TelegramBot) => {
 
   const sessionService = new SessionService(db);
-
-  const telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
-
   const workerService = new WorkerService(telegramBot);
-
   const keyboardService = new KeyboardService(telegramBot);
-
   const commandHandlers = new TelegramBotCommandHandlers(telegramBot, sessionService, keyboardService, workerService);
-
   const tradingProcessFlow = new TradingProcessFlowHandlers(telegramBot, sessionService, keyboardService, workerService);
-  
-  // Start the bot
-  const bot = new TelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
-  
+  return { sessionService, workerService, keyboardService, commandHandlers, tradingProcessFlow };
+
+};
+
+// Start the Telegram bot service
+const startTelegramBotService = (
+  telegramBot: TelegramBot,
+  sessionService: SessionService,
+  workerService: WorkerService,
+  tradingProcessFlow: TradingProcessFlowHandlers,
+  commandHandlers: TelegramBotCommandHandlers
+) => {
+
+  return new TelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
+
+};
+
+// Setup session middleware
+const setupSessionMiddleware = (sessionService: SessionService) => {
+
   const sessionMiddleware = sessionService.getSessionMiddleware();
 
-  const sessionObject: any = session(sessionMiddleware);
+  const sessionObject = session(sessionMiddleware);
 
   app.use(sessionObject);
 
-  app.set("bot", bot);
+};
 
-  const server = app.listen(env.PORT, () => {
+// Start the server
+const startServer = () => {
+
+  const server = app.listen(PORT, () => {
 
     logger.info(`Server now running in (${NODE_ENV}) at : ${serverUrl}`);
 
@@ -75,11 +87,43 @@ util.isRegExp = function (obj: any) {
       logger.info("server closed");
       process.exit();
     });
+
     setTimeout(() => process.exit(1), 10000).unref(); // Force shutdown after 10s
+
   };
 
   process.on("SIGINT", onCloseSignal);
 
   process.on("SIGTERM", onCloseSignal);
 
-})();
+};
+
+// Main function to bootstrap the application
+const bootstrap = async () => {
+
+  overrideUtilMethods();
+
+  const db = await initializeDatabase();
+
+  const telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+
+  const { sessionService, workerService, commandHandlers, tradingProcessFlow } = initializeServices(db, telegramBot);
+
+  setupSessionMiddleware(sessionService);
+
+  const bot = startTelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
+
+  app.set("bot", bot);
+
+  startServer();
+
+};
+
+// Start the application
+bootstrap().catch((error) => {
+
+  logger.error("Failed to start the application:", error);
+
+  process.exit(1);
+
+});

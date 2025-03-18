@@ -103,6 +103,14 @@ export class OAuthRouter {
             // @ts-ignore
             req.session.encuser = encuser;
 
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Error saving session:', err);
+                } else {
+                    console.log('Session saved successfully');
+                }
+            });
+
             const data: TemplateData = {
                 title: 'Deriv Login',
                 nonce: res.locals.nonce, // Nonce for CSP

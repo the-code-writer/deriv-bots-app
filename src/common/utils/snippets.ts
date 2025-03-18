@@ -114,3 +114,42 @@ export const replaceStringVariables = (str: string, variables: any): string => {
     }
   });
 }
+
+export const calculateExpiry = (timeString: string): number => {
+  const now = Date.now(); // Current epoch time in milliseconds
+
+  // Regular expression to extract the numeric value and unit from the input string
+  const match = timeString.match(/^(\d+)\s*(sec|second|min|minute|hr|hour|day|week|month|year)s?$/i);
+
+  if (!match) {
+    throw new Error(`Invalid time string: ${timeString}`);
+  }
+
+  const value = parseInt(match[1], 10); // Extract the numeric value
+  const unit = match[2].toLowerCase(); // Extract the unit and convert to lowercase
+
+  // Map units to their corresponding durations in milliseconds
+  const durations: { [key: string]: number } = {
+    sec: 1000,
+    second: 1000,
+    min: 60 * 1000,
+    minute: 60 * 1000,
+    hr: 60 * 60 * 1000,
+    hour: 60 * 60 * 1000,
+    day: 24 * 60 * 60 * 1000,
+    week: 7 * 24 * 60 * 60 * 1000,
+    month: 30 * 24 * 60 * 60 * 1000, // Approximate, as months vary in length
+    year: 365 * 24 * 60 * 60 * 1000, // Approximate, ignoring leap years
+  };
+
+  // Get the duration in milliseconds based on the unit
+  const durationInMilliseconds = durations[unit];
+
+  if (!durationInMilliseconds) {
+    throw new Error(`Invalid time unit: ${unit}`);
+  }
+
+  // Calculate the expiry time
+  const expiryTime = now + value * durationInMilliseconds;
+  return expiryTime;
+}

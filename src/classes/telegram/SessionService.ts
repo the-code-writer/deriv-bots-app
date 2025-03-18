@@ -2,6 +2,7 @@ import { pino } from "pino";
 import { env } from "@/common/utils/envConfig";
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
 import session from "express-session";
+import { calculateExpiry } from "@/common/utils/snippets";
 const MongoDBStore = require('connect-mongodb-session')(session);
 // Logger
 const logger = pino({ name: "SessionService" });
@@ -71,20 +72,22 @@ export class SessionService implements ISessionService {
             logger.error(error);
         });
 
-        const expiryTime: number = 1000 * 60 * 60 * 24 * 7 * 1;
+        const expiryTime: number = calculateExpiry("1 week");
+        console.log(DB_SERVER_SESSIONS_DATABASE_TTL);
+        console.log(expiryTime);
 
         const sessionMiddleware: any = {
             name: DB_SERVER_SESSIONS_DATABASE_COLLECTION,
             secret: APP_CRYPTOGRAPHIC_KEY,
-            resave: false,
-            saveUninitialized: false,
+            resave: true,
+            saveUninitialized: true,
             cookie: {
                 secure: process.env.NODE_ENV === "production",
                 httpOnly: true,
                 sameSite: "strict",
-                originalMaxAge: DB_SERVER_SESSIONS_DATABASE_TTL || expiryTime,
-                maxAge: DB_SERVER_SESSIONS_DATABASE_TTL || expiryTime,
-                expires: DB_SERVER_SESSIONS_DATABASE_TTL || expiryTime,
+                originalMaxAge: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
+                maxAge: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
+                expires: expiryTime || DB_SERVER_SESSIONS_DATABASE_TTL,
                 path: "/",
                 domain: null,
                 priority: null,
