@@ -3,7 +3,6 @@ import { app, logger } from "@/server";
 import session from "express-session";
 import TelegramBot from "node-telegram-bot-api";
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
-import { Encryption } from "@/classes/cryptography/EncryptionClass";
 import { SessionService } from "@/classes/telegram/SessionService";
 import { WorkerService } from "@/classes/telegram/WorkerService";
 import { KeyboardService } from "@/classes/telegram/KeyboardService";
@@ -17,7 +16,7 @@ const serverUrl: string = `http://${HOST}:${PORT}`;
 
 // Utility function to override util methods
 const overrideUtilMethods = () => {
-  
+
   const util = require('util');
   util.isArray = Array.isArray;
   util.isDate = (obj: any) => Object.prototype.toString.call(obj) === '[object Date]';
