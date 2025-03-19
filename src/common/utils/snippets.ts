@@ -115,8 +115,12 @@ export const replaceStringVariables = (str: string, variables: any): string => {
   });
 }
 
-export const calculateExpiry = (timeString: string): number => {
+export const calculateExpiry = (timeString: string | number): number => {
   const now = Date.now(); // Current epoch time in milliseconds
+
+  if (typeof timeString === "number") {
+    return now + timeString * 1000;
+  }
 
   // Regular expression to extract the numeric value and unit from the input string
   const match = timeString.match(/^(\d+)\s*(sec|second|min|minute|hr|hour|day|week|month|year)s?$/i);

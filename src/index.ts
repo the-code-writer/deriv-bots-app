@@ -24,17 +24,6 @@ const overrideUtilMethods = () => {
 
 };
 
-// Initialize MongoDB connection and set it on the app
-const initializeDatabase = async () => {
-
-  const db = new MongoDBConnection();
-  await db.connect();
-  await db.createDatabase(MONGODB_DATABASE_NAME);
-  app.set("db", db);
-  return db;
-
-};
-
 // Initialize services required for the application
 const initializeServices = (db: MongoDBConnection, telegramBot: TelegramBot) => {
 
@@ -57,15 +46,6 @@ const startTelegramBotService = (
 ) => {
 
   return new TelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
-
-};
-
-// Setup session middleware
-const setupSessionMiddleware = (sessionService: SessionService) => {
-
-  const sessionMiddleware = sessionService.getSessionMiddleware();
-
-  app.use(sessionMiddleware);
 
 };
 
@@ -100,13 +80,11 @@ const bootstrap = async () => {
 
   overrideUtilMethods();
 
-  const db = await initializeDatabase();
+  const db = app.get("bot");
 
   const telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
   const { sessionService, workerService, commandHandlers, tradingProcessFlow } = initializeServices(db, telegramBot);
-
-  setupSessionMiddleware(sessionService);
 
   const bot = startTelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
 

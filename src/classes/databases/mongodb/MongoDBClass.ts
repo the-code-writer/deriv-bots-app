@@ -118,6 +118,8 @@ export class MongoDBConnection implements DatabaseConnection {
             retryDelay: MONGODB_RETRY_DELAY || 3000
         };
 
+        console.log(this.config)
+
     }
 
     /**
@@ -272,27 +274,40 @@ export class MongoDBConnection implements DatabaseConnection {
      * @param collectionName - Name of the collection.
      * @param conditions - Query conditions.
      * @param updates - Updates to apply.
+ * @param upsert - Create record if it doesn't exist.
      * @returns UpdateResult
      */
-    async updateItem(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult | undefined> {
+    async updateItem(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>, upsert: boolean = false): Promise<UpdateResult | undefined> {
         const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         const query = QueryBuilder.buildQuery({ conditions });
         updates.updatedAt = new Date();
-        return await collection?.updateOne(query, { $set: updates });
+        return await collection?.updateOne(query, { $set: updates }, { upsert });
     }
 
     /**
-     * Updates multiple items in a collection using dynamic query conditions.
-     * @param collectionName - Name of the collection.
-     * @param conditions - Query conditions.
-     * @param updates - Updates to apply.
-     * @returns UpdateResult
-     */
-    async updateItems(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult | undefined> {
+ * Updates multiple items in a collection using dynamic query conditions.
+ * @param collectionName - Name of the collection.
+ * @param conditions - Query conditions.
+ * @param updates - Updates to apply.
+ * @param upsert - Create record if it doesn't exist.
+ * @returns UpdateResult
+ */
+    async updateItems(
+        collectionName: string,
+        conditions: QueryCondition[],
+        updates: Partial<Item>,
+        upsert: boolean = false
+    ): Promise<UpdateResult | undefined> {
         const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
+        if (!collection) {
+            throw new Error(`Collection ${collectionName} not found.`);
+        }
+
         const query = QueryBuilder.buildQuery({ conditions });
         updates.updatedAt = new Date();
-        return await collection?.updateMany(query, { $set: updates });
+
+        // Include the upsert option in the updateMany call
+        return await collection.updateMany(query, { $set: updates }, { upsert });
     }
 
     /**

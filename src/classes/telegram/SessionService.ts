@@ -37,7 +37,7 @@ export interface Session {
  */
 export interface ISessionService {
     initializeSession(chatId: number): void;
-    getSessionMiddleware(sessionId:string): any;
+    getSessionMiddleware(sessionID: string): any;
     updateSession(chatId: number, session: Session): Promise<void>;
     cleanupInactiveSessions(): Promise<void>;
     getSession(chatId: number): Promise<Session | null>;
@@ -53,6 +53,7 @@ export class SessionService implements ISessionService {
     constructor(db: MongoDBConnection) {
         this.db = db;
         logger.info("Session Service started!");
+        
     }
 
     async initializeSession(chatId: number): Promise<void> {

@@ -1,11 +1,11 @@
 import express, { Request, Response, Router } from 'express';
 import { env } from '@/common/utils/envConfig';
-import session from 'express-session';
 import { SessionService } from '@/classes/telegram/SessionService';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
-const cookieParser = require('cookie-parser');
+import { SessionManagerStorageClass } from '@/classes/sessions/SessionManagerStorageClass';
+import { SessionManagerClass } from '@/classes/sessions/SessionManagerClass';
 
-const { DERIV_APP_OAUTH_URL, DB_SERVER_SESSIONS_DATABASE_COLLECTION } = env;
+const { DERIV_APP_OAUTH_URL, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL } = env;
 
 /**
  * Interface for the data object passed to EJS templates.
@@ -49,6 +49,7 @@ export class OAuthRouter {
         this.router = express.Router(); // Create a new Express router
         this.db = new MongoDBConnection(); // Initialize MongoDB connection
         this.sessionService = new SessionService(this.db); // Initialize session service
+
     }
 
     /**
@@ -56,26 +57,6 @@ export class OAuthRouter {
      * @returns {Router} - Configured OAuth router.
      */
     public getRouter(): Router {
-        // Get session middleware from the session service
-        const sessionMiddleware = this.sessionService.getSessionMiddleware();
-
-        // Configure the session object using express-session
-        const sessionObject: any = session(sessionMiddleware);
-
-        // Apply the session middleware to the OAuth router
-        this.router.use(sessionObject);
-
-        this.router.use(cookieParser());
-
-        this.router.use((req: Request, res: Response, next: any) => {
-
-            console.log('Session at start of request:', JSON.stringify(req.session));
-
-            console.log('Session at start of request:', JSON.stringify(req.cookies));
-
-            next();
-
-        });
 
         // Define routes
         this.defineRoutes();
@@ -87,6 +68,38 @@ export class OAuthRouter {
      * Defines all routes for the OAuth router.
      */
     private defineRoutes(): void {
+
+        const sessionManager = this.app.get("sessionManager"); 
+
+        this.router.get('/set-session', async (req, res) => {
+
+            await sessionManager.updateSession(req, res, "flight", {
+                ticket: 600.25
+            });
+
+            await sessionManager.updateSession(req, res, "color", "yellow");
+
+            await sessionManager.updateSession(req, res, "wheels", {
+                front: "17''", left: 5436, back: { a: "1", b: "2", c: "3" }, right: true,
+            });
+
+            console.log(":: URL :: /set-session ::", req.session)
+
+            res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
+
+        });
+
+        this.router.get('/get-session', (req, res) => {
+            console.log(":: URL :: /get-session ::", req.session)
+            res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
+        });
+
+        this.router.get('/del-session', async (req, res) => {
+            await sessionManager.destroySession(req, res);
+            console.log(":: URL :: /del-session ::", req.session)
+            res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
+        });
+
         /**
          * Route: GET /
          * Renders the index page with a nonce and Deriv OAuth URL.
@@ -114,16 +127,16 @@ export class OAuthRouter {
 
             const { encid, encuser } = req.query; // Extract query parameters
 
-            let sessionId = req.cookies.sessionId;
+            let sessionID = req.cookies.sessionID;
 
-            if (!sessionId) {
+            if (!sessionID) {
 
                 const { cookieSessionId, cookieParams } = this.sessionService.generateCookieSessionID(req.sessionID); // Generate a unique session ID
 
                 // Set a cookie in the client's browser
-                res.cookie('sessionId', cookieSessionId, cookieParams);
+                res.cookie('sessionID', cookieSessionId, cookieParams);
 
-                sessionId = cookieSessionId;
+                sessionID = cookieSessionId;
 
             }
 
@@ -133,7 +146,7 @@ export class OAuthRouter {
             // @ts-ignore
             req.session.encuser = encuser;
             // @ts-ignore
-            req.session.sessionId = sessionId;
+            req.session.sessionID = sessionID;
 
 
             await this.db.insertItem(DB_SERVER_SESSIONS_DATABASE_COLLECTION, req.session);
@@ -145,7 +158,7 @@ export class OAuthRouter {
                 } else {
                     console.log('Session saved successfully');
 
-                    console.log('sessionId:', sessionId);
+                    console.log('sessionID:', sessionID);
                     console.log('Session ID:', req.sessionID);
                     console.log('Session Data:', req.session);
 
@@ -174,20 +187,19 @@ export class OAuthRouter {
 
             const queryParams = req.query; // Extract all query parameters
 
-            console.log('req.cookies:', req.cookies.sessionId);
-            console.log('req.session:', req.session.sessionId);
+            console.log('req.cookies:', req.cookies.sessionID);
+            console.log('req.session:', req.session);
             console.log('Session ID:', req.sessionID);
-            console.log('Session Data:', req.session);
 
-            const sessionId = req.cookies.sessionId;
+            const sessionID = req.cookies.sessionID;
 
-            if (!sessionId) {
+            if (!sessionID) {
 
                 console.error('Missing cookie data:', req.session);
 
             }
 
-            const session = await this.db.getItem(DB_SERVER_SESSIONS_DATABASE_COLLECTION, [{ field: 'sessionId', operator: 'eq', value: sessionId }]);
+            const session = await this.db.getItem(DB_SERVER_SESSIONS_DATABASE_COLLECTION, [{ field: 'sessionID', operator: 'eq', value: sessionID }]);
 
             // @ts-ignore
             if (!req.session.encid || !req.session.encuser) {
