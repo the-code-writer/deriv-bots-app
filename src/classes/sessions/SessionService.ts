@@ -175,6 +175,7 @@ export class SessionService implements ISessionService {
         chatId > 0 ? session.chatId = chatId : undefined;
 
         const sessionData = {
+            _id: sessionID,
             maxAge: this.maxAge,
             cookie: this.getCookieObject(),
             session
@@ -192,6 +193,11 @@ export class SessionService implements ISessionService {
         // If no session data exists, initialize an empty session and store it
         if (!sessionData) {
             sessionData = this.initializeSessionObject(sessionID);
+
+
+            console.log("::::::::: SESSION_DATA ::::::::: 00000 :::::::::", sessionID, sessionData);
+
+
             await this.sessionStore.set(sessionID, sessionData);
         }
 
@@ -222,6 +228,27 @@ export class SessionService implements ISessionService {
      * @param req - The HTTP request object.
      * @param res - The HTTP response object.
      */
+    async createSession(chatId:number, session:any): Promise<void> {
+
+        const sessionID: string = uuidv4();
+
+        // Retrieve session data from the session store
+        const sessionData = this.initializeSessionObject(sessionID, chatId);
+
+        sessionData.session.bot = session;
+
+        console.log("::::::::: SESSION_DATA :: CREATE ::::::::: XXXXXX :::::::::", sessionID, sessionData);
+
+        await this.sessionStore.create(sessionData);
+
+    }
+
+    /**
+     * Destroys the session for the current request.
+     * This removes the session data from the store and clears the session cookie.
+     * @param req - The HTTP request object.
+     * @param res - The HTTP response object.
+     */
     async updateSession(req: any, _: any, key: string, value: any): Promise<void> {
 
         const sessionID: string = req.sessionID;
@@ -229,7 +256,7 @@ export class SessionService implements ISessionService {
         // Retrieve session data from the session store
         const { sessionData } = await this.validateSession(sessionID);
 
-        console.log("::::::::: SESSION_DATA :::::::::", key, value, sessionID, sessionData);
+        console.log("::::::::: SESSION_DATA ::::::::: 00001 :::::::::", sessionData);
 
         sessionData[key] = value;
 

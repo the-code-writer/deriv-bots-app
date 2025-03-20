@@ -29,6 +29,8 @@ export interface ISessionStore {
      */
     set(sessionID: string, key: string | any, value?: Record<string, any>): Promise<void>;
 
+    create(sessionData: Record<string, any>): Promise<void>;
+
     /**
      * Destroy session data by session ID.
      * @param sessionID - The session ID.
@@ -177,6 +179,19 @@ export class SessionManagerStorageClass implements ISessionStore {
 
     /**
      * Stores or updates session data in MongoDB.
+     * @param sessionData - Session data to be stored.
+     * @returns Promise resolving when the operation is complete.
+     */
+    async create(sessionData: Record<string, any>): Promise<void> {
+
+        console.log("::::::::: SESSION_DATA ::::::::: 0000.0000 :::::::::", sessionData);
+
+        await this.db.insertItem(this.collectionName, sessionData);
+
+    }
+
+    /**
+     * Stores or updates session data in MongoDB.
      * @param sessionID - Unique identifier for the session.
      * @param data - Session data to be stored.
      * @returns Promise resolving when the operation is complete.
@@ -193,9 +208,9 @@ export class SessionManagerStorageClass implements ISessionStore {
 
         }
 
-        console.log("::: UPDATES :::", updates);
+        console.log("::::::::: SESSION_DATA ::::::::: 0000.0000 :::::::::", updates);
 
-        await this.db.updateItems(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates);
+        await this.db.updateItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates);
 
     }
 
