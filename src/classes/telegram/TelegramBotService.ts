@@ -142,7 +142,7 @@ export class TelegramBotService implements ITelegramBotService {
 
     public async handleMessage(msg: Message): Promise<void> {
         const chatId = msg.chat.id;
-        const firstname = msg.chat.id;
+        const firstname = msg.chat.first_name;
         const text = sanitizeHtml(msg.text || "", { allowedTags: [], allowedAttributes: {} });
         const session = await this.sessionService.getUserSessionByChatId(chatId);
         if (!session) {

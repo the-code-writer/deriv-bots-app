@@ -295,20 +295,19 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             }
         };
 
-        logger.info("SESSION");
-
-        logger.info(session);
-
         await this.sessionService.createSession(chatId, session);
 
+        /*
         const imageUrl = IMAGE_BANNER;
-        const caption = `*Hi ${session.accounts.telegram.first_name}*\n\nThe Future of Trading Is Here! 🌟`;
+        const caption = `**\n\nThe Future of Trading Is Here! 🌟`;
         this.telegramBot.sendPhoto(chatId, imageUrl, { caption, parse_mode: "Markdown" });
+        */
+
         setTimeout(() => {
-            this.telegramBot.sendMessage(chatId, 'Please login using your Deriv Account to proceed:', {
+            this.telegramBot.sendMessage(chatId, `Please login using your Deriv Account to proceed:`, {
                 reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(session) },
             });
-        }, 3000);
+        }, 500);
     }
 
     /**
