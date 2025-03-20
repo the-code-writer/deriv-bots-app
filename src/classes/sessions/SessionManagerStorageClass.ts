@@ -1,3 +1,4 @@
+import { DatabaseConnection } from "@/classes/databases/mongodb/MongoDBClass";
 
 /**
  * Interface for SessionStore.
@@ -10,6 +11,14 @@ export interface ISessionStore {
      * @returns The session data.
      */
     get(sessionID: string): Promise<Record<string, any>>;
+
+    getWithParams(query: any): Promise<any | null>;
+
+    getSession(query: any): Promise<ISession | any>;
+
+    getSessions(query: any): Promise<ISession | any>;
+
+    getAllSessions(): Promise<ISession | any>;
 
     /**
      * Store session data by session ID.
@@ -31,19 +40,28 @@ export interface ISessionStore {
 /**
  * Interface representing a session object stored in MongoDB.
  */
-export interface Session {
-    _id: string; // Unique identifier for the session
-    data: any; // Session data (can be any type)
-    expires: Date; // Expiration date of the session
+
+export interface ICookie {
+    secure: boolean;
+    httpOnly: boolean;
+    sameSite: "strict" | "lax" | "none";
+    originalMaxAge: number | null;
+    maxAge: number | null;
+    expires: number | null;
+    path: string;
+    domain: string | null;
+    priority: string | null;
+    partitioned: boolean | null;
 }
 
-/**
- * Interface representing the MongoDB collection.
- */
-export interface MongoCollection {
-    findOne(query: any): Promise<Session | null>; // Method to find a single document
-    updateOne(query: any, update: any, options: any): Promise<any>; // Method to update a document
-    deleteOne(query: any): Promise<any>; // Method to delete a document
+export interface ISession {
+    _id?: string; // Unique identifier for the session
+    data?: any; // Session data (can be any type)
+    expires?: Date; // Expiration date of the session
+    maxAge: number;
+    cookie: ICookie;
+    session: Record<string, any>; // Generic session object
+
 }
 
 /**
@@ -58,7 +76,7 @@ export interface SetOptions {
  */
 export class SessionManagerStorageClass implements ISessionStore {
 
-    private db: any; // Name of the database
+    private db: DatabaseConnection; // Name of the database
     private collectionName: string; // Name of the collection
 
     /**
@@ -67,7 +85,7 @@ export class SessionManagerStorageClass implements ISessionStore {
      * @param db - Instance of the database where sessions are stored.
      * @param collectionName - Name of the collection where sessions are stored.
      */
-    constructor(db: any, collectionName: string) {
+    constructor(db: DatabaseConnection, collectionName: string) {
 
         this.db = db;
         this.collectionName = collectionName;
@@ -78,11 +96,80 @@ export class SessionManagerStorageClass implements ISessionStore {
      * @param sessionID - Unique identifier for the session.
      * @returns Promise resolving to the session data or null if not found.
      */
-    async get(sessionID: string): Promise<any | null> {
+    async get(sessionID: string): Promise<ISession | any> {
 
-        const sessionData: Session | null = await this.db.getItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }]);
+        const sessionData: ISession | any = await this.db.getItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }]);
 
         console.log("::SESSION_DATA::GET::", sessionData);
+
+        // Return the session data if found, otherwise return null
+        return sessionData;
+    }
+
+    /**
+     * Retrieves session data from MongoDB.
+     * @param query - Unique identifier for the session.
+     * @returns Promise resolving to the session data or null if not found.
+     */
+    async getWithParams(query: any): Promise<ISession | any> {
+
+        const sessionData: ISession | any = await this.db.getItem(this.collectionName, query);
+
+        console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
+
+        console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
+
+        // Return the session data if found, otherwise return null
+        return sessionData;
+    }
+
+    /**
+     * Retrieves session data from MongoDB.
+     * @param query - Unique identifier for the session.
+     * @returns Promise resolving to the session data or null if not found.
+     */
+    async getSession(query: any): Promise<ISession | any> {
+
+        // @ts-ignore
+        const sessionData: ISession | any = await this.db.get(this.collectionName, query);
+
+        console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
+
+        console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
+
+        // Return the session data if found, otherwise return null
+        return sessionData;
+    }
+
+    /**
+     * Retrieves session data from MongoDB.
+     * @param query - Unique identifier for the session.
+     * @returns Promise resolving to the session data or null if not found.
+     */
+    async getSessions(query: any): Promise<ISession | any> {
+
+        // @ts-ignore
+        const sessionData: ISession | any = await this.db.get(this.collectionName, query);
+
+        console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
+
+        console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
+
+        // Return the session data if found, otherwise return null
+        return sessionData;
+    }
+
+    /**
+     * Retrieves session data from MongoDB.
+     * @param query - Unique identifier for the session.
+     * @returns Promise resolving to the session data or null if not found.
+     */
+    async getAllSessions(): Promise<ISession | any> {
+
+        // @ts-ignore
+        const sessionData: ISession | any = await this.db.get(this.collectionName, query);
+
+        console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
 
         // Return the session data if found, otherwise return null
         return sessionData;
@@ -99,16 +186,16 @@ export class SessionManagerStorageClass implements ISessionStore {
         let updates: Partial<any> = key;
 
         if (typeof key === "string" && typeof value !== undefined) {
-            
+
             updates = {
                 [`session.${key}`]: value // Use dot notation to update the nested field
             };
-            
+
         }
 
         console.log("::: UPDATES :::", updates);
 
-        await this.db.updateItems(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates, true);
+        await this.db.updateItems(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates);
 
     }
 

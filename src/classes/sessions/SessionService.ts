@@ -1,6 +1,6 @@
 import * as cookie from 'cookie';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique session IDs
-import { ISessionStore } from './SessionManagerStorageClass';
+import { ISessionStore, ISession } from './SessionManagerStorageClass';
 import { Encryption } from '../cryptography/EncryptionClass';
 import session from 'express-session';
 import { calculateExpiry } from '@/common/utils/snippets';
@@ -9,11 +9,11 @@ import { env } from '@/common/utils/envConfig';
 const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, TELEGRAM_BOT_TOKEN } = env;
 
 /**
- * Interface for SessionManagerClass.
+ * Interface for SessionService.
  * This defines the contract for managing user sessions, including middleware for handling sessions
  * and methods for destroying sessions.
  */
-export interface ISessionManager {
+export interface ISessionService {
     /**
      * Middleware for handling session management.
      * This middleware attaches session data to the request object and ensures
@@ -33,19 +33,28 @@ export interface ISessionManager {
      * @returns A promise that resolves when the session is destroyed.
      */
     destroySession(req: any, res: any): Promise<void>;
+
+    getUserSessionByChatId(chatId: number): Promise<ISession | any>;
+
+    getSession(sessionID: number): Promise<ISession | any>;
+
+    cleanupInactiveSessions(): Promise<void>;
+
+    deleteSession(sessionID: string): Promise<void>;
+
 }
 
 /**
- * SessionManagerClass manages user sessions using a session store.
+ * SessionService manages user sessions using a session store.
  * It provides middleware for handling sessions and methods for destroying sessions.
  */
-export class SessionManagerClass implements ISessionManager {
+export class SessionService implements ISessionService {
     private sessionStore: ISessionStore;
     private cookieName: string;
     private maxAge: string | number;
 
     /**
-     * Constructor for SessionManagerClass.
+     * Constructor for SessionService.
      * @param sessionStore - An implementation of the session store interface.
      * @param cookieName - The name of the cookie used to store the session ID.
      * @param maxAge - The maximum age of the session cookie in milliseconds.
@@ -83,10 +92,9 @@ export class SessionManagerClass implements ISessionManager {
         const now = Date.now();
 
         if (now > parseInt(this.maxAge.toString())) {
-            return;
-        }
-
-        if (now > parseInt(data.maxAge.toString())) {
+            console.log("SESSION EXPIRED");
+            res.send("SESSION EXPIRED");
+        } else if (now > parseInt(data.maxAge.toString())) {
             // Destroy the session in the session store
             await this.sessionStore.destroy(sessionID);
 
@@ -96,20 +104,22 @@ export class SessionManagerClass implements ISessionManager {
             // Remove session data from the request object
             delete req.session;
             delete req.sessionID;
-            return;
+            res.send("SESSION EXPIRED");
+        } else {
+
+            // Attach session data and session ID to the request object
+            req.session = sessionData;
+            req.sessionID = sessionID;
+
+            // Ensure session data is persisted when the response is finished
+            res.on('finish', async () => {
+                if (req.session) {
+                    //await this.sessionStore.set(sessionID, req.session);
+                    console.log(":: SESSION ON FINITO ::", req.session);
+                }
+            });
+
         }
-
-        // Attach session data and session ID to the request object
-        req.session = sessionData;
-        req.sessionID = sessionID;
-
-        // Ensure session data is persisted when the response is finished
-        res.on('finish', async () => {
-            if (req.session) {
-                //await this.sessionStore.set(sessionID, req.session);
-                console.log(":: SESSION ON FINITO ::", req.session);
-            }
-        });
 
         // Proceed to the next middleware
         next();
@@ -206,6 +216,33 @@ export class SessionManagerClass implements ISessionManager {
 
         await this.sessionStore.set(sessionID, key, value);
 
+    }
+
+    async getUserSessionByChatId(chatId: number): Promise<ISession | any> {
+        return await this.sessionStore.getWithParams([
+            { field: "session.chatId", operator: "eq", value: chatId }
+        ]);
+    }
+
+    async getSession(sessionID: number): Promise<ISession | any> {
+        return await this.sessionStore.getWithParams([
+            { field: "session.sessionID", operator: "eq", value: sessionID }
+        ]);
+    }
+
+    async cleanupInactiveSessions(): Promise<void> {
+        const now = Date.now();
+        const sessions: Array<ISession | any> = await this.sessionStore.getAllSessions(); //TODO : toArray()
+
+        for (const session of sessions) {
+            if (now - (session.timestamp || 0) > 30 * 60 * 1000) {
+                await this.sessionStore.destroy(session.session.sessionID);
+            }
+        }
+    }
+
+    async deleteSession(sessionID: string): Promise<void> {
+        await this.sessionStore.destroy(sessionID);
     }
 
 }

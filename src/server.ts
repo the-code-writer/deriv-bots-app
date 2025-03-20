@@ -12,9 +12,8 @@ import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
 import { AttachRoutes } from '@/routes/AttachRoutes';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
-import { SessionService } from '@/classes/telegram/SessionService';
 import { SessionManagerStorageClass } from "@/classes/sessions/SessionManagerStorageClass";
-import { SessionManagerClass } from "@/classes/sessions/SessionManagerClass";
+import { SessionService } from "@/classes/sessions/SessionService";
 
 const path = require('path');
 
@@ -25,10 +24,10 @@ const crypto = require("crypto");
 const logger = pino({ name: "server start" });
 const app: Express = express();
 
-const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, TELEGRAM_BOT_TOKEN } = env;
+const { MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL } = env;
 
 (async () => {
-  
+
 
   // Set the application to trust the reverse proxy
   app.set("trust proxy", true);
@@ -75,27 +74,22 @@ const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE
   const db = new MongoDBConnection();
   await db.connect();
   await db.createDatabase(MONGODB_DATABASE_NAME);
-  app.set("db", db); 
 
   const sessionStore = new SessionManagerStorageClass(db, DB_SERVER_SESSIONS_DATABASE_COLLECTION);
-  const sessionManager = new SessionManagerClass(sessionStore, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL );
+  const sessionService = new SessionService(sessionStore, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL);
 
-  app.use(sessionManager.middleware.bind(sessionManager));
-
-  app.set("sessionStore", sessionStore); 
-
-  app.set("sessionManager", sessionManager); 
+  app.use(sessionService.middleware.bind(sessionService));
 
   app.get('/set-session', async (req, res) => {
 
-    await sessionManager.updateSession(req, res, "flight", {
+    await sessionService.updateSession(req, res, "flight", {
       ticket: 600.25
     });
 
-    await sessionManager.updateSession(req, res, "color", "yellow");
+    await sessionService.updateSession(req, res, "color", "yellow");
 
-    await sessionManager.updateSession(req, res, "wheels", {
-      front: "17''", left: 5436, back: {a: "1", b: "2", c: "3"}, right: true,
+    await sessionService.updateSession(req, res, "wheels", {
+      front: "17''", left: 5436, back: { a: "1", b: "2", c: "3" }, right: true,
     });
 
     console.log(":: URL :: /set-session ::", req.session)
@@ -110,20 +104,10 @@ const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE
   });
 
   app.get('/del-session', async (req, res) => {
-    await sessionManager.destroySession(req, res);
+    await sessionService.destroySession(req, res);
     console.log(":: URL :: /del-session ::", req.session)
     res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
   });
-
-
-  // Setup session middleware
-  const setupSessionMiddleware = (sessionService: SessionService) => {
-
-    const sessionMiddleware = sessionService.getSessionMiddleware();
-
-    //app.use(sessionMiddleware);
-
-  };
 
   // Routes
 

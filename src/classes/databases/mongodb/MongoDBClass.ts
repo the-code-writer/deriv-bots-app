@@ -31,7 +31,7 @@ interface Item {
     isActive: boolean;
 }
 
-interface DatabaseConnection {
+export interface DatabaseConnection {
     connect(): Promise<void>;
     disconnect(): Promise<void>;
     retryConnection(): Promise<void>;
@@ -74,25 +74,28 @@ class QueryBuilder {
         const queryParts = conditions.map((condition) => {
             const { field, operator, value } = condition;
 
+            // Handle nested fields using dot notation
+            const nestedField = field.includes('.') ? field : field;
+
             switch (operator) {
                 case 'eq':
-                    return { [field]: value };
+                    return { [nestedField]: value };
                 case 'gt':
-                    return { [field]: { $gt: value } };
+                    return { [nestedField]: { $gt: value } };
                 case 'lt':
-                    return { [field]: { $lt: value } };
+                    return { [nestedField]: { $lt: value } };
                 case 'gte':
-                    return { [field]: { $gte: value } };
+                    return { [nestedField]: { $gte: value } };
                 case 'lte':
-                    return { [field]: { $lte: value } };
+                    return { [nestedField]: { $lte: value } };
                 case 'ne':
-                    return { [field]: { $ne: value } };
+                    return { [nestedField]: { $ne: value } };
                 case 'regex':
-                    return { [field]: { $regex: value, $options: 'i' } }; // Case-insensitive regex
+                    return { [nestedField]: { $regex: value, $options: 'i' } }; // Case-insensitive regex
                 case 'in':
-                    return { [field]: { $in: value } };
+                    return { [nestedField]: { $in: value } };
                 case 'nin':
-                    return { [field]: { $nin: value } };
+                    return { [nestedField]: { $nin: value } };
                 default:
                     throw new Error(`Unsupported operator: ${operator}`);
             }

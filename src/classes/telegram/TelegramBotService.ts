@@ -5,11 +5,11 @@ import { pino } from "pino";
 import sanitizeHtml from "sanitize-html";
 import { CONSTANTS } from "@/common/utils/constants";
 import { env } from "@/common/utils/envConfig";
-import { ISessionService } from "@/classes/telegram/SessionService";
 import { ITradingProcessFlow } from "@/classes/telegram/TradingProcessFlowHandlers";
 import { ITelegramBotCommandHandlers } from "@/classes/telegram/TelegramBotCommandHandlers";
-import { IWorkerService } from "./WorkerService";
-import { Encryption } from "../cryptography/EncryptionClass";
+import { IWorkerService } from "@/classes/telegram/WorkerService";
+import { Encryption } from "@/classes/cryptography/EncryptionClass";
+import { ISessionService } from "@/classes/sessions/SessionService";
 
 // Logger
 const logger = pino({ name: "TelegramBotService" });
@@ -144,7 +144,7 @@ export class TelegramBotService implements ITelegramBotService {
         const chatId = msg.chat.id;
         const firstname = msg.chat.id;
         const text = sanitizeHtml(msg.text || "", { allowedTags: [], allowedAttributes: {} });
-        const session = await this.sessionService.getSession(chatId);
+        const session = await this.sessionService.getUserSessionByChatId(chatId);
         if (!session) {
             this.telegramBot.sendMessage(chatId, `Hello ${firstname}, The session has not been found or has expired. Use ${CONSTANTS.COMMANDS.START} to begin.`);
             return;
