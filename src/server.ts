@@ -112,7 +112,7 @@ const { MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER
   // Routes
 
   // Initialize the AttachRoutes class with the app
-  const attachRoutes = new AttachRoutes(app);
+  const attachRoutes = new AttachRoutes(app, sessionService);
 
   // Attach all routes to the app
   attachRoutes.initializeRoutes();

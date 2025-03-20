@@ -166,11 +166,13 @@ export class SessionService implements ISessionService {
 
     }
 
-    initializeSessionObject(sessionID: string): any {
+    initializeSessionObject(sessionID: string, chatId:number=0): any {
 
         const session: any = {
             sessionID: sessionID
         };
+
+        chatId > 0 ? session.chatId = chatId : undefined;
 
         const sessionData = {
             maxAge: this.maxAge,
@@ -193,7 +195,24 @@ export class SessionService implements ISessionService {
             await this.sessionStore.set(sessionID, sessionData);
         }
 
-        return { sessionData: sessionData.session, data: sessionData };
+        return { sessionData: sessionData.session, data: sessionData, sessionID: sessionID };
+
+    }
+
+    async validateSessionWithChatId(chatId: number): Promise<any> {
+
+        const sessionID: string = uuidv4();
+
+        // Retrieve session data from the session store
+        let sessionData: Record<string, any> = await this.getUserSessionByChatId(chatId);
+
+        // If no session data exists, initialize an empty session and store it
+        if (!sessionData) {
+            sessionData = this.initializeSessionObject(sessionID, chatId);
+            await this.sessionStore.set(sessionID, sessionData);
+        }
+
+        return { sessionData: sessionData.session, data: sessionData, sessionID: sessionID };
 
     }
 
@@ -210,11 +229,36 @@ export class SessionService implements ISessionService {
         // Retrieve session data from the session store
         const { sessionData } = await this.validateSession(sessionID);
 
+        console.log("::::::::: SESSION_DATA :::::::::", key, value, sessionID, sessionData);
+
         sessionData[key] = value;
 
         req.session[key] = value;
 
         await this.sessionStore.set(sessionID, key, value);
+
+    }
+
+    /**
+     * Destroys the session for the current request.
+     * This removes the session data from the store and clears the session cookie.
+     * @param req - The HTTP request object.
+     * @param res - The HTTP response object.
+     */
+    async updateSessionWithChatId(chatId: number, session: any): Promise<void> {
+
+        // Retrieve session data from the session store
+        const { sessionData, data, sessionID } = await this.validateSessionWithChatId(chatId);
+
+        console.log("::::::::: SESSION_DATA :: updateSessionWithChatId ::::::::: 000", sessionData, data);
+
+        if (session) {
+
+            await this.sessionStore.set(sessionID, "bot", session);
+
+            console.log("::::::::: SESSION_DATA :: updateSessionWithChatId ::::::::: 001", sessionID, session);
+
+        }
 
     }
 

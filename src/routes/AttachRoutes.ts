@@ -1,6 +1,7 @@
 import { Express } from 'express';
 import { RouterGenerator } from "@/routes/RouterGenerator";
 import { OAuthRouter } from "@/routes/paths/OAuthRouter";
+import { ISessionService } from "@/classes/sessions/SessionService";
 
 
 /**
@@ -13,13 +14,17 @@ export class AttachRoutes {
 
     private app;
 
+    private sessionService: ISessionService;
+
     /**
      * Constructor for the AttachRoutes class.
      * @param {Express} app - The Express app instance.
      */
-    constructor(app: Express) {
+    constructor(app: Express, sessionService:ISessionService) {
         
         this.app = app;
+
+        this.sessionService = sessionService;
 
         // Initialize the RouterGenerator with the app
         this.routerGenerator = new RouterGenerator(this.app);
@@ -43,7 +48,7 @@ export class AttachRoutes {
     public initializeOAuthRouter(): void {
 
         // Initialize the OAuthRouter
-        const oauthRouter = new OAuthRouter(this.app);
+        const oauthRouter = new OAuthRouter(this.sessionService);
 
         // Get the configured OAuth router
         const oauthRouterInstance = oauthRouter.getRouter();

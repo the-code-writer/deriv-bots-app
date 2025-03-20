@@ -299,7 +299,7 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
         logger.info(session);
 
-        await this.sessionService.updateSession(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
 
         const imageUrl = IMAGE_BANNER;
         const caption = `*Hi ${session.accounts.telegram.first_name}*\n\nThe Future of Trading Is Here! 🌟`;

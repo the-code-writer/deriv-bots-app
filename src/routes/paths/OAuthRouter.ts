@@ -2,7 +2,7 @@ import express, { Request, Response, Router } from 'express';
 import { env } from '@/common/utils/envConfig';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
 import { SessionManagerStorageClass } from '@/classes/sessions/SessionManagerStorageClass';
-import { SessionService } from '@/classes/sessions/SessionService';
+import { SessionService, ISessionService } from '@/classes/sessions/SessionService';
 
 const { DERIV_APP_OAUTH_URL, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL } = env;
 
@@ -34,17 +34,15 @@ export interface OrganizedAccountData {
  * OAuthRouter class is responsible for generating and configuring the OAuth router.
  */
 export class OAuthRouter {
-    private app;
     private router: Router;
-    private db: MongoDBConnection;
-    private sessionService: SessionService;
+    private sessionService: ISessionService;
 
     /**
      * Constructor for the OAuthRouter class.
      * Initializes the router, database connection, and session service.
      */
-    constructor(app: any) {
-        this.app = app;
+    constructor(sessionService: ISessionService) {
+        this.sessionService = sessionService;
         this.router = express.Router(); // Create a new Express router
     }
 
@@ -65,17 +63,15 @@ export class OAuthRouter {
      */
     private defineRoutes(): void {
 
-        const sessionManager = this.app.get("sessionManager");
-
         this.router.get('/set-session', async (req, res) => {
 
-            await sessionManager.updateSession(req, res, "flight", {
+            await this.sessionService.updateSession(req, res, "flight", {
                 ticket: 600.25
             });
 
-            await sessionManager.updateSession(req, res, "color", "yellow");
+            await this.sessionService.updateSession(req, res, "color", "yellow");
 
-            await sessionManager.updateSession(req, res, "wheels", {
+            await this.sessionService.updateSession(req, res, "wheels", {
                 front: "17''", left: 5436, back: { a: "1", b: "2", c: "3" }, right: true,
             });
 
@@ -91,7 +87,7 @@ export class OAuthRouter {
         });
 
         this.router.get('/del-session', async (req, res) => {
-            await sessionManager.destroySession(req, res);
+            await this.sessionService.destroySession(req, res);
             console.log(":: URL :: /del-session ::", req.session)
             res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
         });
@@ -126,8 +122,8 @@ export class OAuthRouter {
             req.session.encid = encid;
             // @ts-ignore
             req.session.encuser = encuser;
-            await sessionManager.updateSession(req, res, "encid", encid);
-            await sessionManager.updateSession(req, res, "encuser", encuser);
+            await this.sessionService.updateSession(req, res, "encid", encid);
+            await this.sessionService.updateSession(req, res, "encuser", encuser);
 
             const data: TemplateData = {
                 title: 'Deriv Login',
@@ -150,8 +146,8 @@ export class OAuthRouter {
 
             const queryParams = req.query; // Extract all query parameters
 
-            console.log('req.cookies:', req.cookies.sessionID);
             console.log('req.session:', req.session);
+            console.log('Session ID:', req.session.sessionID);
             console.log('Session ID:', req.sessionID);
 
             const sessionID = req.cookies.sessionID;
@@ -161,8 +157,6 @@ export class OAuthRouter {
                 console.error('Missing cookie data:', req.session);
 
             }
-
-            const session = await this.db.getItem(DB_SERVER_SESSIONS_DATABASE_COLLECTION, [{ field: 'sessionID', operator: 'eq', value: sessionID }]);
 
             // @ts-ignore
             if (!req.session.encid || !req.session.encuser) {
@@ -206,8 +200,8 @@ export class OAuthRouter {
             const data: TemplateData = {
                 nonce: res.locals.nonce, // Nonce for CSP
                 accounts: organizedData, // Organized account data
-                encid: session.encid, // Encrypted ID from the session
-                encusername: session.encusername, // Encrypted username from the session
+                encid: req.session.encid, // Encrypted ID from the session
+                encusername: req.session.encusername, // Encrypted username from the session
             };
 
             // Notify the bot that the user has logged in
