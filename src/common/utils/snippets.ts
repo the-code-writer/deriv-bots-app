@@ -118,6 +118,8 @@ export const replaceStringVariables = (str: string, variables: any): string => {
 export const calculateExpiry = (timeString: string | number): number => {
   const now = Date.now(); // Current epoch time in milliseconds
 
+  console.log("TIME_STRING", timeString, typeof timeString)
+
   if (typeof timeString === "number") {
     return now + timeString * 1000;
   }

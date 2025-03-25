@@ -1,12 +1,12 @@
-import * as cookie from 'cookie';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique session IDs
-import { ISessionStore, ISession } from './SessionManagerStorageClass';
+import { ISessionStore, ISession, IBotAccounts, ITelegramAccount, IDerivUserAccount } from './SessionManagerStorageClass';
 import { Encryption } from '../cryptography/EncryptionClass';
 import session from 'express-session';
 import { calculateExpiry } from '@/common/utils/snippets';
 import { env } from '@/common/utils/envConfig';
+import { UserManagerStorageClass } from './UserManagerStorageClass';
 
-const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, TELEGRAM_BOT_TOKEN } = env;
+const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, DB_USER_ACCOUNT_DATABASE_COLLECTION } = env;
 
 /**
  * Interface for SessionService.
@@ -38,6 +38,10 @@ export interface ISessionService {
 
     getSession(sessionID: number): Promise<ISession | any>;
 
+    updateSession(req: any, _: any, key: string, value: any): Promise<void>;
+
+    updateSessionWithChatId(chatId: number, session: any): Promise<void>;
+
     cleanupInactiveSessions(): Promise<void>;
 
     deleteSession(sessionID: string): Promise<void>;
@@ -50,6 +54,7 @@ export interface ISessionService {
  */
 export class SessionService implements ISessionService {
     private sessionStore: ISessionStore;
+    private userStore: any;
     private cookieName: string;
     private maxAge: string | number;
 
@@ -59,11 +64,12 @@ export class SessionService implements ISessionService {
      * @param cookieName - The name of the cookie used to store the session ID.
      * @param maxAge - The maximum age of the session cookie in milliseconds.
      */
-    constructor(sessionStore: ISessionStore, cookieName: string = 'sessionID', maxAge: string | number = 86400) {
+    constructor(sessionStore: ISessionStore, cookieName: string = 'sessionID', maxAge: string | number = 86400, userStore:any) {
         if (!sessionStore || typeof sessionStore.get !== 'function' || typeof sessionStore.set !== 'function' || typeof sessionStore.destroy !== 'function') {
             throw new Error('sessionStore must implement ISessionStore interface');
         }
         this.sessionStore = sessionStore;
+        this.userStore = userStore;
         this.cookieName = cookieName;
         this.maxAge = maxAge ? calculateExpiry(maxAge) : DB_SERVER_SESSIONS_DATABASE_TTL;
     }
@@ -190,15 +196,19 @@ export class SessionService implements ISessionService {
         // Retrieve session data from the session store
         let sessionData: Record<string, any> = await this.sessionStore.get(sessionID);
 
+        console.log("::::::::: VALIDATE_SESSION ::::: validateSession :::: 00000 :::::::::", sessionID, sessionData);
+
         // If no session data exists, initialize an empty session and store it
         if (!sessionData) {
+            
+            console.log("::::::::: VALIDATE_SESSION ::::: NOT FOUND!!!!!!!! :::::::::", sessionID, sessionData);
+
             sessionData = this.initializeSessionObject(sessionID);
 
-
-            console.log("::::::::: SESSION_DATA ::::::::: 00000 :::::::::", sessionID, sessionData);
-
+            console.log("::::::::: VALIDATE_SESSION ::::: initializeSessionObject :::::::::", sessionID, sessionData);
 
             await this.sessionStore.set(sessionID, sessionData);
+
         }
 
         return { sessionData: sessionData.session, data: sessionData, sessionID: sessionID };
@@ -253,16 +263,26 @@ export class SessionService implements ISessionService {
 
         const sessionID: string = req.sessionID;
 
-        // Retrieve session data from the session store
-        const { sessionData } = await this.validateSession(sessionID);
+        try {
 
-        console.log("::::::::: SESSION_DATA ::::::::: 00001 :::::::::", sessionData);
+            // Retrieve session data from the session store
+            const { sessionData } = await this.validateSession(sessionID);
 
-        sessionData[key] = value;
+            console.log("::::::::: UPDATE_SESSION ::::: updateSession :::: 00001 :::::::::", req.session, req.cookies, sessionID, sessionData);
 
-        req.session[key] = value;
+            sessionData[key] = value;
 
-        await this.sessionStore.set(sessionID, key, value);
+            req.session[key] = value;
+
+            await this.sessionStore.set(sessionID, key, value);
+
+        } catch (error) {
+            
+            console.log("::::::::: UPDATE_SESSION_ERROR ::::: updateSession :::: 00001 :::::::::", req.session, req.sessionID, error);
+
+        }
+
+        
 
     }
 
@@ -295,6 +315,28 @@ export class SessionService implements ISessionService {
         ]);
     }
 
+    async saveUser(user: any): Promise<void> {
+        return await this.userStore.create(user);
+    }
+
+    async getUserAccountById(chatId: number): Promise<ISession | any> {
+        return await this.userStore.getWithParams([
+            { field: "userId", operator: "eq", value: chatId }
+        ]);
+    }
+
+    async getUserAccountByChatId(chatId: number): Promise<ISession | any> {
+        return await this.userStore.getWithParams([
+            { field: "telegramAccount.chatId", operator: "eq", value: chatId }
+        ]);
+    }
+
+    async getUserAccountByDerivAccountNumber(accountId: number): Promise<ISession | any> {
+        return await this.userStore.getWithParams([
+            { field: "derivAccount.accountId", operator: "eq", value: accountId }
+        ]);
+    }
+
     async getSession(sessionID: number): Promise<ISession | any> {
         return await this.sessionStore.getWithParams([
             { field: "session.sessionID", operator: "eq", value: sessionID }
@@ -317,3 +359,5 @@ export class SessionService implements ISessionService {
     }
 
 }
+
+export { ISession, IBotAccounts, ITelegramAccount, IDerivUserAccount }

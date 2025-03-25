@@ -10,6 +10,7 @@ import { ITelegramBotCommandHandlers } from "@/classes/telegram/TelegramBotComma
 import { IWorkerService } from "@/classes/telegram/WorkerService";
 import { Encryption } from "@/classes/cryptography/EncryptionClass";
 import { ISessionService } from "@/classes/sessions/SessionService";
+import { text } from "express";
 
 // Logger
 const logger = pino({ name: "TelegramBotService" });
@@ -107,6 +108,7 @@ export class TelegramBotService implements ITelegramBotService {
         this.telegramBot.onText(/\/strategies/, (msg) => this.commandHandlers.handleStrategiesCommand(msg));
         this.telegramBot.onText(/\/faq/, (msg) => this.commandHandlers.handleFAQCommand(msg));
         this.telegramBot.on("callback_query", (callbackQuery) => this.commandHandlers.handleCallbackQuery(callbackQuery));
+        this.telegramBot.on("polling_error", (error: any) => this.handlePollingError(error));
         this.telegramBot.on("message", (msg) => this.handleMessage(msg));
         logger.info("Bot Service started!");
     }
@@ -117,26 +119,37 @@ export class TelegramBotService implements ITelegramBotService {
      * @param {any} data - The data associated with the logged-in event
      * @public
      */
-    public loggedIn(data: any): void {
+    public authorizeOauthData(accounts: any, session:any): void {
         
-        console.log("LOGGED IN", data);
-
-        const { nonce, accounts, encid, encusername } = data;
-
-        console.log("#####################", nonce, accounts, encid, encusername);
+        const encid:string = session.encid;
 
         const chatId: number = parseInt(Encryption.decryptAES(encid, APP_CRYPTOGRAPHIC_KEY));
 
-        const username: string = Encryption.decryptAES(encusername, APP_CRYPTOGRAPHIC_KEY);
+        console.log("XXXXXXXXXXXXXXXXXXXXXXX ", encid, chatId, accounts, session);
 
-        const metaData: any = {
-            chatId, username, data
+        session.accounts = accounts;
+
+        this.sessionService.updateSessionWithChatId(chatId, session);
+
+        this.tradingProcessFlow.handleLoginAccount(chatId, "", session);
+
+        //TODO : this.workerService.postMessageToDerivWorker("LOGGED_IN", metaData.chatId, "", {}, metaData);
+
+    }
+
+    /**
+     * Handle polling errors
+     * @param {Error} error - The error object
+     * @private
+     */
+    private handlePollingError(error: Error): void {
+        
+        if (String(error.message).includes("ECONNRESET")) {
+            // Handle ECONNRESET error
         }
-
-        console.log(metaData);
-
-        this.workerService.postMessageToDerivWorker("LOGGED_IN", data.chatId, "", {}, metaData);
-
+        if (String(error.message).includes("ENOTFOUND")) {
+            //logger.error(`Polling error: ${error.message}`);
+        }
     }
 
 
@@ -146,7 +159,7 @@ export class TelegramBotService implements ITelegramBotService {
         const text = sanitizeHtml(msg.text || "", { allowedTags: [], allowedAttributes: {} });
         const session = await this.sessionService.getUserSessionByChatId(chatId);
         if (!session) {
-            this.telegramBot.sendMessage(chatId, `Hello ${firstname}, The session has not been found or has expired. Use ${CONSTANTS.COMMANDS.START} to begin.`);
+            this.telegramBot.sendMessage(chatId, `Hello ${firstname}, Your session has not been found or has expired. Use ${CONSTANTS.COMMANDS.START} to begin.`);
             return;
         }
         // Process session step
@@ -208,7 +221,7 @@ export class TelegramBotService implements ITelegramBotService {
                 this.tradingProcessFlow.handleTradeManual(chatId, text, session);
                 break;
             default:
-                this.tradingProcessFlow.handleLoginAccount(chatId, text, session);
+                //  1 on 1 AI session if text is not a command
                 break;
         }
     }

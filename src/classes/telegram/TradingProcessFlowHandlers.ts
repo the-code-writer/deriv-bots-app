@@ -235,10 +235,9 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @public
      */
     public handleLoginAccount(chatId: number, text: string, session: Session): void {
-        session.loginAccount = text;
         session.step = "select_account_type";
         this.sessionService.updateSession(chatId, session);
-        this.keyboardService.showAccountTypeKeyboard(chatId, session.loginAccount);
+        this.keyboardService.showAccountTypeKeyboard(chatId, session.accounts);
     }
 
     /**
@@ -252,7 +251,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.accountType = text;
         session.step = "select_trading_type";
         this.sessionService.updateSession(chatId, session);
-        this.keyboardService.showTradingTypeKeyboard(chatId, session.accountType);
+        this.keyboardService.showTradingTypeKeyboard(chatId, session);
     }
 
     /**

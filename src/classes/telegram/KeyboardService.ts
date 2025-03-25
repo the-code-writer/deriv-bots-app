@@ -189,11 +189,7 @@ export class KeyboardService implements IKeyboardService {
 
         const encid: string = Encryption.encryptAES(id, APP_CRYPTOGRAPHIC_KEY);
 
-        const encuser: string = Encryption.encryptAES(username, APP_CRYPTOGRAPHIC_KEY);
-
-        logger.warn({ encid, encuser });
-
-        const oauthURL: string = `${DERIV_APP_LOGIN_URL}?encid=${encid}&encuser=${encuser}`;
+        const oauthURL: string = `${DERIV_APP_LOGIN_URL}?encid=${encid}`;
 
         logger.warn(`OAUTH_URL ${oauthURL}`);
 
@@ -206,11 +202,14 @@ export class KeyboardService implements IKeyboardService {
 
     getAccountTypeKeyboard(userAccounts: any): KeyboardButton[][] | string[][] {
 
-        console.log(userAccounts, "");
+        const result = Object.values(userAccounts).map((item:any) => ([{
+            text: `${item.acct} ( ${item.cur} )`,
+            callback_data: item
+          }]));
 
-        return [
-            [],
-        ];
+        console.log("::::: USER ACCOUNTS :::: 2", result);
+
+        return [ result ];
 
     }
 

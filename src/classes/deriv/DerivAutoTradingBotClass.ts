@@ -22,14 +22,11 @@ const jsan = require("jsan");
 const logger = pino({ name: "DerivTradingBot" });
 
 const {
-  CONNECTION_MAXIMUM_ATTEMPTS,
-  CONNECTION_ATTEMPTS_TIMEOUT,
-  CONNECTION_ATTEMPTS_TIMEOUT_INCREMENT,
   CONNECTION_PING_TIMEOUT,
   CONNECTION_CONTRACT_CREATION_TIMEOUT,
-  CONNECTION_RETRY_DELAY,
-  DERIV_APP_ENDPOINT,
-  DERIV_APP_ID,
+  DERIV_APP_ENDPOINT_DOMAIN,
+  DERIV_APP_ENDPOINT_APP_ID,
+  DERIV_APP_ENDPOINT_LANG,
   DERIV_APP_TOKEN,
   MIN_STAKE,
   MAX_STAKE,
@@ -633,27 +630,12 @@ interface BotConfig {
   contractDuration?: number;
   contractDurationUnit?: string;
   userAccountToken?: string;
-  connectionMaximumAttempts?: number;
-  connectionInitialTimeout?: number;
-  connectionTimeoutIncreament?: number;
 }
 
 class DerivAutoTradingBotClass {
   // Private properties with explicit types
-
-  // Deriv API connection
-  private _connection: WebSocket | undefined;
-
-  // @ts-ignore: see this.resetState()
-  private _connectionAttempts: number;
-  // @ts-ignore: see this.resetState()
-  private _connectionMaximumAttempts: number;
-  // @ts-ignore: see this.resetState()
-  private _connectionInitialTimeout: number;
-  // @ts-ignore: see this.resetState()
-  private _connectionTimeoutIncreament: number;
-  // @ts-ignore: see this.resetState()
-  private _connectionEstablished: boolean;
+  
+  private _api: any;
 
   // @ts-ignore: see this.resetState()
   private _auditTrail: Array<any>;
@@ -740,8 +722,6 @@ class DerivAutoTradingBotClass {
   // Save the BotConfig passed to the constructor
   private _botConfig: BotConfig;
 
-  private api: any;
-
   /**
    * Constructor for DerivAutoTradingBotClass.
    * @param {BotConfig} config - Optional configuration object to override default values.
@@ -770,12 +750,7 @@ class DerivAutoTradingBotClass {
     const mergedConfig: BotConfig = { ...this._botConfig, ...config };
 
     // Deriv API connection
-    this._connection = undefined;
-    this._connectionAttempts = 0;
-    this._connectionMaximumAttempts = mergedConfig.connectionMaximumAttempts || CONNECTION_MAXIMUM_ATTEMPTS;
-    this._connectionInitialTimeout = mergedConfig.connectionInitialTimeout || CONNECTION_ATTEMPTS_TIMEOUT;
-    this._connectionTimeoutIncreament = mergedConfig.connectionTimeoutIncreament || CONNECTION_ATTEMPTS_TIMEOUT_INCREMENT;
-    this._connectionEstablished = false;
+    this._api = null;
 
     // Audit trail and session management
     this._auditTrail = [];
@@ -832,59 +807,17 @@ class DerivAutoTradingBotClass {
     this._userAccountToken = mergedConfig.userAccountToken || DERIV_APP_TOKEN;
     this._userBalance = ["", ""];
 
-    this.api = null;
-
   }
 
   // Getters and Setters
 
   // Deriv API connection
-  get connection(): WebSocket | undefined {
-    return this._connection;
+  get api(): any {
+    return this._api;
   }
 
-  set connection(value: WebSocket | undefined) {
-    this._connection = value;
-  }
-
-  get connectionAttempts(): number {
-    return this._connectionAttempts;
-  }
-
-  set connectionAttempts(value: number) {
-    this._connectionAttempts = value;
-  }
-
-  get connectionMaximumAttempts(): number {
-    return this._connectionMaximumAttempts;
-  }
-
-  set connectionMaximumAttempts(value: number) {
-    this._connectionMaximumAttempts = value;
-  }
-
-  get connectionInitialTimeout(): number {
-    return this._connectionInitialTimeout;
-  }
-
-  set connectionInitialTimeout(value: number) {
-    this._connectionInitialTimeout = value;
-  }
-
-  get connectionTimeoutIncreament(): number {
-    return this._connectionTimeoutIncreament;
-  }
-
-  set connectionTimeoutIncreament(value: number) {
-    this._connectionTimeoutIncreament = value;
-  }
-
-  get connectionEstablished(): boolean {
-    return this._connectionEstablished;
-  }
-
-  set connectionEstablished(value: boolean) {
-    this._connectionEstablished = value;
+  set api(value: any) {
+    this._api = value;
   }
 
   // Audit trail and session management
@@ -1207,199 +1140,43 @@ class DerivAutoTradingBotClass {
     this._userBalance = value;
   }
 
-
-
-  private async establishConnection(callback?: any): Promise<boolean> {
-
-    const self = this;
-
-    return new Promise((resolve) => {
-
-      this.connection = new WebSocket(`${DERIV_APP_ENDPOINT}${DERIV_APP_ID}`);
-      this.connection.onopen = (event) => {
-        self.handleOpen(event, callback);
-        this._connectionEstablished = true;
-        resolve(true);
-      };
-      this.connection.onmessage = (response) => {
-        self.handleMessage(response);
-        resolve(true);
-      };
-      this.connection.onerror = (error) => {
-        self.handleError(error);
-        this._connectionEstablished = false;
-        resolve(false);
-      };
-      this.connection.onclose = (event) => {
-        self.handleClose(event);
-        this._connectionEstablished = false;
-        resolve(false);
-      };
-
-    });
-
-  }
-
-  private async connect(callback?: any): Promise<WebSocket | undefined> {
-
+  private async connect(callback?: any): Promise<void> {
     logger.info("Connecting...");
-
     parentPort.postMessage({ action: "sendTelegramMessage", text: "🟡 Establishing connection to Deriv server...", meta: {} });
 
-    if (this.connection?.readyState === WebSocket.CONNECTING) {
-      logger.warn("WebSocket.CONNECTING (0): The connection is not yet open.");
-      return;
-    }
-    if (this.connection?.readyState === WebSocket.OPEN) {
-      logger.warn("WebSocket.OPEN (1): The connection is open and ready to communicate.");
-      return;
-    }
-    if (this.connection?.readyState === WebSocket.CLOSING) {
-      logger.warn("WebSocket.CLOSING (2): The connection is in the process of closing.");
-      return;
-    }
-    if (this.connection?.readyState === WebSocket.CLOSED) {
-      logger.warn("WebSocket.CLOSED (3): The connection is closed or couldn't be opened.");
-      return;
-    }
+    this.api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
-    let currentTimeout: number = this._connectionInitialTimeout;
+    logger.info("Connection established via DerivAPI endpoint.");
 
-    while (this._connectionAttempts < this._connectionMaximumAttempts) {
-
-      logger.warn(`Attempting connection: ${this._connectionAttempts + 1} of ${CONNECTION_MAXIMUM_ATTEMPTS}`);
-
-      const isConnected = await this.establishConnection();
-
-      if (isConnected) {
-        const connectionSuccessMessage: string = `\`\`\`🟢Connection Deriv server connected!\`\`\``
-        logger.info(connectionSuccessMessage);
-        parentPort.postMessage({ action: "sendTelegramMessage", text: connectionSuccessMessage, meta: {} });
-        if (typeof callback === "function") {
-          callback(this.connection);
-        }
-        return this.connection;
-      }
-
-      this._connectionAttempts++;
-
-      if (this._connectionAttempts < this._connectionMaximumAttempts) {
-        logger.warn(`Waiting ${currentTimeout / 1000} seconds before retrying...`);
-        await this.sleep(currentTimeout);
-        currentTimeout *= this._connectionTimeoutIncreament;
-      }
-
-    }
-    const connectionErrorMessage: string = `\`\`\`🔴Connection Deriv server connection failed!\`\`\``;
-    logger.fatal(connectionErrorMessage);
-    parentPort.postMessage({ action: "sendTelegramMessage", text: connectionErrorMessage, meta: {} });
-    this._connectionEstablished = false;
-    this.clearTimers();
-    return undefined;
-
-  }
-
-  // Event: Connection opened
-  private async handleOpen(event: Event, callback?: any) {
-
-    logger.info("WebSocket connection opened:");
-    // Perform actions after connection is established
-    logger.info("Initialize the Deriv API:");
-    this.api = new DerivAPI({ connection: this.connection });
     logger.info("Start Ping <-> Pong:");
+
     this.ping();
-    logger.info("Initialize the user account:");
+
     if (typeof callback === "function") {
-      await callback(event);
+      await callback();
     }
   }
 
-  // Event: Message received
-  private async handleMessage(response: MessageEvent) {
-
-    console.log("Message received from server:", response.data);
-    // Handle incoming data
-
-    const data = JSON.parse(response.data);
-
-    // Send message to TG
-    // console.log("WEB SOCKET MESSAGE::", data);
-
-    // If there's an error in the response, log the error message and disconnect
-    if (data.error) {
-      console.error("Error:", data.error.message);
-      this.disconnect();
-      setTimeout(async () => {
-        await this.reconnect();
-      }, CONNECTION_RETRY_DELAY);
-      return;
-    }
-
-    // If the message type is 'website_status', log the relevant details
-    if (data.msg_type === "website_status") {
-      const websiteStatus = data.website_status;
-      console.log("Website Status:", websiteStatus.site_status);
-      console.log("Available Languages:", websiteStatus.supported_languages);
-      console.log(
-        "Terms & Conditions Version:",
-        websiteStatus.terms_conditions_version
-      );
-      console.log("Broker Codes:", websiteStatus.broker_codes);
-    }
-  }
-
-  // Event: Error occurred
-  private async handleError(event: Event): Promise<void> {
-
-    logger.error("WebSocket connection error.");
-    setTimeout(async () => {
-      //await this.reconnect();
-    }, CONNECTION_RETRY_DELAY);
-
-  }
-
-  // Event: Connection closed
-  private handleClose(event: CloseEvent) {
-
-    logger.error("WebSocket connection closed.");
-    // Handle cleanup or reconnection
-  }
-
-  private async reconnect(): Promise<void> {
-    await this.disconnect();
-    this.sleep(500);
-    logger.info("Reconnecting...");
-    await this.connect();
-  }
-
-  private async disconnect(): Promise<void> {
-    logger.info("Disconnecting...");
-    this.connection?.close();
-    this.connection?.removeEventListener("open", this.handleOpen);
-    this.connection?.removeEventListener("message", this.handleMessage);
-    this.connection?.removeEventListener("error", this.handleError);
-    this.connection?.removeEventListener("close", this.handleClose);
-    this.clearTimers();
-    await this.sleep(500);
-    this.connection = undefined;
+  private disconnect(): void {
     this.api = null;
   }
 
   private ping(): void {
-    const basic = this.api.basic;
     // Sends a ping message every 30 seconds
     this._pingIntervalID = setInterval(() => {
-      basic.ping().then((pong: any) => {
+      this.api.basic.ping().then((pong: any) => {
         logger.info(`Ping-Pong-Received : ${pong.req_id}`);
       });
     }, CONNECTION_PING_TIMEOUT);
   }
 
-  private async getAccountToken(data:any, key:string, value:string) {
+  public getAccountToken(data:any, key:string, value:string) {
+
     // Iterate through the object
-    for (const index in data) {
-      const entry = data[index];
-  
+    for (const index in data.accounts) {
+
+      const entry = data.accounts[index];
+
       // Check if the key is 'acct' or 'cur' and if the value matches
       if ((key === "acct" && entry.acct === value) || (key === "cur" && entry.cur === value) || (key === "token" && entry.token === value)) {
         return entry; // Return the matching entry
@@ -1419,19 +1196,30 @@ class DerivAutoTradingBotClass {
   public async setAccount(callBackFunction?: any, token?: string): Promise<IDerivUserAccount> {
     // Validate the token
     const userToken = token || this._userAccountToken;
+
     if (!userToken || typeof userToken !== "string") {
       throw new Error("Invalid user token provided.");
     }
 
-    // Ensure the WebSocket connection is open
-    if (this.connection?.readyState !== WebSocket.OPEN) {
-      logger.warn("WebSocket connection is not open. Attempting to reconnect...");
-      await this.connect();
+    if(!this._userAccountToken && typeof token === "string" && token.length > 10){
+      this._userAccountToken = token;
+    }
+
+    if(!this.api){
+
+      this.connect(()=>{
+        
+        this.setAccount(callBackFunction, token);
+
+      });
+
     }
 
     try {
       // Initialize the account using the Deriv API
       const account = await this.api.account(userToken);
+
+      logger.info(`API hangs with ${userToken}`);
 
       // Validate the account data
       if (!account || !account.balance || !account.balance.amount) {
@@ -1749,6 +1537,7 @@ class DerivAutoTradingBotClass {
 
       // Return an empty trade data object in case of failure
       return {} as ITradeData;
+      
     }
   }
 
@@ -2452,7 +2241,7 @@ class DerivAutoTradingBotClass {
    */
   private async executeTrade(purchaseType: string): Promise<void> {
     // Stop trading if the flag is false or the connection is closed
-    if (!this._isTrading || this.connection?.readyState !== WebSocket.OPEN) {
+    if (!this._isTrading || !this.api) {
       return;
     }
 

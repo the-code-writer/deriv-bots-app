@@ -14,6 +14,7 @@ import { AttachRoutes } from '@/routes/AttachRoutes';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
 import { SessionManagerStorageClass } from "@/classes/sessions/SessionManagerStorageClass";
 import { SessionService } from "@/classes/sessions/SessionService";
+import { UserManagerStorageClass } from "./classes/sessions/UserManagerStorageClass";
 
 const path = require('path');
 
@@ -24,7 +25,7 @@ const crypto = require("crypto");
 const logger = pino({ name: "server start" });
 const app: Express = express();
 
-const { MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL } = env;
+const { MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, DB_USER_ACCOUNT_DATABASE_COLLECTION } = env;
 
 (async () => {
 
@@ -75,8 +76,10 @@ const { MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER
   await db.connect();
   await db.createDatabase(MONGODB_DATABASE_NAME);
 
+  const userStore = new UserManagerStorageClass(db, DB_USER_ACCOUNT_DATABASE_COLLECTION);
+
   const sessionStore = new SessionManagerStorageClass(db, DB_SERVER_SESSIONS_DATABASE_COLLECTION);
-  const sessionService = new SessionService(sessionStore, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL);
+  const sessionService = new SessionService(sessionStore, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, userStore);
 
   app.use(sessionService.middleware.bind(sessionService));
 

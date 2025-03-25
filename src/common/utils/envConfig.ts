@@ -15,6 +15,9 @@ export const env = cleanEnv(process.env, {
   DERIV_APP_LOGIN_URL: url({ devDefault: testOnly("http://localhost:8080/deriv-oauth") }),
   DERIV_APP_OAUTH_URL: url({ devDefault: testOnly("https://oauth.deriv.com/oauth2/authorize?app_id=68182") }),
   DERIV_APP_ENDPOINT: str({ devDefault: testOnly("wss://ws.derivws.com/websockets/v3?app_id=") }),
+  DERIV_APP_ENDPOINT_DOMAIN: str({ devDefault: testOnly("ws.derivws.com") }),
+  DERIV_APP_ENDPOINT_APP_ID: str({ devDefault: testOnly("68182") }),
+  DERIV_APP_ENDPOINT_LANG: str({ devDefault: testOnly("EN") }),
   TELEGRAM_BOT_TOKEN: str({ devDefault: testOnly("7325482342:AAGfExzAOb5V66N4aCjiycL9-IULfUGVUG8") }),
   PUSHER_TOKEN: str({ devDefault: testOnly("d7c8541eaeb8ad290bb1") }),
   PUSHER_CLUSTER: str({ devDefault: testOnly("ap2") }),
@@ -24,7 +27,7 @@ export const env = cleanEnv(process.env, {
   MONGODB_BACKUP_PATH: str({ devDefault: testOnly("./files/databases/mongodb/backups/") }),
   MONGODB_DATABASE_NAME: str({ devDefault: testOnly("ndutax_db") }),
   DB_SERVER_SESSIONS_DATABASE_COLLECTION: str({ devDefault: testOnly("sv_sessions") }),
-  DB_TG_BOT_SESSIONS_DATABASE_COLLECTION: str({ devDefault: testOnly("tg_sessions") }),
+  DB_USER_ACCOUNT_DATABASE_COLLECTION: str({ devDefault: testOnly("user_accounts") }),
   DB_DERIV_TRADE_RESULT_DATABASE_COLLECTION: str({ devDefault: testOnly("dv_trade_results") }),
 
   // Number variables

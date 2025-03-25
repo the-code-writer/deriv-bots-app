@@ -1,4 +1,5 @@
 import { DatabaseConnection } from "@/classes/databases/mongodb/MongoDBClass";
+import { IDerivUserAccount } from '@/classes/deriv/DerivUserAccountClass';
 
 /**
  * Interface for SessionStore.
@@ -63,6 +64,24 @@ export interface ISession {
     maxAge: number;
     cookie: ICookie;
     session: Record<string, any>; // Generic session object
+
+}
+
+
+            export interface ITelegramAccount {
+                
+            }
+
+            export interface IBotAccounts {
+                telegram: ITelegramAccount;
+                deriv: IDerivUserAccount;
+            }
+
+export interface ITGSession {
+    chatId?: number; // Unique identifier for the session
+    step: string; // Session data (can be any type)
+    timestamp: Date; // Expiration date of the session
+    accounts: IBotAccounts; // Generic session object
 
 }
 
@@ -208,9 +227,9 @@ export class SessionManagerStorageClass implements ISessionStore {
 
         }
 
-        console.log("::::::::: SESSION_DATA ::::::::: 0000.0000 :::::::::", updates);
+        console.log("::::::::: SESSION_DATA ::::::::: 0000.1111 :::::::::", updates);
 
-        await this.db.updateItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates);
+        await this.db.updateItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates, true);
 
     }
 

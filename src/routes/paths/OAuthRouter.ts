@@ -16,7 +16,6 @@ export interface TemplateData {
     params?: { session: any };
     accounts?: any;
     encid?: string;
-    encusername?: string;
 }
 
 /**
@@ -117,13 +116,10 @@ export class OAuthRouter {
          */
         this.router.get('/login', async (req: Request, res: Response) => {
 
-            const { encid, encuser } = req.query; // Extract query parameters
+            const { encid } = req.query; // Extract query parameters
             // @ts-ignore
             req.session.encid = encid;
-            // @ts-ignore
-            req.session.encuser = encuser;
             await this.sessionService.updateSession(req, res, "encid", encid);
-            await this.sessionService.updateSession(req, res, "encuser", encuser);
 
             const data: TemplateData = {
                 title: 'Deriv Login',
@@ -146,11 +142,10 @@ export class OAuthRouter {
 
             const queryParams = req.query; // Extract all query parameters
 
-            console.log('req.session:', req.session);
-            console.log('Session ID:', req.session.sessionID);
-            console.log('Session ID:', req.sessionID);
+            // @ts-ignore
+            const sessionID = req.session.sessionID || req.sessionID;
 
-            const sessionID = req.cookies.sessionID;
+            const session = req.session;
 
             if (!sessionID) {
 
@@ -159,8 +154,8 @@ export class OAuthRouter {
             }
 
             // @ts-ignore
-            if (!req.session.encid || !req.session.encuser) {
-                console.error('Missing session data:', req.session);
+            if (!session.encid) {
+                console.error('Missing session data:', session);
                 return res.status(400).send('Session data is missing');
             }
 
@@ -197,21 +192,15 @@ export class OAuthRouter {
                 return res.status(500).send('<h2>Telegram bot is not initialized</h2>');
             }
 
-            const data: TemplateData = {
-                nonce: res.locals.nonce, // Nonce for CSP
-                accounts: organizedData, // Organized account data
-                encid: req.session.encid, // Encrypted ID from the session
-                encusername: req.session.encusername, // Encrypted username from the session
-            };
-
             // Notify the bot that the user has logged in
-            bot.loggedIn(data);
+            bot.authorizeOauthData(organizedData, session);
 
             // Send a success response
             res.status(200).send('<h2>User logged in successfully</h2>');
 
-            // Render the deriv-callback-template EJS template with the data
-            res.render('deriv-callback-template', { data });
+            // Render the deriv-oauth-template EJS template with the data
+            //res.render('deriv-oauth-template', { data });
+
         });
     }
 }

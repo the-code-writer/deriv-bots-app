@@ -43,10 +43,10 @@ export interface DatabaseConnection {
     restoreDatabase(backupPath: string): Promise<void>;
     insertItem(collectionName: string, item: any): Promise<InsertOneResult<Document> | undefined>;
     insertBulk(collectionName: string, items: any[]): Promise<InsertManyResult<Document> | undefined>;
-    getItem(collectionName: string, query: Partial<Item>): Promise<Item | null>;
+    getItem(collectionName: string, query: Partial<Item>): Promise<any | null>;
     getAllItems(collectionName: string, conditions: QueryCondition[]): Promise<WithId<Document>[] | undefined>;
-    updateItem(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult | undefined>;
-    updateItems(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>): Promise<UpdateResult | undefined>;
+    updateItem(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>, upsert: boolean): Promise<UpdateResult | undefined>;
+    updateItems(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>, upsert: boolean): Promise<UpdateResult | undefined>;
     deleteItem(collectionName: string, conditions: QueryCondition[]): Promise<DeleteResult | undefined>;
 }
 
@@ -150,7 +150,7 @@ export class MongoDBConnection implements DatabaseConnection {
                 // Handle other errors
                 logger.error(`Failed to connect to MongoDB: ${error.message}`);
             }
-            throw error; // Re-throw the error to stop the application
+            // TODO : throw error; // Re-throw the error to stop the application
         }
     }
 

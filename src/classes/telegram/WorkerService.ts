@@ -33,20 +33,21 @@ export class WorkerService implements IWorkerService {
     }
 
     postMessageToDerivWorker(action: string, chatId: number, text: string, session: Session, data?: any): void {
+
         const workerID = `WKR_${chatId}`;
 
         if (this.workers[workerID]) {
-            this.workers[workerID].postMessage({ action, text, meta: { chatId, text, session, data } });
+            this.workers[workerID].postMessage({action, chatId, text, session, data});
         } else {
             this.workers[workerID] = new Worker("./src/classes/deriv/tradeWorker.js", {
-                workerData: { action, text, meta: { chatId, text, session } },
+                workerData: { action, chatId, text, session, data },
             });
-
             this.workers[workerID].on("message", (message) => this.handleWorkerMessage(chatId, message));
             this.workers[workerID].on("error", (error) => this.handleWorkerError(chatId, error));
             this.workers[workerID].on("exit", (code) => this.handleWorkerExit(chatId, code));
         }
     }
+    
 
     handleWorkerMessage(chatId: number, message: any): void {
         // Handle worker messages

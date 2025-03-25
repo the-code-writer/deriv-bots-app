@@ -915,7 +915,7 @@ https://derivbots.app
      */
     private getLoginKeyboard(session: any): any {
         return [
-            [{ text: '🔒 LOGIN', url: `${DERIV_APP_LOGIN_URL}?encid=${session.id}&encuser=${session.username}` }],
+            [{ text: '🔒 LOGIN', url: `${DERIV_APP_LOGIN_URL}?encid=${session.id}` }],
             [{ text: '🚫 CANCEL', callback_data: 'exec_cancel' }],
         ];
     }

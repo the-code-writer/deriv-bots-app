@@ -248,11 +248,37 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
     /**
      * Handle the /confirm command
+     * @param {Message} chatId - The message object from Telegram
+     */
+    async getUserChatSession(chatId: number): Promise<any> {
+
+        const session = await this.sessionService.getUserSessionByChatId(chatId);
+
+        return session;
+
+    }
+
+    /**
+     * Handle the /confirm command
+     * @param {Message} chatId - The message object from Telegram
+     */
+    async getUserAccount(chatId: number): Promise<any> {
+
+        const user = await this.sessionService.getUserAccountByChatId(chatId);
+
+        return user;
+
+    }
+
+    /**
+     * Handle the /confirm command
      * @param {Message} msg - The message object from Telegram
      */
     async getChatSession(msg: Message): Promise<any> {
+
         const chatId = msg.chat.id;
-        const session = await this.sessionService.getSession(chatId);
+
+        const session = await this.getUserChatSession(chatId);
 
         if (!session) {
             // If session is not found, throw an error
@@ -284,30 +310,88 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
      * @param {Message} msg - The message object from Telegram
      */
     async handleStartCommand(msg: Message): Promise<void> {
-        const chatId = msg.chat.id;
-        const session: Session = {
-            chatId,
-            step: "login_account",
-            timestamp: Date.now(),
-            accounts: {
-                telegram: msg.from,
-                deriv: {}
-            }
-        };
 
-        await this.sessionService.createSession(chatId, session);
+        const chatId = msg.chat.id;
+
+        const first_name = msg?.from.first_name;
+
+        // check if the chatId session is already in the database
+
+        const botSession = await this.getUserChatSession(chatId);
+
+        console.log(":::: BOT_SESSION_FROM_DB :::: 000", botSession);
+
+        if(!botSession){
+                
+            const session: Session = {
+                chatId,
+                step: "login_account",
+                timestamp: Date.now(),
+                accounts: {
+                    telegram: msg.from,
+                    deriv: {}
+                }
+            };
+
+            await this.sessionService.createSession(chatId, session);
+
+        }
+        
+        const session = await this.getUserChatSession(chatId);
+
+        console.log(":::: BOT_SESSION_FROM_DB :::: 111", session);
+
+        // check if the chatId user is already in the database
+
+        const user = await this.getUserAccount(chatId);
+
+        console.log(":::: USER_ACCOUNT_FROM_DB :::: 222", user);
+
+        if(!user){
+
+            this.telegramBot.sendMessage(chatId, `Hi ${first_name}. \n\nPlease login using your Deriv Account to continue.`, {
+                reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(session.session.bot) },
+            });
+
+            return;
+
+        }
+
+        // Accounts
+
+        const userAccounts = user.derivAccount.accounts;
+
+        console.log(":::: USER_DERIV_ACCOUNTS :::: 333", user, userAccounts);
+
+        // if the user is already in the database, skip the login
+
+        // if the user is not in the database, login the user
+
+        // if user is DERIV_APP_LOGIN_URL, send the message to the worker that the user has been logged in
+
+        // the worker then gets the user account via the deriv api
+
+        // then create a user account within the database
+
+        // after ccount creation, welcome the user and a callback function must be the skip login function
+
+        // after skipping loggin or after succesful login
+
+        // start trading
 
         /*
         const imageUrl = IMAGE_BANNER;
         const caption = `**\n\nThe Future of Trading Is Here! 🌟`;
         this.telegramBot.sendPhoto(chatId, imageUrl, { caption, parse_mode: "Markdown" });
-        */
-
+        
         setTimeout(() => {
             this.telegramBot.sendMessage(chatId, `Please login using your Deriv Account to proceed:`, {
                 reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(session) },
             });
         }, 500);
+
+        */
+
     }
 
     /**
@@ -319,6 +403,11 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         const { chatId, session } = await this.getChatSession(msg);
 
         if (!chatId || !session) {
+
+            // send the message that the session has expired
+
+            // TODO: this.isSessionValid(session)
+
             return;
         }
 
@@ -353,6 +442,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        //this.showCommandMenuHelp();
 
         // Send help information to the user
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.HELP, chatId, "Here is some help information.", session);
@@ -418,6 +509,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // User enters amount to withdraw, less than the balance to a paymnt method specified in the menu
+
         // Withdraw amounts into your account
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.WITHDRAW, chatId, "", session);
     }
@@ -433,6 +526,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // Deposit via api
 
         // Deposit amounts into your account
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.DEPOSIT, chatId, "", session);
@@ -450,6 +545,18 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // wallet details
+
+        // /wallet create
+
+        // /wallet close
+
+        // /wallet withdraw
+
+        // /wallet deposit
+
+        // /wallet balance
+
         // Display wallet information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.WALLET, chatId, "", session);
     }
@@ -465,6 +572,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /accounts use
+
+        // /accounts list
 
         // Display account information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.ACCOUNTS, chatId, "", session);
@@ -482,6 +593,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /profile details
+
+        // /profie PDF
+
         // Display profile information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.PROFILE, chatId, "", session);
     }
@@ -497,6 +612,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /settings
 
         // Display settings information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.SETTINGS, chatId, "", session);
@@ -514,6 +631,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /logout
+
         // Logout the user
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.LOGOUT, chatId, "", session);
     }
@@ -529,6 +648,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /status
 
         // Display status information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.STATUS, chatId, "", session);
@@ -546,6 +667,12 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /history PDF
+
+        // /history summary
+
+        // /history 3 weeks, 1hr, 2days, last year
+
         // Display history information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.HISTORY, chatId, "", session);
     }
@@ -561,6 +688,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /balance
 
         // Display balance information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.BALANCE, chatId, "", session);
@@ -578,6 +707,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /info or /about
+
         // Display information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.INFO, chatId, "", session);
     }
@@ -593,6 +724,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /support chat
+
+        // /support bot
 
         // Display support information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.SUPPORT, chatId, "", session);
@@ -610,6 +745,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /update
+
         // Perform an update (e.g., update settings or data)
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.UPDATE, chatId, "", session);
     }
@@ -625,6 +762,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /news list
+
+        // /news 4
 
         // Display news information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.NEWS, chatId, "", session);
@@ -642,6 +783,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /alerts
+
         // Display alerts information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.ALERTS, chatId, "", session);
     }
@@ -657,6 +800,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /risks
 
         // Display risk management information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.RISK_MANAGEMENT, chatId, "", session);
@@ -674,6 +819,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /strategies
+
+        // /strategies 5
+
         // Display strategies information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.STRATEGIES, chatId, "", session);
     }
@@ -689,6 +838,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /faq
+
+        // /faq 8
 
         // Display FAQ information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.FAQ, chatId, "", session);
@@ -706,6 +859,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /telemetry
+
         // Display telemetry information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.TELEMETRY, chatId, "", session);
     }
@@ -721,6 +876,12 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /profits
+
+        // /profits table
+
+        // /profits PDF
 
         // Display profits information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.PROFITS, chatId, "", session);
@@ -738,6 +899,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /statement
+
+        // /statement PDF
+
         // Display statement information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.STATEMENT, chatId, "", session);
     }
@@ -753,6 +918,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /reset
 
         // Reset the session or settings
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.RESET, chatId, "", session);
@@ -770,6 +937,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /pricing
+
+
+
         // Display pricing information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.PRICING, chatId, "", session);
     }
@@ -785,6 +956,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         if (!chatId || !session) {
             return;
         }
+
+        // /subscribe list
+
+        // /subscribe free | basic | pro | premium
 
         // Subscribe the user to a service
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.SUBSCRIBE, chatId, "", session);
@@ -802,7 +977,10 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             return;
         }
 
+        // /health 
+
         // Perform a health check
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.HEALTH_CHECK, chatId, "", session);
     }
+    
 }
