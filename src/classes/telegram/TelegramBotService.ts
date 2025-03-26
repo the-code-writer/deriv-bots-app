@@ -1,6 +1,5 @@
 import TelegramBot from "node-telegram-bot-api";
 import type { Message } from "node-telegram-bot-api";
-import { pino } from "pino";
 // @ts-ignore
 import sanitizeHtml from "sanitize-html";
 import { CONSTANTS } from "@/common/utils/constants";
@@ -12,6 +11,7 @@ import { Encryption } from "@/classes/cryptography/EncryptionClass";
 import { ISessionService } from "@/classes/sessions/SessionService";
 import { text } from "express";
 
+import { pino } from "pino";
 // Logger
 const logger = pino({ name: "TelegramBotService" });
 
@@ -119,19 +119,29 @@ export class TelegramBotService implements ITelegramBotService {
      * @param {any} data - The data associated with the logged-in event
      * @public
      */
-    public authorizeOauthData(accounts: any, session:any): void {
+    public async authorizeOauthData(sessionData:any): Promise<void> {
         
-        const encid:string = session.encid;
+        let chatId:number = 0;
 
-        const chatId: number = parseInt(Encryption.decryptAES(encid, APP_CRYPTOGRAPHIC_KEY));
+        const encid: string = sessionData.session.encid;
 
-        console.log("XXXXXXXXXXXXXXXXXXXXXXX ", encid, chatId, accounts, session);
+        if(encid){
+            
+            chatId = parseInt(Encryption.decryptAES(encid, APP_CRYPTOGRAPHIC_KEY));
 
-        session.accounts = accounts;
+        }else{
 
-        this.sessionService.updateSessionWithChatId(chatId, session);
+            chatId = sessionData.session.chatId;
 
-        this.tradingProcessFlow.handleLoginAccount(chatId, "", session);
+        }
+
+        logger.info(JSON.stringify(sessionData.session))
+
+        const updatedSession = await this.sessionService.updateSessionWithChatId(chatId, sessionData.session);
+
+        console.log("*** *** *** *** SESSION*** *** *** ***", chatId, updatedSession);
+
+        this.tradingProcessFlow.handleLoginAccount(chatId, "", updatedSession);
 
         //TODO : this.workerService.postMessageToDerivWorker("LOGGED_IN", metaData.chatId, "", {}, metaData);
 

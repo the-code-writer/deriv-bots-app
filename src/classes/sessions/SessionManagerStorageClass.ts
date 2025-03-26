@@ -219,17 +219,17 @@ export class SessionManagerStorageClass implements ISessionStore {
 
         let updates: Partial<any> = key;
 
-        if (typeof key === "string" && typeof value !== undefined) {
+        if (key.length > 1 && value !== null && typeof value !== undefined) {
 
             updates = {
-                [`session.${key}`]: value // Use dot notation to update the nested field
+                [`${key}`]: value // Use dot notation to update the nested field
             };
 
+            console.log("::::::::: SESSION_DATA ::::::::: 0000.1111 :::::::::", updates);
+
+            await this.db.updateItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates, true);
+
         }
-
-        console.log("::::::::: SESSION_DATA ::::::::: 0000.1111 :::::::::", updates);
-
-        await this.db.updateItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates, true);
 
     }
 

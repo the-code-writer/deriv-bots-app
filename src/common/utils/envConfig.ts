@@ -29,6 +29,7 @@ export const env = cleanEnv(process.env, {
   DB_SERVER_SESSIONS_DATABASE_COLLECTION: str({ devDefault: testOnly("sv_sessions") }),
   DB_USER_ACCOUNT_DATABASE_COLLECTION: str({ devDefault: testOnly("user_accounts") }),
   DB_DERIV_TRADE_RESULT_DATABASE_COLLECTION: str({ devDefault: testOnly("dv_trade_results") }),
+  DB_DERIV_ACCOUNT: str({ devDefault: testOnly("") }),
 
   // Number variables
   COMMON_RATE_LIMIT_MAX_REQUESTS: num({ devDefault: testOnly(1000) }),

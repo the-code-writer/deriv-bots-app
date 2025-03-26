@@ -5,9 +5,11 @@ import { InsertOneResult } from 'mongodb';
  * MongoDB implementation of the user repository
  */
 export class UserRepository implements IUserRepository {
-    private readonly collection: string = 'users';
+    private readonly collection: string = 'sv_users';
 
-    constructor(private db: DatabaseConnection) { }
+    constructor(private db: DatabaseConnection) { 
+        
+    }
 
     /**
      * Creates a new user in the database
@@ -16,16 +18,7 @@ export class UserRepository implements IUserRepository {
      */
     async create(user: IUser): Promise<IUser> {
 
-        const now = new Date();
-
-        const newUser: IUser = {
-            ...user,
-            createdAt: now,
-            updatedAt: now,
-            isActive: true
-        };
-
-        const insertResult = await this.db.insertItem(this.collection, newUser);
+        const insertResult = await this.db.insertItem(this.collection, user);
 
         if (!insertResult || !insertResult.acknowledged) {
             throw new Error('Failed to create user');
@@ -34,7 +27,7 @@ export class UserRepository implements IUserRepository {
         // If we get MongoDB's InsertOneResult, combine with our data
         if ('insertedId' in insertResult) {
             return {
-                ...newUser,
+                ...user,
                 _id: insertResult.insertedId.toString()
             };
         }
@@ -116,7 +109,7 @@ export class UserRepository implements IUserRepository {
      * @returns Array of all users
      */
     async findAll(): Promise<IUser[]> {
-        const users = await this.db.getAllItems(this.collection, {});
+        const users = await this.db.getAllItems(this.collection, []);
         return users as IUser[];
     }
 }

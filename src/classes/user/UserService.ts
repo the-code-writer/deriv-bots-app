@@ -72,7 +72,7 @@ async create(userData: CreateUserDto): Promise<IUser> {
 private validateDerivAccount(account: IDerivUserAccount): boolean {
     // Add your specific validation logic for deriv accounts here
     // Example basic validation:
-    return !!account.accountId && !!account.currency;
+    return !!account.currency;
 }
 
 /**

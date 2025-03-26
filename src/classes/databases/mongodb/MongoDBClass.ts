@@ -44,7 +44,7 @@ export interface DatabaseConnection {
     insertItem(collectionName: string, item: any): Promise<InsertOneResult<Document> | undefined>;
     insertBulk(collectionName: string, items: any[]): Promise<InsertManyResult<Document> | undefined>;
     getItem(collectionName: string, query: Partial<Item>): Promise<any | null>;
-    getAllItems(collectionName: string, conditions: QueryCondition[]): Promise<WithId<Document>[] | undefined>;
+    getAllItems(collectionName: string, conditions: QueryCondition[]): Promise<WithId<Document>[] | undefined | any>;
     updateItem(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>, upsert: boolean): Promise<UpdateResult | undefined>;
     updateItems(collectionName: string, conditions: QueryCondition[], updates: Partial<Item>, upsert: boolean): Promise<UpdateResult | undefined>;
     deleteItem(collectionName: string, conditions: QueryCondition[]): Promise<DeleteResult | undefined>;
@@ -225,11 +225,13 @@ export class MongoDBConnection implements DatabaseConnection {
      * @returns InsertOneResult
      */
     async insertItem(collectionName: string, item: any): Promise<InsertOneResult<Document> | undefined> {
+
         const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         item.createdAt = new Date();
         item.updatedAt = new Date();
         item.isActive = true;
         return await collection?.insertOne(item);
+
     }
 
     /**
@@ -544,91 +546,3 @@ export class MongoDBConnection implements DatabaseConnection {
     }
 
 }
-
-
- 
-// Example usage
-(async () => {
-    const db = new MongoDBConnection();
-    try {
-        await db.connect();
-        await db.insertItem('users', { name: 'John Doe', age: 30 });
-        const user = await db.getItem('users', [
-            { field: 'name', operator: 'regex', value: 'John' }, // Case-insensitive regex search
-        ]);
-        logger.info('Retrieved user:', user);
-    } catch (error) {
-        logger.error('Error:', error);
-    } finally {
-        await db.disconnect();
-    }
-})();
-
-// Example usage
-(async () => {
-    const db = new MongoDBConnection();
-    try {
-        await db.connect(); 
-
-        // Example: Insert an item
-        await db.insertItem('users', { name: 'John Doe', age: 30, createdAt: new Date(), updatedAt: new Date(), isActive: true });
-
-        // Example: Get items with dynamic query
-        const users = await db.getAllItems('users', [
-            { field: 'age', operator: 'gt', value: 20 },
-            { field: 'name', operator: 'regex', value: 'John' }, // Case-insensitive regex search
-        ]);
-        logger.info('Retrieved users:', users);
-
-        // Example: Update items with dynamic query
-        await db.updateItems('users', [{ field: 'age', operator: 'lt', value: 40 }], { isActive: false });
-    } catch (error) {
-        logger.error('Error:', error);
-    } finally {
-        await db.disconnect();
-    }
-})();
-
-// Example usage
-(async () => {
-    const db = new MongoDBConnection();
-    let backupFileObject: any = {};
-    try {
-        await db.connect();
-
-        // Example: Insert an item
-        await db.insertItem('users', { name: 'John Doe', age: 30, createdAt: new Date(), updatedAt: new Date(), isActive: true });
-
-        //{ backupPath, backupFileName, backupFilePath }
-        backupFileObject = await db.backupDatabase(); 
-        logger.info('Database backup completed successfully!', backupFileObject);
-    } catch (error) {
-        logger.error('Database backup error');
-        logger.error(error);
-    } finally {
-        try {
-            await db.connect();
-            await db.restoreDatabase(backupFileObject.backupFileName);
-            logger.info('Database restoration completed successfully!', backupFileObject);
-        } catch (error) {
-            logger.error('Database restoration error');
-            logger.error(error);
-        } finally {
-            await db.disconnect();
-        }
-    }
-})();
-
-(async () => {
-    const db = new MongoDBConnection();
-    try {
-        await db.connect();
-
-        // Optimize the database
-        await db.optimizeDatabase();
-    } catch (error) {
-        logger.error('Error:', error);
-    } finally {
-        await db.disconnect();
-    }
-})();

@@ -198,7 +198,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         if (text === "Automatic") {
             session[field] = this.getAutomaticStake(session.step, nextStep);
             session.step = nextStep;
-            this.sessionService.updateSession(chatId, session);
+            this.sessionService.updateSessionWithChatId(chatId, session);
             showNextKeyboard();
             return;
         }
@@ -207,20 +207,20 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
             const value = parseFloat(`${amount}`);
             if (Number.isNaN(value) || value <= 0) {
                 session[field] = 0;
-                this.sessionService.updateSession(chatId, session);
+                this.sessionService.updateSessionWithChatId(chatId, session);
                 this.telegramBot.sendMessage(chatId, errorMessage);
                 showCurrentKeyboard();
                 return;
             } else {
                 session[field] = value;
                 session.step = nextStep;
-                this.sessionService.updateSession(chatId, session);
+                this.sessionService.updateSessionWithChatId(chatId, session);
                 showNextKeyboard();
                 return;
             }
         } else {
             session[field] = 0;
-            this.sessionService.updateSession(chatId, session);
+            this.sessionService.updateSessionWithChatId(chatId, session);
             this.telegramBot.sendMessage(chatId, errorMessage);
             showCurrentKeyboard();
             return;
@@ -235,9 +235,9 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @public
      */
     public handleLoginAccount(chatId: number, text: string, session: Session): void {
-        session.step = "select_account_type";
-        this.sessionService.updateSession(chatId, session);
-        this.keyboardService.showAccountTypeKeyboard(chatId, session.accounts);
+        session.step = CONSTANTS.SESSION_STEPS.SELECT_ACCOUNT_TYPE;
+        this.sessionService.updateSessionWithChatId(chatId, session);
+        this.keyboardService.showAccountTypeKeyboard(chatId, session.bot.accounts.deriv.accountList);
     }
 
     /**
@@ -249,8 +249,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleAccountTypeSelection(chatId: number, text: string, session: Session): void {
         session.accountType = text;
-        session.step = "select_trading_type";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.SELECT_TRADING_TYPE;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showTradingTypeKeyboard(chatId, session);
     }
 
@@ -263,8 +263,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleTradingTypeSelection(chatId: number, text: string, session: Session): void {
         session.tradingType = text;
-        session.step = "select_market";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.SELECT_MARKET;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showMarketTypeKeyboard(chatId, session.tradingType);
     }
 
@@ -277,8 +277,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleMarketSelection(chatId: number, text: string, session: Session): void {
         session.market = text;
-        session.step = "select_purchase_type";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.SELECT_PURCHASE_TYPE;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showPurchaseTypeKeyboard(chatId, session.market);
     }
 
@@ -291,8 +291,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handlePurchaseTypeSelection(chatId: number, text: string, session: Session): void {
         session.purchaseType = text;
-        session.step = "enter_stake";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.ENTER_STAKE;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showStakeInputKeyboard(chatId);
     }
 
@@ -322,7 +322,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
             text,
             session,
             "stake",
-            "enter_take_profit",
+            CONSTANTS.SESSION_STEPS.ENTER_TAKE_PROFIT,
             "You have entered an invalid amount.",
             () => this.keyboardService.showTakeProfitInputKeyboard(chatId),
             () => this.keyboardService.showStakeInputKeyboard(chatId)
@@ -344,7 +344,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
             text,
             session,
             "stake",
-            "enter_stop_loss",
+            CONSTANTS.SESSION_STEPS.ENTER_STOP_LOSS,
             "You have entered an invalid amount.",
             () => this.keyboardService.showStopLossInputKeyboard(chatId),
             () => this.keyboardService.showTakeProfitInputKeyboard(chatId)
@@ -366,7 +366,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
             text,
             session,
             "stake",
-            "select_trade_duration",
+            CONSTANTS.SESSION_STEPS.SELECT_TRADE_DURATION,
             "You have entered an invalid amount.",
             () => this.keyboardService.showTradeDurationKeyboard(chatId),
             () => this.keyboardService.showStopLossInputKeyboard(chatId)
@@ -383,8 +383,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleTradeDurationSelection(chatId: number, text: string, session: Session): void {
         session.tradeDuration = text;
-        session.step = "select_update_frequency";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.SELECT_UPDATE_FREQUENCY;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showUpdateFrequencyKeyboard(chatId);
     }
 
@@ -397,8 +397,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleUpdateFrequencySelection(chatId: number, text: string, session: Session): void {
         session.updateFrequency = text;
-        session.step = "select_ticks_or_minutes";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.SELECT_TICKS_OR_MINUTES;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showContractDurationUnitsKeyboard(chatId, session.updateFrequency);
     }
 
@@ -411,8 +411,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleUpdateContractDurationUnitsSelection(chatId: number, text: string, session: Session): void {
         session.contractDurationUnits = text;
-        session.step = "select_ticks_or_minutes_duration";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.SELECT_TICKS_OR_MINUTES_DURATION;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showContractDurationValueKeyboard(chatId, session.contractDurationUnits);
     }
 
@@ -425,8 +425,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleUpdateContractDurationValueSelection(chatId: number, text: string, session: Session): void {
         session.contractDurationValue = text;
-        session.step = "select_auto_or_manual";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.SELECT_AUTO_OR_MANUAL;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showAutoManualTradingKeyboard(chatId, session.contractDurationValue);
     }
 
@@ -439,8 +439,8 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleAutoManualTrading(chatId: number, text: string, session: Session): void {
         session.tradingMode = text;
-        session.step = "confirm_trade";
-        this.sessionService.updateSession(chatId, session);
+        session.step = CONSTANTS.SESSION_STEPS.CONFIRM_TRADE;
+        this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showTradeConfirmationKeyboard(chatId, session.tradingMode);
     }
 
@@ -453,7 +453,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleTradeConfirmation(chatId: number, text: string, session: Session): void {
         if (text === CONSTANTS.COMMANDS.CONFIRM) {
-            this.workerService.postMessageToDerivWorker("CONFIRM_TRADE", chatId, "", session);
+            this.workerService.postMessageToDerivWorker(CONSTANTS.SESSION_STEPS.CONFIRM_TRADE, chatId, "", session);
         } else {
             this.telegramBot.sendMessage(chatId, `Trade not confirmed. Use ${CONSTANTS.COMMANDS.START} to begin again.`);
         }
@@ -468,7 +468,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      */
     public handleTradeManual(chatId: number, text: string, session: Session): void {
         if (text === CONSTANTS.COMMANDS.CONFIRM) {
-            this.workerService.postMessageToDerivWorker("CONFIRM_TRADE", chatId, "", session);
+            this.workerService.postMessageToDerivWorker(CONSTANTS.SESSION_STEPS.CONFIRM_TRADE, chatId, "", session);
         } else {
             this.telegramBot.sendMessage(chatId, `Trade not confirmed. Use ${CONSTANTS.COMMANDS.START} to begin again.`);
         }

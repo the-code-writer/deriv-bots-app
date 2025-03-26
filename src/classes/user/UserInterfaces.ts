@@ -76,7 +76,12 @@ export interface CreateUserDto {
  * DTO for updating user information
  */
 export interface UserUpdateDto {
+    userId?: string;
+    chatId?: string;
+    accountId?: string;
+    sessionId?: string;
     name?: string;
+    username?: string;
     email?: string;
     derivAccount?: Partial<IDerivUserAccount>;
     telegramAccount?: Partial<ITelegramAccount>;

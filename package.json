@@ -8,6 +8,11 @@
   "main": "index.ts",
   "private": true,
   "scripts": {
+    "nodev": "nvm use 23.8.0",
+    "dev-usr": "tsx watch --clear-screen=false src/classes/user/example.ts | pino-pretty",
+    "dev-tg": "tsx watch --clear-screen=false src/classes/telegram/example.ts | pino-pretty",
+    "dev-db": "tsx watch --clear-screen=false src/classes/databases/mongodb/example.ts | pino-pretty",
+    "dev-crypt": "tsx watch --clear-screen=false src/classes/cryptography/example.ts | pino-pretty",
     "dev": "tsx watch --clear-screen=false src/index.ts | pino-pretty",
     "build": "tsup",
     "start": "node --no-deprecation dist/index.cjs",

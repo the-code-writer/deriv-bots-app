@@ -3,6 +3,7 @@ import { env } from '@/common/utils/envConfig';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
 import { SessionManagerStorageClass } from '@/classes/sessions/SessionManagerStorageClass';
 import { SessionService, ISessionService } from '@/classes/sessions/SessionService';
+import { getDerivAccountFromURLParams } from '../../common/utils/snippets';
 
 const { DERIV_APP_OAUTH_URL, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL } = env;
 
@@ -159,30 +160,7 @@ export class OAuthRouter {
                 return res.status(400).send('Session data is missing');
             }
 
-            const organizedData: OrganizedAccountData = {}; // Initialize an object to organize account data
-
-            // Iterate over query parameters to organize account data
-            for (const key in queryParams) {
-                if (key.startsWith('acct') || key.startsWith('token') || key.startsWith('cur')) {
-                    // Extract the index from the key (e.g., 'acct1' -> '1')
-                    // @ts-ignore
-                    const index = key.match(/\d+/)[0];
-
-                    // Initialize the object for this index if it doesn't exist
-                    if (!organizedData[index]) {
-                        organizedData[index] = {};
-                    }
-
-                    // Add the value to the corresponding property
-                    if (key.startsWith('acct')) {
-                        organizedData[index].acct = queryParams[key];
-                    } else if (key.startsWith('token')) {
-                        organizedData[index].token = queryParams[key];
-                    } else if (key.startsWith('cur')) {
-                        organizedData[index].cur = queryParams[key];
-                    }
-                }
-            }
+            const organizedData: OrganizedAccountData = getDerivAccountFromURLParams(queryParams);
 
             // Get the bot instance from the app
             const bot = req.app.get('bot');

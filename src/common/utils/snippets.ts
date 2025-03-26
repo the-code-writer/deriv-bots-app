@@ -159,3 +159,143 @@ export const calculateExpiry = (timeString: string | number): number => {
   const expiryTime = now + value * durationInMilliseconds;
   return expiryTime;
 }
+
+
+export const getDerivAccountFromURLParams = (queryParams: any) => {
+
+  const organizedData: any = {}; // Initialize an object to organize account data
+
+  // Iterate over query parameters to organize account data
+  for (const key in queryParams) {
+    if (key.startsWith('acct') || key.startsWith('token') || key.startsWith('cur')) {
+      // Extract the index from the key (e.g., 'acct1' -> '1')
+      // @ts-ignore
+      const index = key.match(/\d+/)[0];
+
+      // Initialize the object for this index if it doesn't exist
+      if (!organizedData[index]) {
+        organizedData[index] = {};
+      }
+
+      // Add the value to the corresponding property
+      if (key.startsWith('acct')) {
+        organizedData[index].acct = queryParams[key];
+      } else if (key.startsWith('token')) {
+        organizedData[index].token = queryParams[key];
+      } else if (key.startsWith('cur')) {
+        organizedData[index].cur = queryParams[key];
+      }
+    }
+  }
+
+  return organizedData;
+}
+
+/**
+ * Represents the structure of query parameters where keys are strings and values are strings or arrays of strings.
+ */
+export type QueryParams = Record<string, string | string[]>;
+
+/**
+ * Parses a query string from a URL and converts it into an object of key-value pairs.
+ * Handles both single and multiple values for the same parameter by converting them to arrays.
+ * 
+ * @param {string} url - The URL containing the query string to be parsed.
+ * @returns {QueryParams} An object representing the parsed query parameters.
+ * 
+ * @example
+ * const url = "http://example.com?name=John&age=30&hobby=reading&hobby=swimming";
+ * const params = parseQueryString(url);
+ * // Returns: { name: "John", age: "30", hobby: ["reading", "swimming"] }
+ */
+export const getQueryParamsFromURL = (url: string): QueryParams => {
+    // Extract the query string from the URL by splitting at '?' and taking the second part
+    const queryString = url.split('?')[1];
+    
+    // If there's no query string, return an empty object
+    if (!queryString) {
+        return {};
+    }
+
+    // Split the query string into individual key-value pairs
+    const pairs = queryString.split('&');
+    
+    // Initialize an empty object to store the parsed parameters
+    const result: QueryParams = {};
+
+    // Process each key-value pair
+    for (const pair of pairs) {
+        // Split each pair into key and value
+        const [key, value] = pair.split('=');
+        
+        // Decode URI components to handle special characters
+        const decodedKey = decodeURIComponent(key);
+        const decodedValue = decodeURIComponent(value);
+
+        // If the key already exists in the result
+        if (result.hasOwnProperty(decodedKey)) {
+            const existingValue = result[decodedKey];
+            
+            // If the existing value is an array, push the new value
+            if (Array.isArray(existingValue)) {
+                existingValue.push(decodedValue);
+            } 
+            // If it's not an array, convert it to an array with both values
+            else {
+                result[decodedKey] = [existingValue as string, decodedValue];
+            }
+        } 
+        // If the key doesn't exist, add it to the result
+        else {
+            result[decodedKey] = decodedValue;
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Splits an array into N chunks of approximately equal size.
+ * 
+ * @template T - The type of elements in the array
+ * @param {T[]} array - The array to be chunked
+ * @param {number} numberOfChunks - How many chunks to create (must be positive integer)
+ * @returns {T[][]} An array of chunks
+ * @throws {Error} If numberOfChunks is not a positive integer
+ * 
+ * @example
+ * // Returns [[1, 2], [3, 4], [5]]
+ * chunkIntoN([1, 2, 3, 4, 5], 3);
+ * 
+ * @example
+ * // Returns [['a', 'b', 'c'], ['d', 'e']]
+ * chunkIntoN(['a', 'b', 'c', 'd', 'e'], 2);
+ */
+export const chunkIntoN:any = (array: any, numberOfChunks: number): any => {
+  // Validate input
+  if (!Number.isInteger(numberOfChunks) || numberOfChunks <= 0) {
+    throw new Error('numberOfChunks must be a positive integer');
+  }
+
+  // Handle edge cases
+  if (numberOfChunks === 1) return [array];
+  if (numberOfChunks >= array.length) return array.map((item:any) => [item]);
+
+  // Calculate base chunk size and how many chunks need an extra item
+  const chunkSize = Math.floor(array.length / numberOfChunks);
+  const chunksWithExtra = array.length % numberOfChunks;
+
+  const chunks: T[][] = [];
+  let currentIndex = 0;
+
+  for (let i = 0; i < numberOfChunks; i++) {
+    // Determine if this chunk gets an extra element
+    const thisChunkSize = i < chunksWithExtra ? chunkSize + 1 : chunkSize;
+
+    // Slice the array for this chunk
+    chunks.push(array.slice(currentIndex, currentIndex + thisChunkSize));
+    currentIndex += thisChunkSize;
+  }
+
+  return chunks;
+}

@@ -3,6 +3,7 @@ import { pino } from "pino";
 import { CONSTANTS } from "@/common/utils/constants";
 import { env } from "@/common/utils/envConfig";
 import { Encryption } from "@/classes/cryptography/EncryptionClass";
+import { chunkIntoN } from '../../common/utils/snippets';
 
 // Logger
 const logger = pino({ name: "KeyboardService" });
@@ -202,14 +203,12 @@ export class KeyboardService implements IKeyboardService {
 
     getAccountTypeKeyboard(userAccounts: any): KeyboardButton[][] | string[][] {
 
-        const result = Object.values(userAccounts).map((item:any) => ([{
+        const result = Object.values(userAccounts).map((item: any) => ([{
             text: `${item.acct} ( ${item.cur} )`,
             callback_data: item
-          }]));
+        }]));
 
-        console.log("::::: USER ACCOUNTS :::: 2", result);
-
-        return [ result ];
+        return result;
 
     }
 
@@ -351,6 +350,9 @@ export class KeyboardService implements IKeyboardService {
         isOneTimeKeyboard: boolean = true,
         parseMode: string = "Markdown"
     ): void {
+
+        console.log("::: showAccountTypeKeyboard :::", JSON.stringify(keyboard))
+
         this.telegramBot.sendMessage(chatId, message, {
             reply_markup: {
                 keyboard: keyboard as KeyboardButton[][] | string[][],

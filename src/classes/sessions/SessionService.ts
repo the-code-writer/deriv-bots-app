@@ -6,6 +6,11 @@ import { calculateExpiry } from '@/common/utils/snippets';
 import { env } from '@/common/utils/envConfig';
 import { UserManagerStorageClass } from './UserManagerStorageClass';
 
+
+import { pino } from "pino";
+// Logger
+const logger = pino({ name: "SessionService" });
+
 const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, DB_USER_ACCOUNT_DATABASE_COLLECTION } = env;
 
 /**
@@ -54,7 +59,7 @@ export interface ISessionService {
  */
 export class SessionService implements ISessionService {
     private sessionStore: ISessionStore;
-    private userStore: any;
+    //private userStore: any;
     private cookieName: string;
     private maxAge: string | number;
 
@@ -64,12 +69,12 @@ export class SessionService implements ISessionService {
      * @param cookieName - The name of the cookie used to store the session ID.
      * @param maxAge - The maximum age of the session cookie in milliseconds.
      */
-    constructor(sessionStore: ISessionStore, cookieName: string = 'sessionID', maxAge: string | number = 86400, userStore:any) {
+    constructor(sessionStore: ISessionStore, cookieName: string = 'sessionID', maxAge: string | number = 86400, /* userStore:any */) {
         if (!sessionStore || typeof sessionStore.get !== 'function' || typeof sessionStore.set !== 'function' || typeof sessionStore.destroy !== 'function') {
             throw new Error('sessionStore must implement ISessionStore interface');
         }
         this.sessionStore = sessionStore;
-        this.userStore = userStore;
+        //this.userStore = userStore;
         this.cookieName = cookieName;
         this.maxAge = maxAge ? calculateExpiry(maxAge) : DB_SERVER_SESSIONS_DATABASE_TTL;
     }
@@ -292,18 +297,29 @@ export class SessionService implements ISessionService {
      * @param req - The HTTP request object.
      * @param res - The HTTP response object.
      */
-    async updateSessionWithChatId(chatId: number, session: any): Promise<void> {
+    async updateSessionWithChatId(chatId: number, session: any): Promise<any> {
 
         // Retrieve session data from the session store
-        const { sessionData, data, sessionID } = await this.validateSessionWithChatId(chatId);
+        const sessionData = await this.getUserSessionByChatId(chatId);
 
-        console.log("::::::::: SESSION_DATA :: updateSessionWithChatId ::::::::: 000", sessionData, data);
+        const sessionID = sessionData.session.sessionID;
 
-        if (session) {
+        console.log("::::::::: SESSION_DATA :: getUserSessionByChatId ::::::::: 000", chatId, sessionID, sessionData.session);
 
-            await this.sessionStore.set(sessionID, "bot", session);
+        console.log([sessionData, sessionID]);
 
-            console.log("::::::::: SESSION_DATA :: updateSessionWithChatId ::::::::: 001", sessionID, session);
+        if (sessionData && sessionID) {
+
+            await this.sessionStore.set(sessionID, "session", session);
+
+            // Retrieve session data from the session store
+            const sessionDataUpdated = await this.getUserSessionByChatId(chatId);
+
+            logger.info(JSON.stringify(sessionDataUpdated))
+
+            console.log("::::::::: SESSION_DATA :: sessionDataUpdated ::::::::: 001", sessionDataUpdated); 
+
+            return sessionDataUpdated.session;
 
         }
 
@@ -314,6 +330,8 @@ export class SessionService implements ISessionService {
             { field: "session.chatId", operator: "eq", value: chatId }
         ]);
     }
+
+    /*
 
     async saveUser(user: any): Promise<void> {
         return await this.userStore.create(user);
@@ -335,7 +353,7 @@ export class SessionService implements ISessionService {
         return await this.userStore.getWithParams([
             { field: "derivAccount.accountId", operator: "eq", value: accountId }
         ]);
-    }
+    }*/
 
     async getSession(sessionID: number): Promise<ISession | any> {
         return await this.sessionStore.getWithParams([
