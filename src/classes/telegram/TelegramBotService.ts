@@ -183,7 +183,10 @@ export class TelegramBotService implements ITelegramBotService {
      * @param {Session} session - The current session
      * @private
      */
-    private processSessionStep(chatId: number, text: string, session: Session): void {
+    private processSessionStep(chatId: number, text: string, sessionData: Session): void {
+        const session = sessionData.session;
+        console.log("@@@@@@@@@@@@@@@@", session)
+        logger.info(["++++++++++++++++++++++++", chatId, text, session.step])
         switch (session.step) {
             case CONSTANTS.SESSION_STEPS.LOGIN_ACCOUNT:
                 this.tradingProcessFlow.handleLoginAccount(chatId, text, session);

@@ -1,0 +1,90 @@
+{
+  "_id": "0279ea84-808a-4236-a627-294ab590ea4b",
+  "maxAge": 1743102892621,
+  "cookie": {
+    "secure": false,
+    "httpOnly": true,
+    "sameSite": "strict",
+    "originalMaxAge": 1743102892621,
+    "maxAge": 1743102892621,
+    "expires": 1743102892621,
+    "path": "/",
+    "domain": null,
+    "priority": null,
+    "partitioned": null
+  },
+  "session": {
+    "sessionID": "0279ea84-808a-4236-a627-294ab590ea4b",
+    "chatId": 7542095001,
+    "bot": {
+      "chatId": 7542095001,
+      "step": "login_account",
+      "timestamp": 1742498109400,
+      "accounts": {
+        "telegram": {
+          "id": 7000005000,
+          "is_bot": false,
+          "first_name": "CodeWriter",
+          "username": "the_code_writer",
+          "language_code": "en"
+        },
+        "deriv": {
+          "accountList": {
+            "1": {
+              "acct": "CR518993",
+              "token": "a1-DCWzEgC2K7TPhXXy2VAzBDrmRxU1i",
+              "cur": "USD"
+            },
+            "2": {
+              "acct": "CR2029443",
+              "token": "a1-h4kkMc3Ydx18PhBDX1L883fw2xCDg",
+              "cur": "USDC"
+            },
+            "3": {
+              "acct": "CR528370",
+              "token": "a1-1jfNoSeHNWsX8LmyBY3h13WAq6YaF",
+              "cur": "BTC"
+            },
+            "4": {
+              "acct": "CR528372",
+              "token": "a1-qNASuJGJh7GCnkkEMjcJR36saoB3x",
+              "cur": "LTC"
+            },
+            "5": {
+              "acct": "CR8424472",
+              "token": "a1-MgWeNe41ZmlR6f5yZ0aQGVvfBEGoI",
+              "cur": "eUSDT"
+            },
+            "6": {
+              "acct": "CR982988",
+              "token": "a1-g0R8JGLJ3DSTvVEz7GXAnDUofsoIB",
+              "cur": "ETH"
+            },
+            "7": {
+              "acct": "VRTC1605087",
+              "token": "a1-azGoefPe917EDjGonVzsn0HiM3MzF",
+              "cur": "USD"
+            }
+          }
+        }
+      }
+    },
+    "encid": "U2FsdGVkX19yk3ykUOVvdXbwwAW8hoSd4Rrlo6VK2Iw=",
+    "step": "TRADE_CONFIRMATION",
+    "accountType": "CR518993 ( USD )",
+    "tradingType": "Derivatives 📊",
+    "market": "Volatility 50 📈",
+    "purchaseType": "Auto Rise/Fall ⬆️⬇️",
+    "stake": 1,
+    "tradeDuration": "2min ⏱️",
+    "updateFrequency": "5min ⏱️",
+    "contractDurationUnits": "Minutes ⏱️",
+    "contractDurationValue": "4 Ticks",
+    "tradingMode": "📈 Manual Trading"
+  },
+  "createdAt": "2025-03-20T19:15:09.401Z",
+  "updatedAt": {
+    "$date": "2025-03-26T19:28:33.397Z"
+  },
+  "isActive": true
+}
