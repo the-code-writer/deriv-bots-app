@@ -12,6 +12,7 @@ import { getDerivAccountFromURLParams, getQueryParamsFromURL } from '../../commo
 import { env } from "@/common/utils/envConfig";
 import { pino } from 'pino';
 import { Encryption } from "../cryptography/EncryptionClass";
+import { UserServiceFactory } from '../user/UserServiceFactory';
 
 // Logger
 const logger = pino({ name: "TelegramServiceExample" });
@@ -29,9 +30,11 @@ const initializeServices = async (telegramBot: TelegramBot): Promise<any> => {
   const sessionStore = new SessionManagerStorageClass(db, DB_SERVER_SESSIONS_DATABASE_COLLECTION);
   const sessionService: ISessionService = new SessionService(sessionStore, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL);
 
+  const userService = UserServiceFactory.createUserService(db);
+
   const workerService = new WorkerService(telegramBot);
   const keyboardService = new KeyboardService(telegramBot);
-  const commandHandlers = new TelegramBotCommandHandlers(telegramBot, sessionService, keyboardService, workerService);
+  const commandHandlers = new TelegramBotCommandHandlers(telegramBot, sessionService, keyboardService, workerService, userService);
   const tradingProcessFlow = new TradingProcessFlowHandlers(telegramBot, sessionService, keyboardService, workerService);
   return { sessionService, workerService, keyboardService, commandHandlers, tradingProcessFlow };
 
@@ -64,13 +67,26 @@ const startTelegramBotService = (
 
   const queryString: string = DB_DERIV_ACCOUNT;
 
-  const queryParams: any = getQueryParamsFromURL(queryString);
+  const queryParams: any = getQueryParamsFromURL(queryString); 
 
   const organizedData: any = getDerivAccountFromURLParams(queryParams);
 
   const sessionData: any = await sessionService.getUserSessionByChatId(chatId);
 
   console.log("*** *** *** *** SESSION*** *** *** ***", chatId, sessionData); 
+
+  if (!sessionData.session.hasOwnProperty("bot")) {
+    
+    sessionData.session["bot"] = {
+      accounts: {
+        deriv: {
+          accountList: {
+
+          }
+        }
+      }
+    }
+  }
 
   sessionData.session.bot.accounts.deriv.accountList = organizedData;
 

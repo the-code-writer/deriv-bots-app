@@ -153,7 +153,7 @@ private validateTelegramAccount(account: ITelegramAccount): boolean {
         const users = await this.userRepository.findByQuery([
             { field: 'sessionId', operator: 'eq', value: sessionId }
         ]);
-        return users.length > 0 ? users[0] : null;
+        return users && users.length > 0 ? users[0] : null;
     }
 
     /**
@@ -161,11 +161,11 @@ private validateTelegramAccount(account: ITelegramAccount): boolean {
      * @param chatId The chat identifier
      * @returns The user or null if not found
      */
-    async getUserByChat(chatId: string): Promise<IUser | null> {
+    async getUserByChat(chatId: number): Promise<IUser | null> {
         const users = await this.userRepository.findByQuery([
             { field: 'chatId', operator: 'eq', value: chatId }
         ]);
-        return users.length > 0 ? users[0] : null;
+        return users && users.length > 0 ? users[0] : null;
     }
 
     /**
@@ -177,7 +177,7 @@ private validateTelegramAccount(account: ITelegramAccount): boolean {
         const users = await this.userRepository.findByQuery([
             { field: 'email', operator: 'eq', value: email }
         ]);
-        return users.length > 0 ? users[0] : null;
+        return users && users.length > 0 ? users[0] : null;
     }
 
     /**
@@ -189,7 +189,7 @@ private validateTelegramAccount(account: ITelegramAccount): boolean {
         const users = await this.userRepository.findByQuery([
             { field: 'username', operator: 'eq', value: username }
         ]);
-        return users.length > 0 ? users[0] : null;
+        return users && users.length > 0 ? users[0] : null;
     }
 
     /**
@@ -211,7 +211,7 @@ private validateTelegramAccount(account: ITelegramAccount): boolean {
             { field: 'userId', operator: 'eq', value: userId },
             { field: 'isActive', operator: 'eq', value: true }
         ]);
-        return users.length > 0;
+        return users && users.length > 0;
     }
 
     /**

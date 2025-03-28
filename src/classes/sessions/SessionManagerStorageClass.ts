@@ -58,24 +58,51 @@ export interface ICookie {
 }
 
 export interface ISession {
+    sessionID: string;
+    chatId: number;
+    bot: {
+        chatId: number;
+        timestamp: Date;
+        tradingOptions: {
+            step: string;
+            // Add other trading options as needed
+            [key: string]: any;
+        };
+        accounts: {
+            telegram?: ITelegramAccount;
+            deriv?: IDerivUserAccount;
+            // Add other account types as needed
+            [key: string]: any;
+        };
+        deriv: {
+            // Deriv-specific session data
+            [key: string]: any;
+        };
+        // Additional bot-related session data
+        [key: string]: any;
+    };
+    // Additional session-wide properties
+    [key: string]: any;
+}
+
+export interface ISessionData {
     _id?: string; // Unique identifier for the session
-    data?: any; // Session data (can be any type)
     expires?: Date; // Expiration date of the session
     maxAge: number;
     cookie: ICookie;
-    session: Record<string, any>; // Generic session object
+    session: ISession; // Generic session object
 
 }
 
 
-            export interface ITelegramAccount {
-                
-            }
+export interface ITelegramAccount {
 
-            export interface IBotAccounts {
-                telegram: ITelegramAccount;
-                deriv: IDerivUserAccount;
-            }
+}
+
+export interface IBotAccounts {
+    telegram: ITelegramAccount;
+    deriv: IDerivUserAccount;
+}
 
 export interface ITGSession {
     chatId?: number; // Unique identifier for the session
@@ -121,7 +148,7 @@ export class SessionManagerStorageClass implements ISessionStore {
 
         const sessionData: ISession | any = await this.db.getItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }]);
 
-        console.log("::SESSION_DATA::GET::", sessionData);
+        //console.log("::SESSION_DATA::GET::", sessionData);
 
         // Return the session data if found, otherwise return null
         return sessionData;
@@ -136,9 +163,9 @@ export class SessionManagerStorageClass implements ISessionStore {
 
         const sessionData: ISession | any = await this.db.getItem(this.collectionName, query);
 
-        console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
+        //console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
 
-        console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
+        //console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
 
         // Return the session data if found, otherwise return null
         return sessionData;
@@ -154,9 +181,9 @@ export class SessionManagerStorageClass implements ISessionStore {
         // @ts-ignore
         const sessionData: ISession | any = await this.db.get(this.collectionName, query);
 
-        console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
+        //console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
 
-        console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
+        //console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
 
         // Return the session data if found, otherwise return null
         return sessionData;
@@ -172,9 +199,9 @@ export class SessionManagerStorageClass implements ISessionStore {
         // @ts-ignore
         const sessionData: ISession | any = await this.db.get(this.collectionName, query);
 
-        console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
+        //console.log("::SESSION_DATA::GET::DEEP::SEARCH::QUERY", query);
 
-        console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
+        //console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
 
         // Return the session data if found, otherwise return null
         return sessionData;
@@ -190,7 +217,7 @@ export class SessionManagerStorageClass implements ISessionStore {
         // @ts-ignore
         const sessionData: ISession | any = await this.db.get(this.collectionName, query);
 
-        console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
+        //console.log("::SESSION_DATA::GET::DEEP::SEARCH::RESULT", sessionData);
 
         // Return the session data if found, otherwise return null
         return sessionData;
@@ -203,7 +230,7 @@ export class SessionManagerStorageClass implements ISessionStore {
      */
     async create(sessionData: Record<string, any>): Promise<void> {
 
-        console.log("::::::::: SESSION_DATA ::::::::: 0000.0000 :::::::::", sessionData);
+        //console.log("::::::::: SESSION_DATA ::::::::: 0000.0000 :::::::::", sessionData);
 
         await this.db.insertItem(this.collectionName, sessionData);
 
@@ -225,7 +252,7 @@ export class SessionManagerStorageClass implements ISessionStore {
                 [`${key}`]: value // Use dot notation to update the nested field
             };
 
-            console.log("::::::::: SESSION_DATA ::::::::: 0000.1111 :::::::::", updates);
+            //console.log("::::::::: SESSION_DATA ::::::::: 0000.1111 :::::::::", updates);
 
             await this.db.updateItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates, true);
 

@@ -9,6 +9,8 @@ import { TelegramBotService } from "@/classes/telegram/TelegramBotService";
 import { ISessionService, SessionService } from '@/classes/sessions/SessionService';
 import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
 import { SessionManagerStorageClass } from '@/classes/sessions/SessionManagerStorageClass';
+import { UserService } from "./classes/user/UserService";
+import { UserServiceFactory } from './classes/user/UserServiceFactory';
 
 const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, TELEGRAM_BOT_TOKEN } = env;
 
@@ -34,9 +36,11 @@ const initializeServices = async (telegramBot: TelegramBot) : Promise<any>=> {
   const sessionStore = new SessionManagerStorageClass(db, DB_SERVER_SESSIONS_DATABASE_COLLECTION);
   const sessionService = new SessionService(sessionStore, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL);
 
+  const userService = UserServiceFactory.createUserService(db);
+
   const workerService = new WorkerService(telegramBot);
   const keyboardService = new KeyboardService(telegramBot);
-  const commandHandlers = new TelegramBotCommandHandlers(telegramBot, sessionService, keyboardService, workerService);
+  const commandHandlers = new TelegramBotCommandHandlers(telegramBot, sessionService, keyboardService, workerService, userService);
   const tradingProcessFlow = new TradingProcessFlowHandlers(telegramBot, sessionService, keyboardService, workerService);
   return { sessionService, workerService, keyboardService, commandHandlers, tradingProcessFlow };
 

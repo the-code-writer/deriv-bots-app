@@ -54,6 +54,7 @@ export interface IUserService {
     deactivateUser(userId: string): Promise<IUser>;
     updateUserDetails(userId: string, updates: UserUpdateDto): Promise<IUser>;
     getUserBySession(sessionId: string): Promise<IUser | null>;
+    getUserByChat(chatId: number): Promise<IUser | null>;
     getActiveUsers(): Promise<IUser[]>;
 }
 

@@ -180,22 +180,22 @@ export class KeyboardService implements IKeyboardService {
 
     getLoginKeyboard(session: any): KeyboardButton[][] | string[][] | any {
 
-        logger.warn(`getLoginKeyboard::OAUTH_SESSION`);
+        const chatId: number = session.chatId;
 
-        const id: string = parseInt(session.accounts.telegram.id).toString();
+        logger.warn(chatId, session);
 
-        const username: string = session.accounts.telegram.username;
-
-        logger.warn({id, username});
-
-        const encid: string = Encryption.encryptAES(id, APP_CRYPTOGRAPHIC_KEY);
+        const encid: string = Encryption.encryptAES(chatId.toString(), APP_CRYPTOGRAPHIC_KEY);
 
         const oauthURL: string = `${DERIV_APP_LOGIN_URL}?encid=${encid}`;
 
         logger.warn(`OAUTH_URL ${oauthURL}`);
 
+        logger.warn(`getLoginKeyboard::OAUTH_SESSION`);
+
+        logger.warn(session);
+
         return [
-            [{ text: '🔒 LOGIN', url: oauthURL }],
+            [{ text: '🔒 LOGIN ', url: oauthURL }],
             [{ text: '🚫 CANCEL', callback_data: 'exec_cancel' }],
         ];
 

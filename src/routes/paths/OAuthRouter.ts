@@ -120,6 +120,9 @@ export class OAuthRouter {
             const { encid } = req.query; // Extract query parameters
             // @ts-ignore
             req.session.encid = encid;
+
+            console.log("### ROUTER ### /login ###", encid);
+
             await this.sessionService.updateSession(req, res, "encid", encid);
 
             const data: TemplateData = {

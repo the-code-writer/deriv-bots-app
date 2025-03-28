@@ -5,6 +5,7 @@ import { env } from "@/common/utils/envConfig";
 import { ISessionService, Session } from "@/classes/telegram/SessionService";
 import { IKeyboardService } from "@/classes/telegram/KeyboardService";
 import { IWorkerService } from "@/classes/telegram/WorkerService";
+import { IUserService } from "../user/UserInterfaces";
 
 // Logger
 const logger = pino({ name: "TelegramBotCommandHandlers" });
@@ -238,11 +239,14 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
     private workerService: IWorkerService;
 
-    constructor(telegramBot: any, sessionService: ISessionService, keyboardService: IKeyboardService, workerService: IWorkerService) {
+    private userService: IUserService;
+
+    constructor(telegramBot: any, sessionService: ISessionService, keyboardService: IKeyboardService, workerService: IWorkerService, userService:IUserService) {
         this.telegramBot = telegramBot;
         this.sessionService = sessionService;
         this.keyboardService = keyboardService;
         this.workerService = workerService;
+        this.userService = userService;
         logger.info("Command Handlers started!");
     }
 
@@ -255,18 +259,6 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         const session = await this.sessionService.getUserSessionByChatId(chatId);
 
         return session;
-
-    }
-
-    /**
-     * Handle the /confirm command
-     * @param {Message} chatId - The message object from Telegram
-     */
-    async getUserAccount(chatId: number): Promise<any> {
-
-        const user = await this.sessionService.getUserAccountByChatId(chatId);
-
-        return user;
 
     }
 
@@ -299,6 +291,8 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
             this.telegramBot.sendMessage(chatId!, `You are about to login using your Deriv Account.`);
         } else if (data === 'exec_cancel') {
             this.telegramBot.sendMessage(chatId!, 'You selected Option 2!');
+        } else {
+            
         }
 
         this.telegramBot.answerCallbackQuery(callbackQuery.id);
@@ -313,49 +307,31 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
         const chatId = msg.chat.id;
 
-        const first_name = msg?.from.first_name;
+        let session = await this.getUserChatSession(chatId);
 
-        // check if the chatId session is already in the database
+        console.log(":::: BOT_SESSION_FROM_DB :::: 000", session);
 
-        const botSession = await this.getUserChatSession(chatId);
-
-        console.log(":::: BOT_SESSION_FROM_DB :::: 000", botSession);
-
-        if(!botSession){
+        if(!session){
                 
-            const session: Session = {
-                chatId,
-                step: "login_account",
-                timestamp: Date.now(),
-                accounts: {
-                    telegram: msg.from,
-                    deriv: {}
-                }
-            };
-
-            await this.sessionService.createSession(chatId, session);
+            session = await this.sessionService.createSession(chatId, msg.from);
 
         }
         
-        const session = await this.getUserChatSession(chatId);
-
         console.log(":::: BOT_SESSION_FROM_DB :::: 111", session);
 
-        // check if the chatId user is already in the database
+        const user = await this.userService.getUserByChat(chatId);
 
-        const user = await this.getUserAccount(chatId);
-
-        console.log(":::: USER_ACCOUNT_FROM_DB :::: 222", user);
+        console.log(":::: USER_ACCOUNT_FROM_DB :::: 222", user); 
 
         if(!user){
 
-            this.telegramBot.sendMessage(chatId, `Hi ${first_name}. \n\nPlease login using your Deriv Account to continue.`, {
+            this.telegramBot.sendMessage(chatId, `Link your Deriv account to start. Please note, you will be taken to an external Url to authorize this Telegram Bot (Nduta.X) on your Deriv Account.`, {
                 reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(session.session.bot) },
             });
 
-            return;
-
         }
+
+        return;
 
         // Accounts
 
@@ -973,7 +949,7 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
         const { chatId, session } = await this.getChatSession(msg);
 
-        if (!chatId || !session) {
+        if (!chatId || !session) { 
             return;
         }
 

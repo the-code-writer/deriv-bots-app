@@ -11,7 +11,7 @@ import { pino } from "pino";
 // Logger
 const logger = pino({ name: "SessionService" });
 
-const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, DB_USER_ACCOUNT_DATABASE_COLLECTION } = env;
+const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, DB_USER_ACCOUNT_DATABASE_COLLECTION, APP_CRYPTOGRAPHIC_KEY } = env;
 
 /**
  * Interface for SessionService.
@@ -91,48 +91,79 @@ export class SessionService implements ISessionService {
         // Retrieve the session ID from the request cookies
         let sessionID: string = req.cookies[this.cookieName];
 
-        // If no session ID exists, generate a new one and set it in the response cookie
-        if (!sessionID) {
-            sessionID = uuidv4();
-            res.cookie(this.cookieName, sessionID, this.getCookieObject());
-        }
-
         // Retrieve session data from the session store
-        const { sessionData, data } = await this.validateSession(sessionID);
+        let sessionData = await this.getUserSessionBySessionId(sessionID);
 
-        const now = Date.now();
+        const { encid } = req.query;
 
-        if (now > parseInt(this.maxAge.toString())) {
-            console.log("SESSION EXPIRED");
-            res.send("SESSION EXPIRED");
-        } else if (now > parseInt(data.maxAge.toString())) {
-            // Destroy the session in the session store
-            await this.sessionStore.destroy(sessionID);
+        console.log("XXXXXXX 000", { encid, APP_CRYPTOGRAPHIC_KEY, sessionID, sessionData })
 
-            // Clear the session cookie
-            res.clearCookie(this.cookieName);
+        if (encid) {
 
-            // Remove session data from the request object
-            delete req.session;
-            delete req.sessionID;
-            res.send("SESSION EXPIRED");
-        } else {
+            const chatId = parseInt(Encryption.decryptAES(encid, APP_CRYPTOGRAPHIC_KEY));
 
-            // Attach session data and session ID to the request object
-            req.session = sessionData;
-            req.sessionID = sessionID;
+            // If no session ID exists, generate a new one and set it in the response cookie
+            if (!sessionID || !sessionData) {
 
-            // Ensure session data is persisted when the response is finished
-            res.on('finish', async () => {
-                if (req.session) {
-                    //await this.sessionStore.set(sessionID, req.session);
-                    console.log(":: SESSION ON FINITO ::", req.session);
+                // Retrieve session data from the session store
+                sessionData = await this.getUserSessionByChatId(chatId);
+
+                if (sessionData) {
+                    
+                    sessionID = sessionData.session.sessionID;
+
+                } else {
+
+                    sessionID = uuidv4();
+
+                    sessionData = await this.initializeSessionObject(sessionID, chatId);
+
                 }
-            });
 
+                sessionData.encid = encid;
+
+                res.cookie(this.cookieName, sessionID, this.getCookieObject());
+                req.session = sessionData;
+                req.sessionID = sessionData.session.sessionID;
+
+                //console.log("XXXXXXX 111", { chatId, sessionID: req.sessionID, sessionData: req.session })
+
+            }
+
+            const now = Date.now();
+
+            if (now > parseInt(this.maxAge.toString())) {
+
+                console.log("SESSION EXPIRED");
+
+                res.send("SESSION EXPIRED");
+
+            } else if (now > parseInt(sessionData.maxAge.toString())) {
+
+                // Destroy the session in the session store
+                await this.sessionStore.destroy(sessionID);
+
+                // Clear the session cookie
+                res.clearCookie(this.cookieName);
+
+                // Remove session data from the request object
+                delete req.session;
+                delete req.sessionID;
+
+                res.send("SESSION EXPIRED");
+
+            } else {
+
+                res.on('finish', async () => {
+                    if (req.session) {
+                        console.log(":: SESSION ON FINITO ::", req.session);
+                    }
+                });
+
+            }
+            
         }
 
-        // Proceed to the next middleware
         next();
 
     }
@@ -168,31 +199,109 @@ export class SessionService implements ISessionService {
             maxAge: this.maxAge,
             expires: this.maxAge,
             path: "/",
-            domain: null,
-            priority: null,
-            partitioned: null,
+            domain: "nduta.x",
+            priority: "high",
+            partitioned: true,
         };
 
         return cookie;
 
     }
 
-    initializeSessionObject(sessionID: string, chatId:number=0): any {
+    getSessionObject(chatId: number, sessionID?: string, telegramUser: any = {}): any {
 
         const session: any = {
-            sessionID: sessionID
+            sessionID: sessionID,
+            chatId: chatId,
+            bot: {
+                chatId: chatId,
+                timestamp: new Date(),
+                tradingOptions: {
+                    step: ""
+                },
+                accounts: {
+                    telegram: telegramUser,
+                    deriv: {
+                        accountList: {},
+                        accountDetails: {}
+                    }
+                },
+
+            }
         };
 
-        chatId > 0 ? session.chatId = chatId : undefined;
+        if (telegramUser) {
+            session.bot.accounts.telegram = telegramUser;
+        }
 
-        const sessionData = {
+        return session;
+
+    }
+
+    getCookieSessionObject(chatId: number, sessionID: string = '', telegramUser: any = {}): any {
+
+        if (sessionID.length < 5) {
+            
+            sessionID =  uuidv4();
+
+        }
+
+        const sessionData: any = {
             _id: sessionID,
             maxAge: this.maxAge,
             cookie: this.getCookieObject(),
-            session
+            session: this.getSessionObject(chatId, sessionID, telegramUser),
         };
 
         return sessionData;
+
+    }
+
+    async initializeSessionObject(sessionID: string, chatId: number = 0, telegramUser: any = {}): Promise<any> {
+
+        let sessionAlreadySaved: boolean = false;
+
+        let session = await this.getUserSessionBySessionId(sessionID);
+
+        if (session) {
+            sessionAlreadySaved = true;
+        }
+
+        //console.log("::::::::: INITIALIZE SESSION OBJECT ::::: getUserSessionBySessionId ::::  000", session);
+
+        if (!session) {
+
+            session = await this.getUserSessionByChatId(chatId);
+
+            if (session) {
+                sessionAlreadySaved = true;
+            }
+
+            //console.log("::::::::: INITIALIZE SESSION OBJECT ::::: getUserSessionByChatId ::::  111", session);
+
+        }
+
+        if (!session) {
+
+            session = await this.getCookieSessionObject(chatId, sessionID, telegramUser);
+
+            //console.log("::::::::: INITIALIZE SESSION OBJECT ::::: getCookieSessionObject ::::  222", session);
+
+        }
+
+        if (!sessionAlreadySaved) {
+
+            await this.sessionStore.create(session);
+
+        }
+
+        let newSession = await this.getUserSessionBySessionId(sessionID);
+
+        console.log("::::::::: INITIALIZE SESSION OBJECT ::::: newSession ::::  444", newSession);
+
+        logger.warn(JSON.stringify(newSession));
+
+        return newSession;
 
     }
 
@@ -201,16 +310,14 @@ export class SessionService implements ISessionService {
         // Retrieve session data from the session store
         let sessionData: Record<string, any> = await this.sessionStore.get(sessionID);
 
-        console.log("::::::::: VALIDATE_SESSION ::::: validateSession :::: 00000 :::::::::", sessionID, sessionData);
+        console.log("::::::::: SESSION======DATA :::::::::  000", sessionData)
 
         // If no session data exists, initialize an empty session and store it
         if (!sessionData) {
-            
-            console.log("::::::::: VALIDATE_SESSION ::::: NOT FOUND!!!!!!!! :::::::::", sessionID, sessionData);
 
             sessionData = this.initializeSessionObject(sessionID);
 
-            console.log("::::::::: VALIDATE_SESSION ::::: initializeSessionObject :::::::::", sessionID, sessionData);
+            console.log("::::::::: SESSION======DATA :::::::::  222", sessionData)
 
             await this.sessionStore.set(sessionID, sessionData);
 
@@ -237,24 +344,11 @@ export class SessionService implements ISessionService {
 
     }
 
-    /**
-     * Destroys the session for the current request.
-     * This removes the session data from the store and clears the session cookie.
-     * @param req - The HTTP request object.
-     * @param res - The HTTP response object.
-     */
-    async createSession(chatId:number, session:any): Promise<void> {
+    async createSession(chatId: number, telegramUser: any): Promise<void> {
 
         const sessionID: string = uuidv4();
 
-        // Retrieve session data from the session store
-        const sessionData = this.initializeSessionObject(sessionID, chatId);
-
-        sessionData.session.bot = session;
-
-        console.log("::::::::: SESSION_DATA :: CREATE ::::::::: XXXXXX :::::::::", sessionID, sessionData);
-
-        await this.sessionStore.create(sessionData);
+        return this.initializeSessionObject(sessionID, chatId, telegramUser);
 
     }
 
@@ -273,7 +367,7 @@ export class SessionService implements ISessionService {
             // Retrieve session data from the session store
             const { sessionData } = await this.validateSession(sessionID);
 
-            console.log("::::::::: UPDATE_SESSION ::::: updateSession :::: 00001 :::::::::", req.session, req.cookies, sessionID, sessionData);
+            //console.log("::::::::: UPDATE_SESSION ::::: updateSession :::: 00001 :::::::::", req.session, req.cookies, sessionID, sessionData);
 
             sessionData[key] = value;
 
@@ -282,12 +376,12 @@ export class SessionService implements ISessionService {
             await this.sessionStore.set(sessionID, key, value);
 
         } catch (error) {
-            
+
             console.log("::::::::: UPDATE_SESSION_ERROR ::::: updateSession :::: 00001 :::::::::", req.session, req.sessionID, error);
 
         }
 
-        
+
 
     }
 
@@ -304,7 +398,7 @@ export class SessionService implements ISessionService {
 
         const sessionID = sessionData.session.sessionID;
 
-        console.log("::::::::: SESSION_DATA :: getUserSessionByChatId ::::::::: 000", chatId, sessionID, sessionData.session);
+        //console.log("::::::::: SESSION_DATA :: getUserSessionByChatId ::::::::: 000", chatId, sessionID, sessionData.session);
 
         console.log([sessionData, sessionID]);
 
@@ -317,12 +411,19 @@ export class SessionService implements ISessionService {
 
             logger.info(JSON.stringify(sessionDataUpdated))
 
-            console.log("::::::::: SESSION_DATA :: sessionDataUpdated ::::::::: 001", sessionDataUpdated); 
+            console.log("::::::::: SESSION_DATA :: sessionDataUpdated ::::::::: 001", sessionDataUpdated);
 
             return sessionDataUpdated.session;
 
         }
 
+    }
+
+    async getUserSessionBySessionId(sessionID: string): Promise<ISession | any> {
+        return await this.sessionStore.getWithParams([
+            { field: "_id", operator: "eq", value: sessionID },
+            { field: "session.sessionID", operator: "eq", value: sessionID },
+        ]);
     }
 
     async getUserSessionByChatId(chatId: number): Promise<ISession | any> {

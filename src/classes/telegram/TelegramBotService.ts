@@ -169,7 +169,7 @@ export class TelegramBotService implements ITelegramBotService {
         const text = sanitizeHtml(msg.text || "", { allowedTags: [], allowedAttributes: {} });
         const session = await this.sessionService.getUserSessionByChatId(chatId);
         if (!session) {
-            this.telegramBot.sendMessage(chatId, `Hello ${firstname}, Your session has not been found or has expired. Use ${CONSTANTS.COMMANDS.START} to begin.`);
+            this.telegramBot.sendMessage(chatId, `Hey ***${firstname}!*** Session not found or has expired. Creating a fresh one... 🚀`, { parse_mode: "Markdown" });
             return;
         }
         // Process session step
@@ -185,9 +185,8 @@ export class TelegramBotService implements ITelegramBotService {
      */
     private processSessionStep(chatId: number, text: string, sessionData: Session): void {
         const session = sessionData.session;
-        console.log("@@@@@@@@@@@@@@@@", session)
-        logger.info(["++++++++++++++++++++++++", chatId, text, session.step])
-        switch (session.step) {
+        logger.info(["+++++++++++++++++++++++", chatId, text, session.bot.tradingOptions.step])
+        switch (session.bot.tradingOptions.step) {
             case CONSTANTS.SESSION_STEPS.LOGIN_ACCOUNT:
                 this.tradingProcessFlow.handleLoginAccount(chatId, text, session);
                 break;
@@ -235,6 +234,7 @@ export class TelegramBotService implements ITelegramBotService {
                 break;
             default:
                 //  1 on 1 AI session if text is not a command
+                logger.info(["@@@@@@@@@@@@@@@@@@@@@@@@", chatId, text, session.bot.tradingOptions.step])
                 break;
         }
     }

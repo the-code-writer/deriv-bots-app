@@ -10,34 +10,34 @@
 // https://www.mongodb.com/docs/mongodb-vscode/playgrounds/
 
 // Select the database to use.
-use('ndutax_db');
+use("ndutax_db");
 
 // Insert a few documents into the sales collection.
-db.getCollection('sv_sessions').insertOne({
-  "_id": "0279ea84-808a-4236-a627-294ab590ea4b",
-  "maxAge": 1743102892621,
+db.getCollection("sv_sessions").insertOne({
+  "_id": "27affcab-7d08-43d6-8584-375108c9610e",
+  "maxAge": 1743693388095,
   "cookie": {
     "secure": false,
     "httpOnly": true,
     "sameSite": "strict",
-    "originalMaxAge": 1743102892621,
-    "maxAge": 1743102892621,
-    "expires": 1743102892621,
+    "originalMaxAge": 1743693388095,
+    "maxAge": 1743693388095,
+    "expires": 1743693388095,
     "path": "/",
     "domain": null,
     "priority": null,
     "partitioned": null
   },
   "session": {
-    "sessionID": "0279ea84-808a-4236-a627-294ab590ea4b",
-    "chatId": 7000005000,
+    "sessionID": "27affcab-7d08-43d6-8584-375108c9610e",
+    "chatId": 7542095001,
     "bot": {
-      "chatId": 7000005000,
+      "chatId": 7542095001,
       "step": "login_account",
-      "timestamp": 1742498109400,
+      "timestamp": 1743088592013,
       "accounts": {
         "telegram": {
-          "id": 7000005000,
+          "id": 7542095001,
           "is_bot": false,
           "first_name": "CodeWriter",
           "username": "the_code_writer",
@@ -45,10 +45,13 @@ db.getCollection('sv_sessions').insertOne({
         },
         "deriv": {}
       }
-    },
-    "encid": "U2FsdGVkX19dFoh0JJdM53FYUrtxg4L+xrLLCIKeVAY="
+    }
   },
-  "createdAt": "2025-03-20T19:15:09.401Z",
-  "updatedAt": "2025-03-20T19:15:09.401Z",
+  "createdAt": {
+    "$date": "2025-03-27T15:16:32.014Z"
+  },
+  "updatedAt": {
+    "$date": "2025-03-27T15:16:32.014Z"
+  },
   "isActive": true
 });
