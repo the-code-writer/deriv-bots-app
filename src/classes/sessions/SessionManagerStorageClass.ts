@@ -28,7 +28,7 @@ export interface ISessionStore {
      * @param value - 
      * @returns A promise that resolves when the session data is stored.
      */
-    set(sessionID: string, key: string | any, value?: Record<string, any>): Promise<void>;
+    set(sessionID: string, key: string | any, value?: any): Promise<void>;
 
     create(sessionData: Record<string, any>): Promise<void>;
 
@@ -146,7 +146,7 @@ export class SessionManagerStorageClass implements ISessionStore {
      */
     async get(sessionID: string): Promise<ISession | any> {
 
-        const sessionData: ISession | any = await this.db.getItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }]);
+        const sessionData: ISession | any = await this.db.getItem(this.collectionName, [{ field: 'sessionID', operator: 'eq', value: sessionID }]);
 
         //console.log("::SESSION_DATA::GET::", sessionData);
 
@@ -242,7 +242,7 @@ export class SessionManagerStorageClass implements ISessionStore {
      * @param data - Session data to be stored.
      * @returns Promise resolving when the operation is complete.
      */
-    async set(sessionID: string, key: string | any, value?: Record<string, any>): Promise<void> {
+    async set(sessionID: string, key: string | any, value?: any): Promise<void> {
 
         let updates: Partial<any> = key;
 
@@ -254,7 +254,7 @@ export class SessionManagerStorageClass implements ISessionStore {
 
             //console.log("::::::::: SESSION_DATA ::::::::: 0000.1111 :::::::::", updates);
 
-            await this.db.updateItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }], updates, true);
+            await this.db.updateItem(this.collectionName, [{ field: 'sessionID', operator: 'eq', value: sessionID }], updates, true);
 
         }
 
@@ -267,7 +267,7 @@ export class SessionManagerStorageClass implements ISessionStore {
      */
     async destroy(sessionID: string): Promise<void> {
 
-        await this.db.deleteItem(this.collectionName, [{ field: '_id', operator: 'eq', value: sessionID }]);
+        await this.db.deleteItem(this.collectionName, [{ field: 'sessionID', operator: 'eq', value: sessionID }]);
 
     }
 }

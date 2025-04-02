@@ -2,7 +2,7 @@ import { env } from "@/common/utils/envConfig";
 import { app, logger } from "@/server";
 import TelegramBot from "node-telegram-bot-api";
 import { WorkerService } from "@/classes/telegram/WorkerService";
-import { KeyboardService } from "@/classes/telegram/KeyboardService";
+import { IKeyboardService, KeyboardService } from "@/classes/telegram/KeyboardService";
 import { TelegramBotCommandHandlers } from "@/classes/telegram/TelegramBotCommandHandlers";
 import { TradingProcessFlowHandlers } from "@/classes/telegram/TradingProcessFlowHandlers";
 import { TelegramBotService } from "@/classes/telegram/TelegramBotService";
@@ -38,11 +38,11 @@ const initializeServices = async (telegramBot: TelegramBot) : Promise<any>=> {
 
   const userService = UserServiceFactory.createUserService(db);
 
-  const workerService = new WorkerService(telegramBot);
   const keyboardService = new KeyboardService(telegramBot);
+  const workerService = new WorkerService(telegramBot, keyboardService, userService);
   const commandHandlers = new TelegramBotCommandHandlers(telegramBot, sessionService, keyboardService, workerService, userService);
   const tradingProcessFlow = new TradingProcessFlowHandlers(telegramBot, sessionService, keyboardService, workerService);
-  return { sessionService, workerService, keyboardService, commandHandlers, tradingProcessFlow };
+  return { sessionService, workerService, keyboardService, commandHandlers, tradingProcessFlow};
 
 };
 
@@ -52,10 +52,11 @@ const startTelegramBotService = (
   sessionService: ISessionService,
   workerService: WorkerService,
   tradingProcessFlow: TradingProcessFlowHandlers,
-  commandHandlers: TelegramBotCommandHandlers
+  commandHandlers: TelegramBotCommandHandlers,
+  keyboardService: IKeyboardService
 ) => {
 
-  return new TelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
+  return new TelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers, keyboardService);
 
 };
 
@@ -92,9 +93,9 @@ const bootstrap = async () => {
 
   const telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
-  const { sessionService, workerService, commandHandlers, tradingProcessFlow } = await initializeServices(telegramBot);
+  const { sessionService, workerService, commandHandlers, tradingProcessFlow, keyboardService } = await initializeServices(telegramBot);
 
-  const bot = startTelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
+  const bot = startTelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers, keyboardService);
 
   app.set("bot", bot);
 

@@ -185,7 +185,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @private
      */
 
-    public validateAndUpdateAmount(
+    public async validateAndUpdateAmount(
         chatId: number,
         text: string,
         session: Session,
@@ -194,11 +194,11 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         errorMessage: string,
         showNextKeyboard: () => void,
         showCurrentKeyboard: () => void
-    ): void {
+    ):Promise< void > {
         if (text === "Automatic") {
             session[field] = this.getAutomaticStake(session.bot.tradingOptions.step, nextStep);
             session.bot.tradingOptions.step = nextStep;
-            this.sessionService.updateSessionWithChatId(chatId, session);
+            await this.sessionService.updateSessionWithChatId(chatId, session);
             showNextKeyboard();
             return;
         }
@@ -207,20 +207,20 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
             const value = parseFloat(`${amount}`);
             if (Number.isNaN(value) || value <= 0) {
                 session[field] = 0;
-                this.sessionService.updateSessionWithChatId(chatId, session);
+                await this.sessionService.updateSessionWithChatId(chatId, session);
                 this.telegramBot.sendMessage(chatId, errorMessage);
                 showCurrentKeyboard();
                 return;
             } else {
                 session[field] = value;
                 session.bot.tradingOptions.step = nextStep;
-                this.sessionService.updateSessionWithChatId(chatId, session);
+                await this.sessionService.updateSessionWithChatId(chatId, session);
                 showNextKeyboard();
                 return;
             }
         } else {
             session[field] = 0;
-            this.sessionService.updateSessionWithChatId(chatId, session);
+            await this.sessionService.updateSessionWithChatId(chatId, session);
             this.telegramBot.sendMessage(chatId, errorMessage);
             showCurrentKeyboard();
             return;
@@ -234,9 +234,9 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleLoginAccount(chatId: number, text: string, session: Session): void {
+    public async handleLoginAccount(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_ACCOUNT_TYPE;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showAccountTypeKeyboard(chatId, session.bot.accounts.deriv.accountList);
     }
 
@@ -247,11 +247,13 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleAccountTypeSelection(chatId: number, text: string, session: Session): void {
+    public async handleAccountTypeSelection(chatId: number, text: string, session: Session): Promise<any> {
         session.bot.tradingOptions.accountType = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_TRADING_TYPE;
-        this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showTradingTypeKeyboard(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
+        const parsedAccountNumber: string = String(text.split(" ")[0]).trim();
+        const accountDta:any = { selectedAccount: text, accountNumber: parsedAccountNumber, accountList: session.bot.accounts.deriv.accountList };
+        this.workerService.postMessageToDerivWorker("LOGIN_DERIV_ACCOUNT", chatId, text, session, accountDta)
     }
 
     /**
@@ -261,10 +263,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleTradingTypeSelection(chatId: number, text: string, session: Session): void {
+    public async handleTradingTypeSelection(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.tradingType = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_MARKET;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showMarketTypeKeyboard(chatId, session.tradingType);
     }
 
@@ -275,10 +277,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleMarketSelection(chatId: number, text: string, session: Session): void {
+    public async handleMarketSelection(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.market = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_PURCHASE_TYPE;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showPurchaseTypeKeyboard(chatId, session.market);
     }
 
@@ -289,10 +291,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handlePurchaseTypeSelection(chatId: number, text: string, session: Session): void {
+    public async handlePurchaseTypeSelection(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.purchaseType = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.ENTER_STAKE;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showStakeInputKeyboard(chatId);
     }
 
@@ -315,7 +317,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleStakeInput(chatId: number, text: string, session: Session): void {
+    public async handleStakeInput(chatId: number, text: string, session: Session): Promise<void> {
 
         this.validateAndUpdateAmount(
             chatId,
@@ -337,7 +339,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleTakeProfitInput(chatId: number, text: string, session: Session): void {
+    public async handleTakeProfitInput(chatId: number, text: string, session: Session): Promise<void> {
 
         this.validateAndUpdateAmount(
             chatId,
@@ -359,7 +361,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleStopLossInput(chatId: number, text: string, session: Session): void {
+    public async handleStopLossInput(chatId: number, text: string, session: Session): Promise<void> {
 
         this.validateAndUpdateAmount(
             chatId,
@@ -381,10 +383,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleTradeDurationSelection(chatId: number, text: string, session: Session): void {
+    public async handleTradeDurationSelection(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.tradeDuration = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_UPDATE_FREQUENCY;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showUpdateFrequencyKeyboard(chatId);
     }
 
@@ -395,10 +397,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleUpdateFrequencySelection(chatId: number, text: string, session: Session): void {
+    public async handleUpdateFrequencySelection(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.updateFrequency = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_TICKS_OR_MINUTES;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showContractDurationUnitsKeyboard(chatId, session.updateFrequency);
     }
 
@@ -409,10 +411,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleUpdateContractDurationUnitsSelection(chatId: number, text: string, session: Session): void {
+    public async handleUpdateContractDurationUnitsSelection(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.contractDurationUnits = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_TICKS_OR_MINUTES_DURATION;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showContractDurationValueKeyboard(chatId, session.contractDurationUnits);
     }
 
@@ -423,10 +425,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleUpdateContractDurationValueSelection(chatId: number, text: string, session: Session): void {
+    public async handleUpdateContractDurationValueSelection(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.contractDurationValue = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_AUTO_OR_MANUAL;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showAutoManualTradingKeyboard(chatId, session.contractDurationValue);
     }
 
@@ -437,10 +439,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleAutoManualTrading(chatId: number, text: string, session: Session): void {
+    public async handleAutoManualTrading(chatId: number, text: string, session: Session): Promise<void> {
         session.bot.tradingOptions.tradingMode = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.CONFIRM_TRADE;
-        this.sessionService.updateSessionWithChatId(chatId, session);
+        await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showTradeConfirmationKeyboard(chatId, session.tradingMode);
     }
 
@@ -451,7 +453,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleTradeConfirmation(chatId: number, text: string, session: Session): void {
+    public async handleTradeConfirmation(chatId: number, text: string, session: Session): Promise<void> {
         if (text === CONSTANTS.COMMANDS.CONFIRM) {
             this.workerService.postMessageToDerivWorker(CONSTANTS.SESSION_STEPS.CONFIRM_TRADE, chatId, "", session);
         } else {
@@ -466,7 +468,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public handleTradeManual(chatId: number, text: string, session: Session): void {
+    public async handleTradeManual(chatId: number, text: string, session: Session): Promise<void> {
         if (text === CONSTANTS.COMMANDS.CONFIRM) {
             this.workerService.postMessageToDerivWorker(CONSTANTS.SESSION_STEPS.CONFIRM_TRADE, chatId, "", session);
         } else {

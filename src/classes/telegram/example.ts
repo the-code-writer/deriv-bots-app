@@ -3,7 +3,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { SessionManagerStorageClass } from '@/classes/sessions/SessionManagerStorageClass';
 import { SessionService, ISessionService } from '@/classes/sessions/SessionService';
 import { WorkerService } from '@/classes/telegram/WorkerService';
-import { KeyboardService } from '@/classes/telegram/KeyboardService';
+import { IKeyboardService, KeyboardService } from '@/classes/telegram/KeyboardService';
 import { TelegramBotCommandHandlers } from '@/classes/telegram/TelegramBotCommandHandlers';
 import { TradingProcessFlowHandlers } from '@/classes/telegram/TradingProcessFlowHandlers';
 import { TelegramBotService } from '@/classes/telegram/TelegramBotService';
@@ -13,6 +13,8 @@ import { env } from "@/common/utils/envConfig";
 import { pino } from 'pino';
 import { Encryption } from "../cryptography/EncryptionClass";
 import { UserServiceFactory } from '../user/UserServiceFactory';
+import { CONSTANTS } from '@/common/utils/constants';
+import { KeyboardButton } from 'node-telegram-bot-api';
 
 // Logger
 const logger = pino({ name: "TelegramServiceExample" });
@@ -32,8 +34,8 @@ const initializeServices = async (telegramBot: TelegramBot): Promise<any> => {
 
   const userService = UserServiceFactory.createUserService(db);
 
-  const workerService = new WorkerService(telegramBot);
   const keyboardService = new KeyboardService(telegramBot);
+  const workerService = new WorkerService(telegramBot, keyboardService, userService);
   const commandHandlers = new TelegramBotCommandHandlers(telegramBot, sessionService, keyboardService, workerService, userService);
   const tradingProcessFlow = new TradingProcessFlowHandlers(telegramBot, sessionService, keyboardService, workerService);
   return { sessionService, workerService, keyboardService, commandHandlers, tradingProcessFlow };
@@ -46,10 +48,11 @@ const startTelegramBotService = (
   sessionService: ISessionService,
   workerService: WorkerService,
   tradingProcessFlow: TradingProcessFlowHandlers,
-  commandHandlers: TelegramBotCommandHandlers
+  commandHandlers: TelegramBotCommandHandlers,
+  keyboardService: IKeyboardService
 ) => {
 
-  return new TelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
+  return new TelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers, keyboardService);
 
 };
 
@@ -61,35 +64,62 @@ const startTelegramBotService = (
 
   const telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
-  const { sessionService, workerService, commandHandlers, tradingProcessFlow } = await initializeServices(telegramBot);
+  const { sessionService, workerService, commandHandlers, tradingProcessFlow, keyboardService } = await initializeServices(telegramBot);
 
-  const bot = startTelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers);
+  const bot = startTelegramBotService(telegramBot, sessionService, workerService, tradingProcessFlow, commandHandlers, keyboardService);
+
+  await commandHandlers.handleStartCommand({
+    chat: {
+      id: chatId
+    },
+    from: {
+      first_name: "Douglas",
+      id: chatId,
+      last_name: "Maposa",
+      username: "drmposa",
+      language_code: "en",
+      is_bot: false
+    }
+  })
 
   const queryString: string = DB_DERIV_ACCOUNT;
 
-  const queryParams: any = getQueryParamsFromURL(queryString); 
+  const queryParams: any = getQueryParamsFromURL(queryString);
 
   const organizedData: any = getDerivAccountFromURLParams(queryParams);
 
-  const sessionData: any = await sessionService.getUserSessionByChatId(chatId);
+  let sessionData: any = await sessionService.getUserSessionByChatId(chatId);
 
-  console.log("*** *** *** *** SESSION*** *** *** ***", chatId, sessionData); 
-
-  if (!sessionData.session.hasOwnProperty("bot")) {
-    
-    sessionData.session["bot"] = {
-      accounts: {
-        deriv: {
-          accountList: {
-
-          }
-        }
-      }
-    }
-  }
+  console.log("*** SESSION - 001 ***", chatId, sessionData);
 
   sessionData.session.bot.accounts.deriv.accountList = organizedData;
 
-  bot.authorizeOauthData(sessionData);
+  await bot.authorizeOauthData(sessionData);
+
+  sessionData = await sessionService.getUserSessionByChatId(chatId);
+
+  console.log("*** SESSION - 002 ***", chatId, sessionData);
+
+  let text: string | KeyboardButton = "CR8424472 ( eUSDT )";
+
+  await tradingProcessFlow.handleAccountTypeSelection(chatId, text, sessionData.session)
+
+  sessionData = await sessionService.getUserSessionByChatId(chatId);
+
+  console.log("*** SESSION - 003 ***", chatId, sessionData);
+
+  text = CONSTANTS.TRADING_TYPES.DERIVATIVES;
+
+  console.log("CONSTANTS.TRADING_TYPES.DERIVATIVES", [CONSTANTS.TRADING_TYPES.DERIVATIVES, text])
+
+  await tradingProcessFlow.handleTradingTypeSelection(chatId, text, sessionData.session)
+
+  sessionData = await sessionService.getUserSessionByChatId(chatId);
+
+  console.log("*** SESSION - 004 ***", chatId, sessionData);
+
+  text = CONSTANTS.PURCHASE_TYPES.DERIVATIVES[4][1]; 
+
+  await tradingProcessFlow.handleMarketSelection(chatId, text, sessionData.session)
 
 })();

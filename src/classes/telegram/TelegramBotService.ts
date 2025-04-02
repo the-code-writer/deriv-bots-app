@@ -12,6 +12,7 @@ import { ISessionService } from "@/classes/sessions/SessionService";
 import { text } from "express";
 
 import { pino } from "pino";
+import { IKeyboardService, KeyboardService } from './KeyboardService';
 // Logger
 const logger = pino({ name: "TelegramBotService" });
 
@@ -60,19 +61,22 @@ export class TelegramBotService implements ITelegramBotService {
     private workerService: IWorkerService;
     private tradingProcessFlow: ITradingProcessFlow;
     private commandHandlers: ITelegramBotCommandHandlers;
+    private keyboardService: IKeyboardService;
 
     constructor(
         telegramBot: TelegramBot,
         sessionService: ISessionService,
         workerService: IWorkerService,
         tradingProcessFlow: ITradingProcessFlow,
-        commandHandlers: ITelegramBotCommandHandlers
+        commandHandlers: ITelegramBotCommandHandlers,
+        keyboardService: IKeyboardService
     ) {
         this.telegramBot = telegramBot;
         this.sessionService = sessionService;
         this.workerService = workerService;
         this.tradingProcessFlow = tradingProcessFlow;
         this.commandHandlers = commandHandlers;
+        this.keyboardService = keyboardService;
         this.setupEventListeners();
     }
 
@@ -123,10 +127,12 @@ export class TelegramBotService implements ITelegramBotService {
         
         let chatId:number = 0;
 
-        const encid: string = sessionData.session.encid;
-
+        let encid: string = sessionData.session.encid;
+        
         if(encid){
-            
+                
+            encid = String(encid).replace(/ /g, '+');
+
             chatId = parseInt(Encryption.decryptAES(encid, APP_CRYPTOGRAPHIC_KEY));
 
         }else{
@@ -173,7 +179,7 @@ export class TelegramBotService implements ITelegramBotService {
             return;
         }
         // Process session step
-        this.processSessionStep(chatId, text, session);
+        await this.processSessionStep(chatId, text, session);
     }
 
     /**
@@ -183,7 +189,7 @@ export class TelegramBotService implements ITelegramBotService {
      * @param {Session} session - The current session
      * @private
      */
-    private processSessionStep(chatId: number, text: string, sessionData: Session): void {
+    private async processSessionStep(chatId: number, text: string, sessionData: Session): Promise<void> {
         const session = sessionData.session;
         logger.info(["+++++++++++++++++++++++", chatId, text, session.bot.tradingOptions.step])
         switch (session.bot.tradingOptions.step) {

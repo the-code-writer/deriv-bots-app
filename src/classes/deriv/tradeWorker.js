@@ -2,7 +2,7 @@ const DerivAutoTradingBotClass = require("./DerivAutoTradingBotClass.ts");
 
 const { parentPort, workerData } = require("node:worker_threads");
 
-const {action, chatId, data} = workerData;
+const { action, chatId, text, session, data } = workerData;
 
 if (!action) {
   throw new Error("Invalid worker data");
@@ -10,36 +10,85 @@ if (!action) {
 
 const derivInstance = new DerivAutoTradingBotClass();
 
-const handleLoggedIn = (id, metadata) =>  {
-  
-  const account = derivInstance.getAccountToken(metadata, "cur", "USD");
+const handleLoggedIn = (
+  userAction,
+  userChatId,
+  textString,
+  sessionData,
+  metaData
+) => {
 
-  console.log("ACCOUNT_TOKEN", account.token, account);
+  console.log("LOGIN_DERIV_ACCOUNT", {
+    userAction,
+    userChatId,
+    textString,
+    sessionData,
+    metaData,
+  });
 
-  derivInstance.setAccount((userAccount) => {
-    
-  console.log("LOGGED_IN_ACCOUNT", userAccount);
+  const accounts = metaData.accountList;
 
-    // send message with user data to TG for welcome before proceeding
-    parentPort.postMessage({ type: "userAccount", data: userAccount });
-    
-  }, account.token);
-}
+  const accountNumber = metaData.accountNumber;
 
-if (action === "LOGGED_IN") {
+  const account = derivInstance.getAccountToken(
+    accounts,
+    "acct",
+    accountNumber
+  );
 
+  console.log("ACCOUNT_TOKEN", account);
+
+  try {
+
+    let userAccount = {
+      _email: 'digitalcurrencyonline@gmail.com',
+      _country: 'zw',
+      _currency: 'eUSDT',
+      _loginid: 'CR8424472',
+      _user_id: 5716997,
+      _fullname: 'Mr Douglas Maposa',
+      _amount: { value: 0, currency: 'eUSDT', lang: 'EN' }
+    };
+
+    /*
+
+    parentPort.postMessage({
+      action: "LOGIN_DERIV_ACCOUNT_READY",
+      data: { userAccount, sessionData, chatId: userChatId, selectedAccount: account },
+    });
+
+    */
+   
+    derivInstance.setAccount((userAccount) => {
+      console.log("LOGIN_DERIV_ACCOUNT_READY", userAccount);
+
+      parentPort.postMessage({
+        action: "LOGIN_DERIV_ACCOUNT_READY",
+        data: { userAccount, sessionData, chatId: userChatId },
+      });
+    }, account.token);
+
+  } catch (error) {
+    console.log("LOGIN_DERIV_ACCOUNT_ERROR", error);
+
+    parentPort.postMessage({
+      action: "LOGIN_DERIV_ACCOUNT_READY",
+      data: { error, sessionData, chatId: userChatId },
+    });
+  }
+};
+
+if (action === "LOGIN_DERIV_ACCOUNT") {
   if (!chatId || !data) {
     throw new Error("Invalid session data");
   }
 
-  handleLoggedIn(chatId, data);
-
+  handleLoggedIn(action, chatId, text, session, data);
 }
 
 // Listen for messages from the main thread
 parentPort.on("message", (message) => {
-
-  console.log("NEW_WORKER_MESSAGE", message, [
+  console.log("MESSAGE_FROM_PARENT", message, [
     message.action,
     message.meta.data,
   ]);

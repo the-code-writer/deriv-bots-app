@@ -9,17 +9,17 @@ MongoDBConnection
 export interface IUser {
     _id?: string; // Unique identifier for the user
     userId: string;
-    chatId: string;
-    sessionId?: string;
-    accountId?: string;
+    chatId: number;
+    sessionID?: string;
+    accountID?: string;
     name: string;
     username?: string;
     email: string;
     derivAccount: IDerivUserAccount;
     telegramAccount: ITelegramAccount;
-    createdAt: Date;
-    updatedAt: Date;
-    isActive: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
+    isActive?: boolean;
 }
 
 /**
@@ -63,9 +63,9 @@ export interface IUserService {
  */
 export interface CreateUserDto {
     userId: string;
-    chatId: string;
-    accountId: string;
-    sessionId: string;
+    chatId: number;
+    accountID: string;
+    sessionID: string;
     name: string;
     username: string;
     email: string;
@@ -78,9 +78,9 @@ export interface CreateUserDto {
  */
 export interface UserUpdateDto {
     userId?: string;
-    chatId?: string;
-    accountId?: string;
-    sessionId?: string;
+    chatId?: number;
+    accountID?: string;
+    sessionID?: string;
     name?: string;
     username?: string;
     email?: string;

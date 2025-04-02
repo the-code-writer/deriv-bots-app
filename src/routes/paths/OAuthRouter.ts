@@ -1,11 +1,9 @@
 import express, { Request, Response, Router } from 'express';
 import { env } from '@/common/utils/envConfig';
-import { MongoDBConnection } from '@/classes/databases/mongodb/MongoDBClass';
-import { SessionManagerStorageClass } from '@/classes/sessions/SessionManagerStorageClass';
-import { SessionService, ISessionService } from '@/classes/sessions/SessionService';
-import { getDerivAccountFromURLParams } from '../../common/utils/snippets';
+import {  ISessionService } from '@/classes/sessions/SessionService';
+import { getDerivAccountFromURLParams, getEncryptedUserAgent } from '../../common/utils/snippets';
 
-const { DERIV_APP_OAUTH_URL, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL } = env;
+const { DERIV_APP_OAUTH_URL, DEVICE_AGENT } = env;
 
 /**
  * Interface for the data object passed to EJS templates.
@@ -118,10 +116,27 @@ export class OAuthRouter {
         this.router.get('/login', async (req: Request, res: Response) => {
 
             const { encid } = req.query; // Extract query parameters
-            // @ts-ignore
-            req.session.encid = encid;
 
-            console.log("### ROUTER ### /login ###", encid);
+            console.log("### ROUTER ### encid ###", encid);
+
+            console.log("### ROUTER ### req.session ###", req.session);
+
+            if (!req.session) {
+                
+                req.session = {
+                    id: '',
+                    cookie: req.session?.cookie || {},
+                    regenerate: req.session?.regenerate || (() => Promise.resolve()),
+                    destroy: req.session?.destroy || (() => Promise.resolve()),
+                    reload: req.session?.reload || (() => Promise.resolve()),
+                    save: req.session?.save || (() => Promise.resolve()),
+                    touch: req.session?.touch || (() => {}),
+                };
+
+            }
+
+            // @ts-ignore
+            req.session.encid = encid.replace(" ", "+");
 
             await this.sessionService.updateSession(req, res, "encid", encid);
 
@@ -147,34 +162,60 @@ export class OAuthRouter {
             const queryParams = req.query; // Extract all query parameters
 
             // @ts-ignore
-            const sessionID = req.session.sessionID || req.sessionID;
-
-            const session = req.session;
-
-            if (!sessionID) {
-
-                console.error('Missing cookie data:', req.session);
-
-            }
+            let sessionID: string = null;
 
             // @ts-ignore
-            if (!session.encid) {
-                console.error('Missing session data:', session);
-                return res.status(400).send('Session data is missing');
+            let sessionData = req.session;
+
+            console.error('sessionData:', sessionData);
+            console.error('req.sessionID:', req.sessionID);
+            console.error('req.session:', req.session);
+
+            if (!sessionData) {
+                
+                const { encuaKey } = getEncryptedUserAgent(req, DEVICE_AGENT);
+
+                const sessionDataByUA = await this.sessionService.getUserSessionByEncUA(encuaKey);
+
+                // @ts-ignore
+                if (sessionDataByUA) {
+
+                    sessionData = sessionDataByUA;
+
+                    // @ts-ignore
+                    sessionID = sessionData.sessionID;
+
+                } else {
+
+                    console.error('Missing session data:', sessionData);
+                    return res.status(400).send('Session data is missing');
+
+                }
+
+            } else {
+
+                // @ts-ignore
+                sessionID = sessionData.sessionID;
+
             }
 
             const organizedData: OrganizedAccountData = getDerivAccountFromURLParams(queryParams);
+
+            // @ts-ignore
+            sessionData.session.bot.accounts.deriv.accountList = organizedData;
 
             // Get the bot instance from the app
             const bot = req.app.get('bot');
 
             // Check if the bot is initialized
             if (!bot) {
+
                 return res.status(500).send('<h2>Telegram bot is not initialized</h2>');
+
             }
 
             // Notify the bot that the user has logged in
-            bot.authorizeOauthData(organizedData, session);
+            bot.authorizeOauthData(sessionData);
 
             // Send a success response
             res.status(200).send('<h2>User logged in successfully</h2>');
@@ -183,5 +224,7 @@ export class OAuthRouter {
             //res.render('deriv-oauth-template', { data });
 
         });
+
     }
+    
 }

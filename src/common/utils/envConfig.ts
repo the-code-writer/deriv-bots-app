@@ -1,11 +1,13 @@
 import dotenv from "dotenv";
-import { cleanEnv, host, num, port, str, url, testOnly } from "envalid";
+import { cleanEnv, num, str, url, testOnly } from "envalid";
 
 dotenv.config();
 
 export const env = cleanEnv(process.env, {
   // String variables
-  APP_CRYPTOGRAPHIC_KEY: str({ devDefault: testOnly("") }),
+  APP_DOMAIN: str({ devDefault: testOnly("nduta.x") }),
+  APP_CRYPTOGRAPHIC_KEY: str({ devDefault: testOnly("@p4$$w07D!") }),
+  DEVICE_AGENT: str({ devDefault: testOnly("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36") }),
   CORS_ORIGIN: str({ devDefault: testOnly("http://localhost:*") }),
   HOST: str({ devDefault: testOnly("localhost") }),
   IMAGE_BANNER: url({ devDefault: testOnly("https://cdn.prod.website-files.com/66585fe0e1dc7e70cc75d440/66a3154b6213d328633433d5_Deriv%20Bot.webp") }),
@@ -29,7 +31,7 @@ export const env = cleanEnv(process.env, {
   DB_SERVER_SESSIONS_DATABASE_COLLECTION: str({ devDefault: testOnly("sv_sessions") }),
   DB_USER_ACCOUNT_DATABASE_COLLECTION: str({ devDefault: testOnly("user_accounts") }),
   DB_DERIV_TRADE_RESULT_DATABASE_COLLECTION: str({ devDefault: testOnly("dv_trade_results") }),
-  DB_DERIV_ACCOUNT: str({ devDefault: testOnly("") }),
+  DB_DERIV_ACCOUNT: str({ devDefault: testOnly("https://www.example.com?acct1=CR518993&token1=a1-DCWzEgC2K7TPhXXy2VAzBDrmRxU1i&cur1=USD&acct2=CR2029443&token2=a1-h4kkMc3Ydx18PhBDX1L883fw2xCDg&cur2=USDC&acct3=CR528370&token3=a1-1jfNoSeHNWsX8LmyBY3h13WAq6YaF&cur3=BTC&acct4=CR528372&token4=a1-qNASuJGJh7GCnkkEMjcJR36saoB3x&cur4=LTC&acct5=CR8424472&token5=a1-MgWeNe41ZmlR6f5yZ0aQGVvfBEGoI&cur5=eUSDT&acct6=CR982988&token6=a1-g0R8JGLJ3DSTvVEz7GXAnDUofsoIB&cur6=ETH&acct7=VRTC1605087&token7=a1-azGoefPe917EDjGonVzsn0HiM3MzF&cur7=USD") }),
 
   // Number variables
   COMMON_RATE_LIMIT_MAX_REQUESTS: num({ devDefault: testOnly(1000) }),

@@ -5,10 +5,10 @@ export interface IDerivUserAccount {
   email: string; // Email address of the user
   country: string; // Country code of the user
   currency: string; // Currency used by the user
-  loginid: string; // Login ID of the user
-  user_id: number; // User ID of the user
+  loginID: string; // Login ID of the user
+  userID: number; // User ID of the user
   fullname: string; // Full name of the user
-  amount: {
+  amount?: {
     // Nested object representing the amount details
     _data: {
       value: number; // Value of the amount
@@ -16,6 +16,7 @@ export interface IDerivUserAccount {
       lang: string; // Language of the amount
     };
   };
+  selectedAccount: any;
 }
 
 /**

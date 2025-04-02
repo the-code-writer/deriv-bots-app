@@ -51,6 +51,8 @@ export interface IKeyboardService {
 
     getTradeManualKeyboard(): KeyboardButton[][] | string[][];
 
+    sendMessage(chatId: number, message: string, parseMode?: string): void;
+
     /**
          * Show the market type keyboard
          * @param {number} chatId - The chat ID of the user
@@ -186,17 +188,15 @@ export class KeyboardService implements IKeyboardService {
 
         const encid: string = Encryption.encryptAES(chatId.toString(), APP_CRYPTOGRAPHIC_KEY);
 
-        const oauthURL: string = `${DERIV_APP_LOGIN_URL}?encid=${encid}`;
+        const oauthURL: string = `${DERIV_APP_LOGIN_URL}?encid=${encodeURIComponent(encid)}`;
 
-        logger.warn(`OAUTH_URL ${oauthURL}`);
-
-        logger.warn(`getLoginKeyboard::OAUTH_SESSION`);
+        logger.warn(`OAUTH_URL :: ${oauthURL}`);
 
         logger.warn(session);
 
         return [
-            [{ text: '🔒 LOGIN ', url: oauthURL }],
-            [{ text: '🚫 CANCEL', callback_data: 'exec_cancel' }],
+            [{ text: '🔒 LOGIN VIA DOMAIN', url: oauthURL }],
+            // [{ text: '🚫 CANCEL', callback_data: 'exec_cancel' }],
         ];
 
     }
@@ -353,14 +353,41 @@ export class KeyboardService implements IKeyboardService {
 
         console.log("::: showAccountTypeKeyboard :::", JSON.stringify(keyboard))
 
-        this.telegramBot.sendMessage(chatId, message, {
-            reply_markup: {
-                keyboard: keyboard as KeyboardButton[][] | string[][],
-                resize_keyboard: true,
-                one_time_keyboard: isOneTimeKeyboard,
-            },
-            parse_mode: parseMode,
-        });
+        try {
+
+            this.telegramBot.sendMessage(chatId, message, {
+                reply_markup: {
+                    keyboard: keyboard as KeyboardButton[][] | string[][],
+                    resize_keyboard: true,
+                    one_time_keyboard: isOneTimeKeyboard,
+                },
+                parse_mode: parseMode,
+            });
+
+        } catch (error: any) {
+
+            console.log("::: KEYBOARD SERVICE ERROR :::", error)
+
+        }
+
+    }
+
+    // @ts-ignore
+    sendMessage(chatId: number, message: string, parseMode?: string = "Markdown"): void {
+        
+        
+        try {
+
+            this.telegramBot.sendMessage(chatId, message, {
+                parse_mode: parseMode,
+            });
+
+        } catch (error: any) {
+
+            console.log("::: KEYBOARD SERVICE ERROR :::", error)
+
+        }
+
     }
 
 
@@ -381,7 +408,7 @@ export class KeyboardService implements IKeyboardService {
          * @private
          */
     showTradingTypeKeyboard(chatId: number): void {
-        this.sendKeyboard(chatId, "Select the desired market:", this.getTradingTypeKeyboard());
+        this.sendKeyboard(chatId, "Select the desired trading type:", this.getTradingTypeKeyboard());
     }
 
     /**

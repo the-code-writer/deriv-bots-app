@@ -1,7 +1,10 @@
 import { Worker } from "node:worker_threads";
 import { pino } from "pino";
+import { v4 as uuidv4 } from 'uuid';
 import { env } from "@/common/utils/envConfig";
-import { Session } from "@/classes/telegram/SessionService";
+import { IKeyboardService } from "./KeyboardService";
+import { IUserRepository, IUser } from "../user/UserInterfaces";
+import { UserService } from "../user/UserService";
 
 // Logger
 const logger = pino({ name: "WorkerService" });
@@ -13,7 +16,7 @@ const { APP_CRYPTOGRAPHIC_KEY } = env;
  * Interface for worker service
  */
 export interface IWorkerService {
-    postMessageToDerivWorker(action: string, chatId: number, text: string, session: Session, data?: any): void;
+    postMessageToDerivWorker(action: string, chatId: number, text: string, session: any, data?: any): void;
     handleWorkerMessage(chatId: number, message: any): void;
 }
 
@@ -26,13 +29,17 @@ export class WorkerService implements IWorkerService {
     private workers: { [key: string]: Worker } = {};
 
     private telegramBot: any;
+    private keyboardService: IKeyboardService;
+    private userService:UserService;
 
-    constructor(telegramBot: any) {
+    constructor(telegramBot: any, keyboardService: IKeyboardService, userService:UserService) {
         this.telegramBot = telegramBot;
+        this.keyboardService = keyboardService;
+        this.userService= userService;
         logger.info("Worker Service started!");
     }
 
-    postMessageToDerivWorker(action: string, chatId: number, text: string, session: Session, data?: any): void {
+    postMessageToDerivWorker(action: string, chatId: number, text: string, session: any, data?: any): void {
 
         const workerID = `WKR_${chatId}`;
 
@@ -49,8 +56,49 @@ export class WorkerService implements IWorkerService {
     }
     
 
-    handleWorkerMessage(chatId: number, message: any): void {
-        // Handle worker messages
+    handleWorkerMessage(chatId:number, message: any): void {
+        
+        console.log("MESSAGE_FROM_WORKER", chatId, message);
+
+        switch(message.action){
+
+            case "LOGIN_DERIV_ACCOUNT_READY" : {
+
+                const { chatId, sessionData, userAccount, selectedAccount } = message.data;
+
+                this.userService.createUserWithCallback(chatId, sessionData, userAccount, selectedAccount, async (createdUser: IUser)=>{
+
+                    const welcomeUser: string = await this.userService.createUserWelcomeMessage(createdUser);
+
+                    this.keyboardService.sendMessage(chatId, welcomeUser);
+
+                    setTimeout(()=>{
+                        
+                        this.keyboardService.showTradingTypeKeyboard(chatId, sessionData);
+
+                    }, 1000)
+                    
+                });
+
+                break;
+            }
+
+            case "sendTelegramMessage" : {
+
+                this.keyboardService.sendMessage(chatId, message.text);
+
+                break;
+            }
+
+            default : {
+                
+                console.log("UNKNOWN_MESSAGE_FROM_WORKER", message);
+
+                break;
+
+            }
+        }
+
     }
 
     private handleWorkerError(chatId: number, error: Error): void {

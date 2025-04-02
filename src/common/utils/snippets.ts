@@ -1,3 +1,10 @@
+import { env } from '@/common/utils/envConfig';
+import { Encryption } from '@/classes/cryptography/EncryptionClass';
+
+const uap = require('ua-parser-js');
+
+const { APP_CRYPTOGRAPHIC_KEY } = env;
+
 export const isDigitOrPeriod = (str: string): boolean => {
   // Regular expression to match only digits and periods
   const regex = /^[0-9.]+$/;
@@ -118,8 +125,6 @@ export const replaceStringVariables = (str: string, variables: any): string => {
 export const calculateExpiry = (timeString: string | number): number => {
   const now = Date.now(); // Current epoch time in milliseconds
 
-  console.log("TIME_STRING", timeString, typeof timeString)
-
   if (typeof timeString === "number") {
     return now + timeString * 1000;
   }
@@ -209,49 +214,49 @@ export type QueryParams = Record<string, string | string[]>;
  * // Returns: { name: "John", age: "30", hobby: ["reading", "swimming"] }
  */
 export const getQueryParamsFromURL = (url: string): QueryParams => {
-    // Extract the query string from the URL by splitting at '?' and taking the second part
-    const queryString = url.split('?')[1];
-    
-    // If there's no query string, return an empty object
-    if (!queryString) {
-        return {};
+  // Extract the query string from the URL by splitting at '?' and taking the second part
+  const queryString = url.split('?')[1];
+
+  // If there's no query string, return an empty object
+  if (!queryString) {
+    return {};
+  }
+
+  // Split the query string into individual key-value pairs
+  const pairs = queryString.split('&');
+
+  // Initialize an empty object to store the parsed parameters
+  const result: QueryParams = {};
+
+  // Process each key-value pair
+  for (const pair of pairs) {
+    // Split each pair into key and value
+    const [key, value] = pair.split('=');
+
+    // Decode URI components to handle special characters
+    const decodedKey = decodeURIComponent(key);
+    const decodedValue = decodeURIComponent(value);
+
+    // If the key already exists in the result
+    if (result.hasOwnProperty(decodedKey)) {
+      const existingValue = result[decodedKey];
+
+      // If the existing value is an array, push the new value
+      if (Array.isArray(existingValue)) {
+        existingValue.push(decodedValue);
+      }
+      // If it's not an array, convert it to an array with both values
+      else {
+        result[decodedKey] = [existingValue as string, decodedValue];
+      }
     }
-
-    // Split the query string into individual key-value pairs
-    const pairs = queryString.split('&');
-    
-    // Initialize an empty object to store the parsed parameters
-    const result: QueryParams = {};
-
-    // Process each key-value pair
-    for (const pair of pairs) {
-        // Split each pair into key and value
-        const [key, value] = pair.split('=');
-        
-        // Decode URI components to handle special characters
-        const decodedKey = decodeURIComponent(key);
-        const decodedValue = decodeURIComponent(value);
-
-        // If the key already exists in the result
-        if (result.hasOwnProperty(decodedKey)) {
-            const existingValue = result[decodedKey];
-            
-            // If the existing value is an array, push the new value
-            if (Array.isArray(existingValue)) {
-                existingValue.push(decodedValue);
-            } 
-            // If it's not an array, convert it to an array with both values
-            else {
-                result[decodedKey] = [existingValue as string, decodedValue];
-            }
-        } 
-        // If the key doesn't exist, add it to the result
-        else {
-            result[decodedKey] = decodedValue;
-        }
+    // If the key doesn't exist, add it to the result
+    else {
+      result[decodedKey] = decodedValue;
     }
+  }
 
-    return result;
+  return result;
 }
 
 /**
@@ -271,7 +276,7 @@ export const getQueryParamsFromURL = (url: string): QueryParams => {
  * // Returns [['a', 'b', 'c'], ['d', 'e']]
  * chunkIntoN(['a', 'b', 'c', 'd', 'e'], 2);
  */
-export const chunkIntoN:any = (array: any, numberOfChunks: number): any => {
+export const chunkIntoN: any = (array: any, numberOfChunks: number): any => {
   // Validate input
   if (!Number.isInteger(numberOfChunks) || numberOfChunks <= 0) {
     throw new Error('numberOfChunks must be a positive integer');
@@ -279,13 +284,13 @@ export const chunkIntoN:any = (array: any, numberOfChunks: number): any => {
 
   // Handle edge cases
   if (numberOfChunks === 1) return [array];
-  if (numberOfChunks >= array.length) return array.map((item:any) => [item]);
+  if (numberOfChunks >= array.length) return array.map((item: any) => [item]);
 
   // Calculate base chunk size and how many chunks need an extra item
   const chunkSize = Math.floor(array.length / numberOfChunks);
   const chunksWithExtra = array.length % numberOfChunks;
 
-  const chunks: T[][] = [];
+  const chunks: [][] = [];
   let currentIndex = 0;
 
   for (let i = 0; i < numberOfChunks; i++) {
@@ -298,4 +303,36 @@ export const chunkIntoN:any = (array: any, numberOfChunks: number): any => {
   }
 
   return chunks;
+}
+
+export const getEncryptedUserAgent = (req: any, defaultAgent: string) => {
+
+  const defaultUserAgent: string = req && "headers" in req ? req.headers['user-agent'] : defaultAgent;
+
+  // get user-agent header
+  // @ts-ignore
+  const userAgent = uap(defaultUserAgent);
+
+  /*
+  // Since v2.0.0
+  // you can also pass Client Hints data to UAParser
+  // note: only works in a secure context (localhost or https://)
+  // from any browsers that are based on Chrome 85+
+  // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Sec-CH-UA
+ 
+      const getHighEntropyValues = 'Sec-CH-UA-Full-Version-List, Sec-CH-UA-Mobile, Sec-CH-UA-Model, Sec-CH-UA-Platform, Sec-CH-UA-Platform-Version, Sec-CH-UA-Arch, Sec-CH-UA-Bitness';
+      res.setHeader('Accept-CH', getHighEntropyValues);
+      res.setHeader('Critical-CH', getHighEntropyValues);
+      
+      ua = uap(req.headers).withClientHints();
+  */
+
+  const userAgentString: any = JSON.stringify(userAgent);
+
+  const encuaKey:string = Encryption.md5(userAgentString);
+
+  const encuaData: any = userAgent;  //Encryption.encryptAES(userAgentString, APP_CRYPTOGRAPHIC_KEY);
+
+  return { userAgent, userAgentString, encuaKey, encuaData};
+
 }

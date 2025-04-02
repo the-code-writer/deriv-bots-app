@@ -1170,12 +1170,12 @@ class DerivAutoTradingBotClass {
     }, CONNECTION_PING_TIMEOUT);
   }
 
-  public getAccountToken(data:any, key:string, value:string) {
+  public getAccountToken(accounts:any, key:string, value:string) {
 
     // Iterate through the object
-    for (const index in data.accounts) {
+    for (const index in accounts) {
 
-      const entry = data.accounts[index];
+      const entry = accounts[index];
 
       // Check if the key is 'acct' or 'cur' and if the value matches
       if ((key === "acct" && entry.acct === value) || (key === "cur" && entry.cur === value) || (key === "token" && entry.token === value)) {

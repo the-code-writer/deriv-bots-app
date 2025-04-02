@@ -79,40 +79,9 @@ const { MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER
   const userStore = new UserManagerStorageClass(db, DB_USER_ACCOUNT_DATABASE_COLLECTION);
 
   const sessionStore = new SessionManagerStorageClass(db, DB_SERVER_SESSIONS_DATABASE_COLLECTION);
-  const sessionService = new SessionService(sessionStore, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL, userStore);
+  const sessionService = new SessionService(sessionStore, DB_SERVER_SESSIONS_DATABASE_COLLECTION, DB_SERVER_SESSIONS_DATABASE_TTL);
 
   app.use(sessionService.middleware.bind(sessionService));
-
-  app.get('/set-session', async (req, res) => {
-
-    await sessionService.updateSession(req, res, "flight", {
-      ticket: 600.25
-    });
-
-    await sessionService.updateSession(req, res, "color", "yellow");
-
-    await sessionService.updateSession(req, res, "wheels", {
-      front: "17''", left: 5436, back: { a: "1", b: "2", c: "3" }, right: true,
-    });
-
-    console.log(":: URL :: /set-session ::", req.session)
-
-    res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
-
-  });
-
-  app.get('/get-session', (req, res) => {
-    console.log(":: URL :: /get-session ::", req.session)
-    res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
-  });
-
-  app.get('/del-session', async (req, res) => {
-    await sessionService.destroySession(req, res);
-    console.log(":: URL :: /del-session ::", req.session)
-    res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
-  });
-
-  // Routes
 
   // Initialize the AttachRoutes class with the app
   const attachRoutes = new AttachRoutes(app, sessionService);

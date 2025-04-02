@@ -1,7 +1,7 @@
 {
   "name": "ndutax-mongodb-express-react-nodejs-typescript",
   "version": "1.0.0",
-  "description": "Nueral Decision Unit for Trading Analytics",
+  "description": "N.D.U.T.A.X - Neural Decision Unit for Trading Analytics & Execution",
   "author": "Douglas Maposa",
   "repository": "the-code-writer/ndutax",
   "license": "MIT",
@@ -64,6 +64,7 @@
     "sinon": "^19.0.2",
     "swagger-ui-express": "^5.0.1",
     "ts-node": "^10.9.2",
+    "ua-parser-js": "^2.0.3",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "ws": "^8.18.1",

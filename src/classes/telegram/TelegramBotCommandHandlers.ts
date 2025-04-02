@@ -329,44 +329,13 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
                 reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(session.session.bot) },
             });
 
+        } else {
+
+            await bot.authorizeOauthData(sessionData);
+            
         }
 
         return;
-
-        // Accounts
-
-        const userAccounts = user.derivAccount.accounts;
-
-        console.log(":::: USER_DERIV_ACCOUNTS :::: 333", user, userAccounts);
-
-        // if the user is already in the database, skip the login
-
-        // if the user is not in the database, login the user
-
-        // if user is DERIV_APP_LOGIN_URL, send the message to the worker that the user has been logged in
-
-        // the worker then gets the user account via the deriv api
-
-        // then create a user account within the database
-
-        // after ccount creation, welcome the user and a callback function must be the skip login function
-
-        // after skipping loggin or after succesful login
-
-        // start trading
-
-        /*
-        const imageUrl = IMAGE_BANNER;
-        const caption = `**\n\nThe Future of Trading Is Here! 🌟`;
-        this.telegramBot.sendPhoto(chatId, imageUrl, { caption, parse_mode: "Markdown" });
-        
-        setTimeout(() => {
-            this.telegramBot.sendMessage(chatId, `Please login using your Deriv Account to proceed:`, {
-                reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(session) },
-            });
-        }, 500);
-
-        */
 
     }
 
@@ -882,6 +851,48 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         // Display statement information
         this.workerService.postMessageToDerivWorker(CONSTANTS.COMMANDS.STATEMENT, chatId, "", session);
     }
+
+    
+        /**
+         * Generate a statement for the user
+         * @param {number} chatId - The chat ID of the user
+         * @param {Session} session - The current session
+         * @private
+
+        private generateStatement(chatId: number, session: Session): void {
+            if (chatId && session) {
+                const worker = new Worker("./src/classes/deriv/statementWorker.mjs", {
+                    workerData: { session },
+                });
+    
+                worker.on("message", (result) => {
+                    this.telegramBot.sendMessage(chatId, result);
+                    if (result.status === "success") {
+                        this.telegramBot.sendMessage(chatId, "Your statement is ready!");
+                        this.telegramBot.sendDocument(chatId, result.filename);
+                    } else {
+                        this.handleError(chatId, result.message);
+                    }
+                });
+    
+                worker.on("error", (error) => {
+                    const errorMessage: string = `Worker error: ${error.message}`;
+                    this.handleError(chatId, errorMessage);
+                });
+    
+                worker.on("exit", (code) => {
+                    if (code !== 0) {
+                        const errorMessage: string = `Statement Worker stopped with exit code ${code}`;
+                        this.handleError(chatId, errorMessage);
+                    }
+                });
+            } else {
+                this.handleError(chatId, "Could not generate your statement. Please try again later.");
+            }
+        }
+
+                 */
+    
 
     /**
      * Handle the /reset command
