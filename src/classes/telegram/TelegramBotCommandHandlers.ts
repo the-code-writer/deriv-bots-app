@@ -6,7 +6,8 @@ import { ISessionService, Session } from "@/classes/telegram/SessionService";
 import { IKeyboardService } from "@/classes/telegram/KeyboardService";
 import { IWorkerService } from "@/classes/telegram/WorkerService";
 import { IUserService } from "../user/UserInterfaces";
-
+import { Encryption } from '@/classes/cryptography/EncryptionClass';
+const cookie = require('cookie-signature');
 // Logger
 const logger = pino({ name: "TelegramBotCommandHandlers" });
 
@@ -325,13 +326,19 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
         if(!user){
 
+            const encid: string = Encryption.encryptAES(chatId.toString(), APP_CRYPTOGRAPHIC_KEY);
+
+            console.log(":::: SIGNED ENCID :::: 333", encid); 
+
+            await this.sessionService.updateSessionEncId(session.sessionID, encid);
+
             this.telegramBot.sendMessage(chatId, `Link your Deriv account to start. Please note, you will be taken to an external Url to authorize this Telegram Bot (Nduta.X) on your Deriv Account.`, {
-                reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(session.session.bot) },
+                reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(encid) },
             });
 
         } else {
 
-            await bot.authorizeOauthData(sessionData);
+            await this.telegramBot.authorizeOauthData(session);
             
         }
 

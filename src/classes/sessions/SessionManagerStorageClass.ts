@@ -30,6 +30,8 @@ export interface ISessionStore {
      */
     set(sessionID: string, key: string | any, value?: any): Promise<void>;
 
+    setSessionRecord(sessionID: string, updates: any): Promise<void>
+
     create(sessionData: Record<string, any>): Promise<void>;
 
     /**
@@ -253,6 +255,22 @@ export class SessionManagerStorageClass implements ISessionStore {
             };
 
             //console.log("::::::::: SESSION_DATA ::::::::: 0000.1111 :::::::::", updates);
+
+            await this.db.updateItem(this.collectionName, [{ field: 'sessionID', operator: 'eq', value: sessionID }], updates, true);
+
+        }
+
+    }
+
+    /**
+     * Stores or updates session data in MongoDB.
+     * @param sessionID - Unique identifier for the session.
+     * @param data - Session data to be stored.
+     * @returns Promise resolving when the operation is complete.
+     */
+    async setSessionRecord(sessionID: string, updates: any): Promise<void> {
+
+        if (sessionID && updates) {
 
             await this.db.updateItem(this.collectionName, [{ field: 'sessionID', operator: 'eq', value: sessionID }], updates, true);
 

@@ -1,7 +1,7 @@
 import express, { Request, Response, Router } from 'express';
 import { env } from '@/common/utils/envConfig';
-import {  ISessionService } from '@/classes/sessions/SessionService';
-import { getDerivAccountFromURLParams, getEncryptedUserAgent } from '../../common/utils/snippets';
+import { ISessionService } from '@/classes/sessions/SessionService';
+import { getDerivAccountFromURLParams, getEncryptedUserAgent, serializeCookieOptions } from '../../common/utils/snippets';
 
 const { DERIV_APP_OAUTH_URL, DEVICE_AGENT } = env;
 
@@ -117,34 +117,58 @@ export class OAuthRouter {
 
             const { encid } = req.query; // Extract query parameters
 
-            console.log("### ROUTER ### encid ###", encid);
+            let sessionData = null;
+            let sessionID = null;
 
-            console.log("### ROUTER ### req.session ###", req.session);
+            console.log("### 1. ROUTER ### encid ###", encid);
 
-            if (!req.session) {
-                
-                req.session = {
-                    id: '',
-                    cookie: req.session?.cookie || {},
-                    regenerate: req.session?.regenerate || (() => Promise.resolve()),
-                    destroy: req.session?.destroy || (() => Promise.resolve()),
-                    reload: req.session?.reload || (() => Promise.resolve()),
-                    save: req.session?.save || (() => Promise.resolve()),
-                    touch: req.session?.touch || (() => {}),
-                };
+            console.log("### 2. ROUTER ### sessionData ###", sessionData);
+
+            if (encid) {
+
+                sessionData = await this.sessionService.getUserSessionByEncID(String(encid))
+
+                if (!sessionData) {
+
+                    return res.status(400).send('Session data is missing');
+
+                } else {
+
+                    sessionID = sessionData.sessionID;
+
+                    console.log("### 3. ROUTER ### sessionID, sessionData ###", sessionID, sessionData);
+
+                    const { encuaKey, encuaData } = getEncryptedUserAgent(req.get('User-Agent'));
+
+                    console.log("### 4. ROUTER ### encuaKey, encuaData ###", encuaKey, encuaData);
+
+                    sessionData.session.encua = encuaKey;
+                    sessionData.session.encuaData = encuaData;
+
+                    await this.sessionService.setSession(sessionData.sessionID, sessionData);
+
+                    req.session = sessionData;
+                    req.session.sessionID = sessionID;
+
+                    res.locals.sessionData = sessionData;
+
+                    const cookieName = "encid";
+
+                    res.cookie(cookieName, encid, sessionData.cookie);
+
+                    console.log("### 5. ROUTER ### cookieString ###", cookieName, encid, sessionData.cookie);
+
+                    console.log("### 6. ROUTER ### req.session ###", req.session);
+
+                }
 
             }
-
-            // @ts-ignore
-            req.session.encid = encid.replace(" ", "+");
-
-            await this.sessionService.updateSession(req, res, "encid", encid);
 
             const data: TemplateData = {
                 title: 'Deriv Login',
                 nonce: res.locals.nonce, // Nonce for CSP
                 derivLoginURL: DERIV_APP_OAUTH_URL, // Deriv OAuth URL from environment
-                params: { session: req.session }, // Pass session data to the template
+                params: { session: sessionData }, // Pass session data to the template
             };
 
             // Render the deriv-oauth-template EJS template with the data
@@ -172,7 +196,7 @@ export class OAuthRouter {
             console.error('req.session:', req.session);
 
             if (!sessionData) {
-                
+
                 const { encuaKey } = getEncryptedUserAgent(req, DEVICE_AGENT);
 
                 const sessionDataByUA = await this.sessionService.getUserSessionByEncUA(encuaKey);
@@ -226,5 +250,5 @@ export class OAuthRouter {
         });
 
     }
-    
+
 }

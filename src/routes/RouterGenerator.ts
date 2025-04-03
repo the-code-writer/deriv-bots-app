@@ -45,18 +45,32 @@ export class RouterGenerator {
                     });
                 });
             } else if (layer.name === 'router' && layer.handle.stack) {
-                // This is a router layer (sub-router)
-                const routerPath = basePath + (layer.regexp.source.replace('\\/?(?=\\/|$)', '') || '');
+                // This is a router layer (sub-router) - Express 5 compatible
+                let routerPath = basePath;
+
+                // Handle Express 5's path representation
+                if (layer.regexp) {
+                    // Clean up the regex to get the mount path
+                    routerPath += layer.regexp.toString()
+                        .replace('/^', '')
+                        .replace('\\/', '/')
+                        .replace('(?=\\/|$)/i', '')
+                        .replace('\\/?(?=\\/|$)', '');
+                }
+
+                // Process nested layers
                 layer.handle.stack.forEach((sublayer: any) => {
                     extractRoutes(sublayer, routerPath);
                 });
             }
         };
 
-        // Iterate through the app's middleware stack
-        this.app._router.stack.forEach((layer: any) => {
-            extractRoutes(layer);
-        });
+        // Express 5 compatible way to access the router stack
+        if (this.app._router?.stack) {
+            this.app._router.stack.forEach((layer: any) => {
+                extractRoutes(layer);
+            });
+        }
 
         return routes;
     }

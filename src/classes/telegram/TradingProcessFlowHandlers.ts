@@ -253,7 +253,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         await this.sessionService.updateSessionWithChatId(chatId, session);
         const parsedAccountNumber: string = String(text.split(" ")[0]).trim();
         const accountDta:any = { selectedAccount: text, accountNumber: parsedAccountNumber, accountList: session.bot.accounts.deriv.accountList };
-        this.workerService.postMessageToDerivWorker("LOGIN_DERIV_ACCOUNT", chatId, text, session, accountDta)
+        this.workerService.postMessageToDerivWorker("LOGIN_DERIV_ACCOUNT", chatId, session.bot.tradingOptions.accountType, session, accountDta)
     }
 
     /**
@@ -267,7 +267,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.tradingType = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_MARKET;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showMarketTypeKeyboard(chatId, session.tradingType);
+        this.keyboardService.showMarketTypeKeyboard(chatId, session.tradingOptions.tradingType);
     }
 
     /**
@@ -281,7 +281,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.market = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_PURCHASE_TYPE;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showPurchaseTypeKeyboard(chatId, session.market);
+        this.keyboardService.showPurchaseTypeKeyboard(chatId, session.tradingOptions.market);
     }
 
     /**
@@ -401,7 +401,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.updateFrequency = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_TICKS_OR_MINUTES;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showContractDurationUnitsKeyboard(chatId, session.updateFrequency);
+        this.keyboardService.showContractDurationUnitsKeyboard(chatId, session.tradingOptions.updateFrequency);
     }
 
     /**
@@ -415,7 +415,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.contractDurationUnits = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_TICKS_OR_MINUTES_DURATION;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showContractDurationValueKeyboard(chatId, session.contractDurationUnits);
+        this.keyboardService.showContractDurationValueKeyboard(chatId, session.tradingOptions.contractDurationUnits);
     }
 
     /**
@@ -429,7 +429,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.contractDurationValue = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_AUTO_OR_MANUAL;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showAutoManualTradingKeyboard(chatId, session.contractDurationValue);
+        this.keyboardService.showAutoManualTradingKeyboard(chatId, session.tradingOptions.contractDurationValue);
     }
 
     /**
@@ -443,7 +443,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.tradingMode = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.CONFIRM_TRADE;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showTradeConfirmationKeyboard(chatId, session.tradingMode);
+        this.keyboardService.showTradeConfirmationKeyboard(chatId, session.tradingOptions.tradingMode);
     }
 
     /**

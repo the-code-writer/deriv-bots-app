@@ -52,6 +52,13 @@ export interface ISessionService {
     getUserSessionBySessionId(sessionId: string): Promise<ISession | undefined>;
 
     /**
+     * Retrieves a user session by encrypted telegram id.
+     * @param encua - The encrypted user agent string to search for.
+     * @returns A promise that resolves with the session data or null if not found.
+     */
+    getUserSessionByEncID(encid: string): Promise<ISession | undefined>;
+
+    /**
      * Retrieves a user session by encrypted user agent.
      * @param encua - The encrypted user agent string to search for.
      * @returns A promise that resolves with the session data or null if not found.
@@ -146,13 +153,15 @@ export class SessionService implements ISessionService {
     }
 
 
-    persistSession(req: any, res: any) {
+    persistSession(req: any, res: any, sessionID: string) {
 
         if (!req.session) return;
 
-        console.log("::: persistSession ::: req.session :::", req.session)
+        req.session.id = sessionID;
 
-        const sessionID: string = req.session.sessionID;
+        req.session.sessionID = sessionID;
+
+        console.log("::: persistSession ::: req.session :::", req.session)
 
         // Update expiration
         req.session.expires = this.maxAge;
@@ -172,6 +181,7 @@ export class SessionService implements ISessionService {
         // or
 
         res.setHeader('Set-Cookie', `${this.cookieName}=${signedSessionId}; HttpOnly; Max-Age=${this.maxAge}; Path=/`);
+        
     }
 
     /**
@@ -190,59 +200,71 @@ export class SessionService implements ISessionService {
      * @returns A promise that resolves when the middleware completes.
      */
     async middleware(req: any, res: any, next: () => void): Promise<void> {
+
         try {
-            // 1. Check for existing session cookie
-            let sessionID: string = this.getSessionIdFromRequest(req); // req.cookies[this.cookieName];
-            let sessionData = null;
 
-            console.log("Session check - Initial session ID:", sessionID);
+            const { encid } = req.query; // Extract query parameters
 
-            if (!sessionID) {
-                // No existing session cookie found
-                const { encid } = req.query;
+            if (!encid) {
+                // 1. Check for existing session cookie
+                let sessionID: string = req.sessionID;  //this.getSessionIdFromRequest(req); // req.cookies[this.cookieName];
+                let sessionData = req.session;
 
-                console.log("No session cookie found. Checking for encid parameter:", encid);
+                console.log("Session check - Initial session ID:", [sessionID, sessionData], [req.session, req.sessionID, req.query, req.protocol, req.originalUrl]);
 
-                if (encid) {
-                    // Handle case where we have an encrypted chat ID
-                    sessionData = await this.handleEncidSession(req, res, encid);
+                if (!sessionID || !sessionData) {
+
+                    console.log("!!!! This request has no session" );
+                    console.log("################## req.cookies.encid", req.headers.cookie)
+                    if (!sessionData && req.cookies.has("encid")) {
+
+                        
+                        
+                    }
+
                 } else {
-                    // No encid parameter - create brand new session
-                    sessionData = await this.handleNewSession(req, res);
+                    
+                    // Existing session found - retrieve session data
+                    sessionData = await this.handleSessionIdSession(req, res, sessionID);
+                    console.log("Existing session found:", { sessionID, sessionData });
+
+
                 }
+                
+                if(true){
 
-            } else {
-                // Existing session found - retrieve session data
-                sessionData = await this.handleSessionIdSession(req, res, sessionID);
-                console.log("Existing session found:", { sessionID, sessionData });
+                    req.session = sessionData;
+
+                    // 2. Validate session expiration
+                    await this.validateSessionExpiration(req, res, sessionID, sessionData);
+
+                    // 3. Attach session data to request object
+                    this.attachSessionToRequest(req, sessionID, sessionData);
+
+                    // 4. Set up response finish handler to log final session state
+                    this.setupResponseFinishHandler(req, res);
+
+                    // 5. Handle the nonce
+                    this.setupNonce(res);
+
+                    // 6. Persist session
+
+                    // Save session before sending response
+                    const originalSend = res.send;
+                    res.send = (body: any) => {
+                        this.persistSession(req, res, sessionID);
+                        return originalSend.call(res, body);
+                    };
+
+                    console.log("Middleware completed - Final session state:", { sessionID, sessionData });
+
+                    console.log("Middleware completed - Final req state:", { sessionID: req.sessionID, sessionData: req.sessionData });
+
+                    console.log("Middleware completed - Final locals state:", { locals: req.locals });
+
+                }
+                
             }
-
-            // 2. Validate session expiration
-            await this.validateSessionExpiration(req, res, sessionID, sessionData);
-
-            // 3. Attach session data to request object
-            this.attachSessionToRequest(req, sessionID, sessionData);
-
-            // 4. Set up response finish handler to log final session state
-            this.setupResponseFinishHandler(req, res);
-
-            // 5. Handle the nonce
-            this.setupNonce(res);
-
-            // 6. Persist session
-
-            // Save session before sending response
-            const originalSend = res.send;
-            res.send = (body: any) => {
-                this.persistSession(req, res);
-                return originalSend.call(res, body);
-            };
-
-            console.log("Middleware completed - Final session state:", { sessionID, sessionData });
-
-            console.log("Middleware completed - Final req state:", { sessionID: req.sessionID, sessionData: req.sessionData });
-
-            console.log("Middleware completed - Final locals state:", { locals: req.locals });
 
             next();
 
@@ -287,6 +309,7 @@ export class SessionService implements ISessionService {
         }
 
         return sessionData;
+
     }
 
     /**
@@ -401,6 +424,7 @@ export class SessionService implements ISessionService {
         sessionData: any
     ): void {
         req.session = sessionData;
+        req.session.id = sessionID
         req.sessionID = sessionID;
         req.cookieName = this.cookieName;
 
@@ -462,13 +486,12 @@ export class SessionService implements ISessionService {
             secure: NODE_ENV === "production",
             httpOnly: true,
             sameSite: "strict",
-            originalMaxAge: this.maxAge,
             maxAge: this.maxAge,
-            expires: this.maxAge,
+            expires: new Date(this.maxAge),
             path: "/",
             domain: APP_DOMAIN,
             priority: "high",
-            partitioned: true,
+            partitioned: undefined,
         };
 
         return cookie;
@@ -483,8 +506,6 @@ export class SessionService implements ISessionService {
      * @returns The session object.
      */
     getSessionObject(chatId: number, sessionID?: string, telegramUser: any = {}): any {
-
-        const { encuaKey, encuaData } = getEncryptedUserAgent(null, DEVICE_AGENT);
 
         const session: any = {
             sessionID: sessionID,
@@ -505,8 +526,8 @@ export class SessionService implements ISessionService {
 
             },
             encid: "",
-            encua: encuaKey,
-            encuaData: encuaData
+            encua: "",
+            encuaData: {}
         };
 
         if (telegramUser) {
@@ -685,6 +706,18 @@ export class SessionService implements ISessionService {
     }
 
     /**
+    * Update the session data.
+    * @param sessionID - 
+    * @param maxAge - 
+    * @returns A promise that resolves when the session is created.
+    */
+    async updateSessionEncId(sessionID: string, encid: number | string): Promise<void> {
+
+        await this.sessionStore.set(sessionID, "session.encid", encid);
+
+    }
+
+    /**
      * Updates a session with new key-value data.
      * @param req - The HTTP request object.
      * @param _ - Unused parameter (placeholder).
@@ -812,6 +845,17 @@ export class SessionService implements ISessionService {
 
     /**
      * Retrieves a user session by encrypted user agent.
+     * @param encid - The encrypted user agent string to search for.
+     * @returns A promise that resolves with the session data or null if not found.
+     */
+    async getUserSessionByEncID(encua: string): Promise<ISession | undefined> {
+        return await this.sessionStore.getWithParams([
+            { field: "session.encid", operator: "eq", value: encua }
+        ]);
+    }
+
+    /**
+     * Retrieves a user session by encrypted user agent.
      * @param encua - The encrypted user agent string to search for.
      * @returns A promise that resolves with the session data or null if not found.
      */
@@ -830,6 +874,16 @@ export class SessionService implements ISessionService {
         return await this.sessionStore.getWithParams([
             { field: "session.sessionID", operator: "eq", value: sessionID }
         ]);
+    }
+
+    /**
+     * Retrieves session data by session ID.
+     * @param sessionID - The session ID to retrieve.
+     * @returns A promise that resolves with the session data or null if not found.
+     */
+    async setSession(sessionID: string, sessionData: any): Promise<ISession | undefined> {
+        await this.sessionStore.setSessionRecord(sessionID, sessionData);
+        return await this.getSession(sessionID);
     }
 
     /**

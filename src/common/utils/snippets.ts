@@ -305,34 +305,52 @@ export const chunkIntoN: any = (array: any, numberOfChunks: number): any => {
   return chunks;
 }
 
-export const getEncryptedUserAgent = (req: any, defaultAgent: string) => {
+export const getEncryptedUserAgent = (ua: string | undefined) => {
 
-  const defaultUserAgent: string = req && "headers" in req ? req.headers['user-agent'] : defaultAgent;
+  let userAgent, userAgentString, encuaKey, encuaData = null;
 
-  // get user-agent header
-  // @ts-ignore
-  const userAgent = uap(defaultUserAgent);
+  if (ua) {
 
-  /*
-  // Since v2.0.0
-  // you can also pass Client Hints data to UAParser
-  // note: only works in a secure context (localhost or https://)
-  // from any browsers that are based on Chrome 85+
-  // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Sec-CH-UA
- 
-      const getHighEntropyValues = 'Sec-CH-UA-Full-Version-List, Sec-CH-UA-Mobile, Sec-CH-UA-Model, Sec-CH-UA-Platform, Sec-CH-UA-Platform-Version, Sec-CH-UA-Arch, Sec-CH-UA-Bitness';
-      res.setHeader('Accept-CH', getHighEntropyValues);
-      res.setHeader('Critical-CH', getHighEntropyValues);
-      
-      ua = uap(req.headers).withClientHints();
-  */
+    // get user-agent header
+    // @ts-ignore
+    userAgent = uap(ua);
 
-  const userAgentString: any = JSON.stringify(userAgent);
+    /*
+    // Since v2.0.0
+    // you can also pass Client Hints data to UAParser
+    // note: only works in a secure context (localhost or https://)
+    // from any browsers that are based on Chrome 85+
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Sec-CH-UA
+   
+        const getHighEntropyValues = 'Sec-CH-UA-Full-Version-List, Sec-CH-UA-Mobile, Sec-CH-UA-Model, Sec-CH-UA-Platform, Sec-CH-UA-Platform-Version, Sec-CH-UA-Arch, Sec-CH-UA-Bitness';
+        res.setHeader('Accept-CH', getHighEntropyValues);
+        res.setHeader('Critical-CH', getHighEntropyValues);
+        
+        ua = uap(req.headers).withClientHints();
+    */
 
-  const encuaKey:string = Encryption.md5(userAgentString);
+    userAgentString = JSON.stringify(userAgent);
 
-  const encuaData: any = userAgent;  //Encryption.encryptAES(userAgentString, APP_CRYPTOGRAPHIC_KEY);
+    encuaKey = Encryption.md5(userAgentString);
 
-  return { userAgent, userAgentString, encuaKey, encuaData};
+    encuaData = userAgent;  //Encryption.encryptAES(userAgentString, APP_CRYPTOGRAPHIC_KEY);
+    
+  }
 
+  return { ua: ua, userAgent, userAgentString, encuaKey, encuaData};
+
+}
+
+// Helper function to serialize cookie options
+export const serializeCookieOptions = (cookieName: string, cookieValue: string, options:any) => {
+  const cookieOptions:string = Object.entries(options)
+    .map(([key, value]:any) => {
+      if (value === true) return `${key}`; // Flags like "HttpOnly"
+      if (value === false) return '';      // Skip false flags
+      if (key === 'Expires') return `Expires=${new Date(value).toUTCString()}`;
+      return `${key}=${value}`;
+    })
+    .filter(Boolean) // Remove empty strings
+    .join('; ');
+  return `${cookieName}=${cookieValue}; ${cookieOptions}`;
 }

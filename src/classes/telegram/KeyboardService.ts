@@ -180,22 +180,14 @@ export class KeyboardService implements IKeyboardService {
         logger.info("Keyboard Service started!");
     }
 
-    getLoginKeyboard(session: any): KeyboardButton[][] | string[][] | any {
-
-        const chatId: number = session.chatId;
-
-        logger.warn(chatId, session);
-
-        const encid: string = Encryption.encryptAES(chatId.toString(), APP_CRYPTOGRAPHIC_KEY);
+    getLoginKeyboard(encid: string): KeyboardButton[][] | string[][] | any {
 
         const oauthURL: string = `${DERIV_APP_LOGIN_URL}?encid=${encodeURIComponent(encid)}`;
 
         logger.warn(`OAUTH_URL :: ${oauthURL}`);
 
-        logger.warn(session);
-
         return [
-            [{ text: '🔒 LOGIN VIA DOMAIN', url: oauthURL }],
+            [{ text: '🔒 LOGIN VIA DERIV.COM', url: oauthURL }],
             // [{ text: '🚫 CANCEL', callback_data: 'exec_cancel' }],
         ];
 
@@ -220,6 +212,9 @@ export class KeyboardService implements IKeyboardService {
     }
 
     getMarketTypeKeyboard(tradingType: string): KeyboardButton[][] | string[][] {
+
+        console.log("&&&&&&&&&&&&&&&&&&&& TRADING TYPE", [tradingType])
+
         // @ts-ignore
         return CONSTANTS.MARKETS[tradingType.replace(/[^a-zA-Z]/g, "").toUpperCase()];
     }
@@ -283,6 +278,8 @@ export class KeyboardService implements IKeyboardService {
     }
 
     getContractDurationValueKeyboard(units: string): KeyboardButton[][] | string[][] {
+
+        console.log("&&&&&&&&&&&&&&&&&&&& SELECTED UNITS", [units])
 
         let contractDurationValue: KeyboardButton[][] | string[][] = [[""]];
 

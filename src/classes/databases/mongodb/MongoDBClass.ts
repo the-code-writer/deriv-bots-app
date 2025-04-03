@@ -226,11 +226,15 @@ export class MongoDBConnection implements DatabaseConnection {
      */
     async insertItem(collectionName: string, item: any): Promise<InsertOneResult<Document> | undefined> {
 
+        if (item) {
+            
         const collection: Collection<Document> | undefined = this.db?.collection(collectionName);
         item.createdAt = new Date();
         item.updatedAt = new Date();
         item.isActive = true;
         return await collection?.insertOne(item);
+
+        }
 
     }
 
