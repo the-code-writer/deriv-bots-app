@@ -2,7 +2,7 @@ import express, { Request, Response, Router } from 'express';
 import { env } from '@/common/utils/envConfig';
 import { ISessionService } from '@/classes/sessions/SessionService';
 import { getDerivAccountFromURLParams, getEncryptedUserAgent, serializeCookieOptions } from '../../common/utils/snippets';
-
+const cookieParser = require('cookie-parser');
 const { DERIV_APP_OAUTH_URL, DEVICE_AGENT } = env;
 
 /**
@@ -42,6 +42,7 @@ export class OAuthRouter {
     constructor(sessionService: ISessionService) {
         this.sessionService = sessionService;
         this.router = express.Router(); // Create a new Express router
+        this.router.use(cookieParser());
     }
 
     /**
@@ -60,35 +61,6 @@ export class OAuthRouter {
      * Defines all routes for the OAuth router.
      */
     private defineRoutes(): void {
-
-        this.router.get('/set-session', async (req, res) => {
-
-            await this.sessionService.updateSession(req, res, "flight", {
-                ticket: 600.25
-            });
-
-            await this.sessionService.updateSession(req, res, "color", "yellow");
-
-            await this.sessionService.updateSession(req, res, "wheels", {
-                front: "17''", left: 5436, back: { a: "1", b: "2", c: "3" }, right: true,
-            });
-
-            console.log(":: URL :: /set-session ::", req.session)
-
-            res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
-
-        });
-
-        this.router.get('/get-session', (req, res) => {
-            console.log(":: URL :: /get-session ::", req.session)
-            res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
-        });
-
-        this.router.get('/del-session', async (req, res) => {
-            await this.sessionService.destroySession(req, res);
-            console.log(":: URL :: /del-session ::", req.session)
-            res.send(`SESSION DATA : ${JSON.stringify(req.session)}`);
-        });
 
         /**
          * Route: GET /
@@ -147,18 +119,7 @@ export class OAuthRouter {
 
                     await this.sessionService.setSession(sessionData.sessionID, sessionData);
 
-                    req.session = sessionData;
-                    req.session.sessionID = sessionID;
-
-                    res.locals.sessionData = sessionData;
-
-                    const cookieName = "encid";
-
-                    res.cookie(cookieName, encid, sessionData.cookie);
-
-                    console.log("### 5. ROUTER ### cookieString ###", cookieName, encid, sessionData.cookie);
-
-                    console.log("### 6. ROUTER ### req.session ###", req.session);
+                    this.sessionService.attachSessionToRequest(req, res, sessionID, sessionData);
 
                 }
 
@@ -185,41 +146,14 @@ export class OAuthRouter {
 
             const queryParams = req.query; // Extract all query parameters
 
-            // @ts-ignore
-            let sessionID: string = null;
+            const { sessionID, sessionData } = await this.sessionService.getSessionFromCookie(req);
 
-            // @ts-ignore
-            let sessionData = req.session;
+            console.log("XXXXXXXXXXXXXXXXX", { sessionID, sessionData })
 
-            console.error('sessionData:', sessionData);
-            console.error('req.sessionID:', req.sessionID);
-            console.error('req.session:', req.session);
+            if (!sessionID && !sessionData ) {
 
-            if (!sessionData) {
-
-                const { encuaKey } = getEncryptedUserAgent(req, DEVICE_AGENT);
-
-                const sessionDataByUA = await this.sessionService.getUserSessionByEncUA(encuaKey);
-
-                // @ts-ignore
-                if (sessionDataByUA) {
-
-                    sessionData = sessionDataByUA;
-
-                    // @ts-ignore
-                    sessionID = sessionData.sessionID;
-
-                } else {
-
-                    console.error('Missing session data:', sessionData);
-                    return res.status(400).send('Session data is missing');
-
-                }
-
-            } else {
-
-                // @ts-ignore
-                sessionID = sessionData.sessionID;
+                console.error('Missing session data:', sessionData);
+                return res.status(400).send('Session data is missing');
 
             }
 

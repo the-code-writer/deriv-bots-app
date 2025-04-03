@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique session IDs
 import { ISessionStore, ISession, IBotAccounts, ITelegramAccount } from '@/classes/sessions/SessionManagerStorageClass';
 import { Encryption } from '@/classes/cryptography/EncryptionClass';
-import { calculateExpiry, getEncryptedUserAgent } from '@/common/utils/snippets';
+import { calculateExpiry, getCookieValue, getEncryptedUserAgent } from '@/common/utils/snippets';
 import { env } from '@/common/utils/envConfig';
 import { pino } from "pino";
 const cookie = require('cookie-signature');
@@ -143,13 +143,44 @@ export class SessionService implements ISessionService {
     }
 
 
-    getSessionIdFromRequest(req: any) {
-        const rawCookie = req.headers.cookie
-            ?.split(';')
-            .find((c: any) => c.trim().startsWith(`${this.cookieName}=`));
-        if (!rawCookie) return null;
-        const signedValue = rawCookie.split('=')[1];
-        return cookie.unsign(signedValue, APP_CRYPTOGRAPHIC_KEY);
+    async getSessionFromCookie(req: any): Promise<any> {
+
+        let sessionID, sessionData = null;
+        
+        console.log("################## req.headers.cookie", req.headers.cookie);
+
+        if (req.headers.cookie) {
+
+            let encid = getCookieValue(req.headers.cookie, "encid");
+
+            encid = decodeURIComponent(String(encid));
+
+            console.log("################## encid", encid);
+
+            if (encid) {
+
+                sessionData = await this.getUserSessionByEncID(encid);
+                if (sessionData) {
+                    sessionID = sessionData.sessionID;
+                }
+                console.log("Existing session found by <encid>:", { encid, sessionID, sessionData });
+
+            }
+
+        } else {
+
+            // Existing session found - retrieve session data
+            sessionData = await this.getUserSessionBySessionId(sessionID);
+            if (sessionData) {
+                sessionID = sessionData.sessionID;
+            }
+            console.log("Existing session found:", { sessionID, sessionData });
+
+
+        }
+
+        return { sessionID, sessionData };
+
     }
 
 
@@ -157,31 +188,12 @@ export class SessionService implements ISessionService {
 
         if (!req.session) return;
 
-        req.session.id = sessionID;
-
-        req.session.sessionID = sessionID;
-
-        console.log("::: persistSession ::: req.session :::", req.session)
-
         // Update expiration
         req.session.expires = this.maxAge;
-
-        this.updateSessionMaxAge(sessionID, this.maxAge);
-
-        console.log("::: persistSession :::", [sessionID, APP_CRYPTOGRAPHIC_KEY])
-
-        // Set cookie
-        const signedSessionId = cookie.sign(sessionID, APP_CRYPTOGRAPHIC_KEY);
-
-        // TODO - render this from the getCookieObject
 
         // Set the new session cookie
         res.cookie(this.cookieName, sessionID, this.getCookieObject());
 
-        // or
-
-        res.setHeader('Set-Cookie', `${this.cookieName}=${signedSessionId}; HttpOnly; Max-Age=${this.maxAge}; Path=/`);
-        
     }
 
     /**
@@ -203,43 +215,19 @@ export class SessionService implements ISessionService {
 
         try {
 
-            const { encid } = req.query; // Extract query parameters
+            let { encid } = req.query;
 
             if (!encid) {
-                // 1. Check for existing session cookie
-                let sessionID: string = req.sessionID;  //this.getSessionIdFromRequest(req); // req.cookies[this.cookieName];
-                let sessionData = req.session;
 
-                console.log("Session check - Initial session ID:", [sessionID, sessionData], [req.session, req.sessionID, req.query, req.protocol, req.originalUrl]);
+                const { sessionID, sessionData } = await this.getSessionFromCookie(req);
 
-                if (!sessionID || !sessionData) {
-
-                    console.log("!!!! This request has no session" );
-                    console.log("################## req.cookies.encid", req.headers.cookie)
-                    if (!sessionData && req.cookies.has("encid")) {
-
-                        
-                        
-                    }
-
-                } else {
-                    
-                    // Existing session found - retrieve session data
-                    sessionData = await this.handleSessionIdSession(req, res, sessionID);
-                    console.log("Existing session found:", { sessionID, sessionData });
-
-
-                }
-                
-                if(true){
-
-                    req.session = sessionData;
+                if (sessionID && sessionData) {
 
                     // 2. Validate session expiration
                     await this.validateSessionExpiration(req, res, sessionID, sessionData);
 
                     // 3. Attach session data to request object
-                    this.attachSessionToRequest(req, sessionID, sessionData);
+                    this.attachSessionToRequest(req, res, sessionID, sessionData);
 
                     // 4. Set up response finish handler to log final session state
                     this.setupResponseFinishHandler(req, res);
@@ -256,76 +244,30 @@ export class SessionService implements ISessionService {
                         return originalSend.call(res, body);
                     };
 
-                    console.log("Middleware completed - Final session state:", { sessionID, sessionData });
-
-                    console.log("Middleware completed - Final req state:", { sessionID: req.sessionID, sessionData: req.sessionData });
-
                     console.log("Middleware completed - Final locals state:", { locals: req.locals });
 
+                    console.log("Middleware completed - Final req state:", { sessionID: req.sessionID, sessionData: req.session });
+
+                    console.log("Middleware completed - Final session state:", { sessionID, sessionData });
+
+                } else {
+
+                    console.log("Middleware completed - Session not found:", { sessionID, sessionData });
+
                 }
-                
+
             }
+
+        } catch (error) {
+
+            console.error("Session middleware error:", error);
+            res.status(500).send("Internal Server Error");
+
+        } finally {
 
             next();
 
-        } catch (error) {
-            console.error("Session middleware error:", error);
-            res.status(500).send("Internal Server Error");
         }
-    }
-
-    /**
-     * Handles session creation/retrieval when encid parameter is present.
-     * @param req - The HTTP request object.
-     * @param res - The HTTP response object.
-     * @param encid - Encrypted chat ID from URL.
-     * @returns A promise that resolves with the session data.
-     */
-    private async handleEncidSession(req: any, res: any, encid: string): Promise<any> {
-        // Decrypt the chat ID from the encid parameter
-        const chatId = parseInt(
-            Encryption.decryptAES(
-                String(encid).replace(/ /g, '+'),
-                APP_CRYPTOGRAPHIC_KEY
-            )
-        );
-
-        console.log("Decrypted chatId from encid, chatId:", encid, chatId);
-
-        // Try to get existing session for this chat
-        let sessionData: any = await this.getUserSessionByChatId(chatId);
-        console.log("Session data from encid, chatId:", sessionData);
-
-        // If no session exists for this chat, create a new one
-        if (!sessionData) {
-            sessionData = await this.handleNewSession(req, res, chatId);
-        }
-
-        // Store encid in session and response locals
-        if (sessionData) {
-            sessionData.encid = encid;
-            res.locals.encid = encid;
-            await this.updateSession(req, res, "session.encid", encid);
-        }
-
-        return sessionData;
-
-    }
-
-    /**
-     * Handles session retrieval when session ID is present.
-     * @param req - The HTTP request object.
-     * @param res - The HTTP response object.
-     * @param sessionID - The session ID to retrieve.
-     * @returns A promise that resolves with the session data.
-     */
-    private async handleSessionIdSession(req: any, res: any, sessionID: string): Promise<any> {
-
-        // Try to get existing session for this sessionID
-        let sessionData = await this.getUserSessionBySessionId(sessionID);
-        console.log("Session data from sessionID:", sessionData);
-
-        return sessionData;
     }
 
     /**
@@ -350,25 +292,6 @@ export class SessionService implements ISessionService {
         );
 
         return nonce;
-
-    }
-
-    /**
-     * Handles creation of a brand new session.
-     * @param req - The HTTP request object.
-     * @param res - The HTTP response object.
-     * @returns A promise that resolves with the new session data.
-     */
-    private async handleNewSession(req: any, res: any, chatId: number = 0): Promise<any> {
-        const sessionID = uuidv4();
-        console.log("Creating brand new session with ID:", sessionID);
-
-        // Initialize empty session
-        const sessionData = await this.initializeSessionObject(sessionID, chatId);
-
-        req.session = sessionData;
-
-        return sessionData;
 
     }
 
@@ -404,7 +327,6 @@ export class SessionService implements ISessionService {
             res.clearCookie(this.cookieName);
 
             // Clean up request object
-            delete req.encid;
             delete req.session;
             delete req.sessionID;
 
@@ -418,13 +340,13 @@ export class SessionService implements ISessionService {
     * @param sessionID - Current session ID.
     * @param sessionData - Current session data.
     */
-    private attachSessionToRequest(
+    attachSessionToRequest(
         req: any,
+        res: any,
         sessionID: string,
         sessionData: any
     ): void {
         req.session = sessionData;
-        req.session.id = sessionID
         req.sessionID = sessionID;
         req.cookieName = this.cookieName;
 
@@ -433,6 +355,15 @@ export class SessionService implements ISessionService {
         req.locals.session = sessionData;
         req.locals.sessionID = sessionID;
         req.locals.cookieName = this.cookieName;
+
+        const cookieName = "encid";
+
+        res.cookie(cookieName, sessionData.session.encid, sessionData.cookie);
+
+        console.log("### 5. ROUTER ### cookieString ###", cookieName, sessionData.session.encid, sessionData.cookie);
+
+        console.log("### 6. ROUTER ### req.session ###", req.session);
+
     }
 
     /**
@@ -824,7 +755,7 @@ export class SessionService implements ISessionService {
      * @param sessionID - The session ID to search for.
      * @returns A promise that resolves with the session data or null if not found.
      */
-    async getUserSessionBySessionId(sessionID: string): Promise<ISession | undefined> {
+    async getUserSessionBySessionId(sessionID: string | undefined): Promise<ISession | undefined> {
         return await this.sessionStore.getWithParams([
             { field: "_id", operator: "eq", value: sessionID },
             { field: "sessionID", operator: "eq", value: sessionID },

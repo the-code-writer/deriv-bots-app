@@ -58,8 +58,6 @@ export class AttachRoutes {
 
         const routes = this.routerGenerator.getRegisteredRoutes();
 
-        console.log("ROUTES", routes);
-
     }
 
 }

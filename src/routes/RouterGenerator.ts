@@ -1,5 +1,4 @@
 import { Express, Router } from 'express';
-
 /**
  * RouterGenerator class is responsible for attaching routers to the Express app.
  * It is a clean, reusable function that configures the app directly.

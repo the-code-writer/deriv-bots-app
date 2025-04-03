@@ -354,3 +354,16 @@ export const serializeCookieOptions = (cookieName: string, cookieValue: string, 
     .join('; ');
   return `${cookieName}=${cookieValue}; ${cookieOptions}`;
 }
+
+export const getCookieValue = (cookieHeader:string, name:string) => {
+  if (!cookieHeader) return null;
+
+  const cookies = cookieHeader.split(';');
+  for (const cookie of cookies) {
+    const [cookieName, cookieValue] = cookie.trim().split('=');
+    if (cookieName === name) {
+      return cookieValue;
+    }
+  }
+  return null;
+}
