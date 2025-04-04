@@ -194,9 +194,9 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         errorMessage: string,
         showNextKeyboard: () => void,
         showCurrentKeyboard: () => void
-    ):Promise< void > {
+    ): Promise<void> {
         if (text === "Automatic") {
-            session[field] = this.getAutomaticStake(session.bot.tradingOptions.step, nextStep);
+            session.bot.tradingOptions[field] = this.getAutomaticStake(session.bot.tradingOptions.step, nextStep);
             session.bot.tradingOptions.step = nextStep;
             await this.sessionService.updateSessionWithChatId(chatId, session);
             showNextKeyboard();
@@ -206,20 +206,20 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
             const amount = extractAmount(text);
             const value = parseFloat(`${amount}`);
             if (Number.isNaN(value) || value <= 0) {
-                session[field] = 0;
+                session.bot.tradingOptions[field] = 0;
                 await this.sessionService.updateSessionWithChatId(chatId, session);
                 this.telegramBot.sendMessage(chatId, errorMessage);
                 showCurrentKeyboard();
                 return;
             } else {
-                session[field] = value;
+                session.bot.tradingOptions[field] = value;
                 session.bot.tradingOptions.step = nextStep;
                 await this.sessionService.updateSessionWithChatId(chatId, session);
                 showNextKeyboard();
                 return;
             }
         } else {
-            session[field] = 0;
+            session.bot.tradingOptions[field] = 0;
             await this.sessionService.updateSessionWithChatId(chatId, session);
             this.telegramBot.sendMessage(chatId, errorMessage);
             showCurrentKeyboard();
@@ -252,7 +252,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_TRADING_TYPE;
         await this.sessionService.updateSessionWithChatId(chatId, session);
         const parsedAccountNumber: string = String(text.split(" ")[0]).trim();
-        const accountDta:any = { selectedAccount: text, accountNumber: parsedAccountNumber, accountList: session.bot.accounts.deriv.accountList };
+        const accountDta: any = { selectedAccount: text, accountNumber: parsedAccountNumber, accountList: session.bot.accounts.deriv.accountList };
         this.workerService.postMessageToDerivWorker("LOGIN_DERIV_ACCOUNT", chatId, session.bot.tradingOptions.accountType, session, accountDta)
     }
 
@@ -267,7 +267,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.tradingType = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_MARKET;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showMarketTypeKeyboard(chatId, session.tradingOptions.tradingType);
+        this.keyboardService.showMarketTypeKeyboard(chatId, session.bot.tradingOptions.tradingType);
     }
 
     /**
@@ -281,7 +281,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.market = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_PURCHASE_TYPE;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showPurchaseTypeKeyboard(chatId, session.tradingOptions.market);
+        this.keyboardService.showPurchaseTypeKeyboard(chatId, session.bot.tradingOptions.market);
     }
 
     /**
@@ -345,7 +345,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
             chatId,
             text,
             session,
-            "stake",
+            "takeProfit",
             CONSTANTS.SESSION_STEPS.ENTER_STOP_LOSS,
             "You have entered an invalid amount.",
             () => this.keyboardService.showStopLossInputKeyboard(chatId),
@@ -367,7 +367,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
             chatId,
             text,
             session,
-            "stake",
+            "stopLoss",
             CONSTANTS.SESSION_STEPS.SELECT_TRADE_DURATION,
             "You have entered an invalid amount.",
             () => this.keyboardService.showTradeDurationKeyboard(chatId),
@@ -401,7 +401,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.updateFrequency = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_TICKS_OR_MINUTES;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showContractDurationUnitsKeyboard(chatId, session.tradingOptions.updateFrequency);
+        this.keyboardService.showContractDurationUnitsKeyboard(chatId, session.bot.tradingOptions.updateFrequency);
     }
 
     /**
@@ -415,7 +415,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.contractDurationUnits = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_TICKS_OR_MINUTES_DURATION;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showContractDurationValueKeyboard(chatId, session.tradingOptions.contractDurationUnits);
+        this.keyboardService.showContractDurationValueKeyboard(chatId, session.bot.tradingOptions.contractDurationUnits);
     }
 
     /**
@@ -429,7 +429,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.contractDurationValue = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_AUTO_OR_MANUAL;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showAutoManualTradingKeyboard(chatId, session.tradingOptions.contractDurationValue);
+        this.keyboardService.showAutoManualTradingKeyboard(chatId, session.bot.tradingOptions.contractDurationValue);
     }
 
     /**
@@ -440,10 +440,12 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @public
      */
     public async handleAutoManualTrading(chatId: number, text: string, session: Session): Promise<void> {
+        console.log("::::::: >>>>>>>> handleAutoManualTrading >>>>>>>> ::::::::::", [chatId, text, session])
+        console.log("::::::: >>>>>>>> CONSTANTS.SESSION_STEPS.CONFIRM_TRADE >>>>>>>> ::::::::::", CONSTANTS.SESSION_STEPS.CONFIRM_TRADE)
         session.bot.tradingOptions.tradingMode = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.CONFIRM_TRADE;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showTradeConfirmationKeyboard(chatId, session.tradingOptions.tradingMode);
+        this.keyboardService.showTradeConfirmationKeyboard(chatId, session.bot.tradingOptions.tradingMode);
     }
 
     /**
@@ -454,6 +456,9 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @public
      */
     public async handleTradeConfirmation(chatId: number, text: string, session: Session): Promise<void> {
+        console.log("::::::: >>>>>>>> handleTradeConfirmation >>>>>>>> ::::::::::", [chatId, text, session])
+        console.log("::::::: >>>>>>>> CONSTANTS.COMMANDS.CONFIRM >>>>>>>> ::::::::::", [(text === CONSTANTS.COMMANDS.CONFIRM), CONSTANTS.COMMANDS.CONFIRM, text])
+        console.log("::::::: >>>>>>>> CONSTANTS.SESSION_STEPS.CONFIRM_TRADE >>>>>>>> ::::::::::", CONSTANTS.SESSION_STEPS.CONFIRM_TRADE)
         if (text === CONSTANTS.COMMANDS.CONFIRM) {
             this.workerService.postMessageToDerivWorker(CONSTANTS.SESSION_STEPS.CONFIRM_TRADE, chatId, "", session);
         } else {
@@ -469,6 +474,9 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @public
      */
     public async handleTradeManual(chatId: number, text: string, session: Session): Promise<void> {
+        console.log("::::::: >>>>>>>> handleTradeManual >>>>>>>> ::::::::::", [chatId, text, session])
+        console.log("::::::: >>>>>>>> CONSTANTS.COMMANDS.CONFIRM >>>>>>>> ::::::::::", [(text === CONSTANTS.COMMANDS.CONFIRM), CONSTANTS.COMMANDS.CONFIRM, text])
+        console.log("::::::: >>>>>>>> CONSTANTS.SESSION_STEPS.CONFIRM_TRADE >>>>>>>> ::::::::::", CONSTANTS.SESSION_STEPS.CONFIRM_TRADE)
         if (text === CONSTANTS.COMMANDS.CONFIRM) {
             this.workerService.postMessageToDerivWorker(CONSTANTS.SESSION_STEPS.CONFIRM_TRADE, chatId, "", session);
         } else {

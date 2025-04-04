@@ -146,6 +146,10 @@ export class OAuthRouter {
 
             const queryParams = req.query; // Extract all query parameters
 
+            console.log("XXXXXXXXXXXXXXXXX", { queryParams })
+
+            console.log("XXXXXXXXXXXXXXXXX", { x: req.session })
+
             const { sessionID, sessionData } = await this.sessionService.getSessionFromCookie(req);
 
             console.log("XXXXXXXXXXXXXXXXX", { sessionID, sessionData })

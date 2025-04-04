@@ -149,6 +149,8 @@ export class SessionService implements ISessionService {
         
         console.log("################## req.headers.cookie", req.headers.cookie);
 
+        console.log("################## req.session", req.session);
+
         if (req.headers.cookie) {
 
             let encid = getCookieValue(req.headers.cookie, "encid");
