@@ -12403,7 +12403,7 @@ label.error{
   margin-bottom: 92px;
 }
 
-.error-section .content-box h1:before{
+.error-section .content-box h1.error-404:before{
   position: absolute;
   content: '';
   background-image: url(../../assets/images/icons/icon-89.png);
@@ -12413,6 +12413,59 @@ label.error{
   transform: translateX(-50%);
   top: 23px;
   background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.error-section .content-box h1.error:before{
+  position: absolute;
+  content: '';
+  background-image: url(../../assets/images/picons/error-500.webp);
+  width: 220px;
+  height: 220px;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 23px;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.error-section .content-box h1.error-500:before{
+  position: absolute;
+  content: '';
+  background-image: url(../../assets/images/picons/error-500.webp);
+  width: 220px;
+  height: 220px;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 23px;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.error-section .content-box h1.error-login:before{
+  position: absolute;
+  content: '';
+  background-image: url(../../assets/images/picons/error-login.webp);
+  width: 220px;
+  height: 220px;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 23px;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.error-section .content-box h1.login:before{
+  position: absolute;
+  content: '';
+  background-image: url(../../assets/images/picons/login.webp);
+  width: 220px;
+  height: 220px;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 23px;
+  background-repeat: no-repeat;
+  background-size: contain;
 }
 
 .error-section .content-box h2{

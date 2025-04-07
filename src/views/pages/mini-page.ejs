@@ -1,0 +1,16 @@
+<!-- error-section -->
+<section class="error-section centred">
+    <div class="pattern-layer" style="background-image: url(assets/images/shape/shape-51.png);"></div>
+
+    <div class="content-box">
+        <div class="inner-box">
+            <h3><%= data.response.oops %></h3>
+            <h1 class="<%= data.response.class %>"><%= data.response.status %></h1>
+            <h2><%= data.response.pageTitle %></h2>
+            <p><%= data.response.pageDescription %></p>
+            <a href="<%= data.response.pageButtonURL %>" class="theme-btn btn-three"><span><%= data.response.pageButtonText %></span></a>
+        </div>
+    </div>
+</section>
+<!-- error-section end -->
+

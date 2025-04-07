@@ -195,7 +195,7 @@ export class SessionService implements ISessionService {
         console.log("5. ################## { sessionID, sessionData }", { sessionID, sessionData });
 
 
-        return { sessionID, sessionData };
+        return { encid, sessionID, sessionData };
 
     }
 

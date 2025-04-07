@@ -17,6 +17,7 @@ export interface TemplateData {
     session?: any;
     accounts?: any;
     encid?: any;
+    response?: any;
 }
 
 /**
@@ -132,11 +133,20 @@ export class OAuthRouter {
             }
 
             const data: TemplateData = {
-                title: 'Deriv Login',
-                nonce: res.locals.nonce, // Nonce for CSP
-                encid: String(encid),
-                derivLoginURL: DERIV_APP_OAUTH_URL, // Deriv OAuth URL from environment
-                session: sessionData
+                title: 'Error!',
+                nonce: res.locals.nonce,
+                encid: encid,
+                telegramBotURL: DERIV_APP_TG_URL,
+                session: {},
+                response: {
+                    status: "‎",
+                    oops: "‎",
+                    class: "login",
+                    pageTitle: "Redirecting",
+                    pageDescription: "If the page doesnt refresh in 1 minute navigate manually to deriv.com",
+                    pageButtonText: "Login via Deriv.com",
+                    pageButtonURL: DERIV_APP_OAUTH_URL
+                }
             };
 
             // Render the deriv-oauth-template EJS template with the data
@@ -157,7 +167,16 @@ export class OAuthRouter {
                 nonce: res.locals.nonce,
                 encid: "",
                 derivCallbackURL: DERIV_APP_OAUTH_CALLBACK_URL,
-                session: {}
+                session: {},
+                response: {
+                    status: 500,
+                    oops: "O-ops!",
+                    class: "error-500",
+                    pageTitle: "Page not found!",
+                    pageDescription: "Try refining your search or use the navigation below to return <br />to the main home page.",
+                    pageButtonText: "Back to Home",
+                    pageButtonURL: "index.html"
+                }
             };
 
             // Render the deriv-oauth-template EJS template with the data
@@ -174,7 +193,7 @@ export class OAuthRouter {
 
             const queryParams: any = req.query;
 
-            const { sessionID, sessionData } = await this.sessionService.getSessionFromCookie(req);
+            const { encid, sessionID, sessionData } = await this.sessionService.getSessionFromCookie(req);
 
             if (sessionID && sessionData) {
 
@@ -196,20 +215,47 @@ export class OAuthRouter {
                 // Notify the bot that the user has logged in
                 bot.authorizeOauthData(sessionData);
 
+
                 const data: TemplateData = {
-                    title: 'Authenticated!',
+                    title: 'Error!',
                     nonce: res.locals.nonce,
-                    encid: sessionData.session.encid,
+                    encid: encid,
                     telegramBotURL: DERIV_APP_TG_URL,
-                    session: sessionData
+                    session: {},
+                    response: {
+                        status: "‎",
+                        oops: "‎",
+                        class: "login",
+                        pageTitle: "Redirecting",
+                        pageDescription: "If the page doesnt refresh in 1 minute navigate manually to deriv.com",
+                        pageButtonText: "Login via Deriv.com",
+                        pageButtonURL: DERIV_APP_OAUTH_URL
+                    }
                 };
-    
                 // Render the deriv-oauth-template EJS template with the data
                 res.render('deriv-oauth-callback-1', { data });
-    
+
             } else {
 
-                return res.status(500).send('<h2>Session not initialized or missing id</h2>');
+                const data: TemplateData = {
+                    title: 'Session Error!',
+                    nonce: res.locals.nonce,
+                    encid: encid,
+                    telegramBotURL: DERIV_APP_TG_URL,
+                    session: sessionData,
+                    response: {
+                        status: 500,
+                        oops: "O-ops!",
+                        class: "error",
+                        pageTitle: "Session not found!",
+                        pageDescription: "The session was not found. Try again",
+                        pageButtonText: "Try Again",
+                        pageButtonURL: "https://inboxgroup.ai/test/scripts/oauth.html?encid=" + encid
+                    }
+                };
+
+                // Render the deriv-oauth-template EJS template with the data
+                res.render('deriv-oauth-callback-1', { data });
 
             }
 
