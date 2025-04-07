@@ -1,0 +1,11 @@
+<!-- External script with nonce -->
+<script nonce="<%= data.nonce %>" src="/assets/js/script.js"></script>
+
+<!-- Inline script with nonce -->
+<script nonce="<%= data.nonce %>">
+    localStorage.setItem("encid", "<%= data.encid %>");
+    setTimeout(()=>{
+        //window.location.href = "<%= data.derivLoginURL %>";
+    })
+</script>
+

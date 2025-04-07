@@ -8,36 +8,15 @@ import { ITradingProcessFlow } from "@/classes/telegram/TradingProcessFlowHandle
 import { ITelegramBotCommandHandlers } from "@/classes/telegram/TelegramBotCommandHandlers";
 import { IWorkerService } from "@/classes/telegram/WorkerService";
 import { Encryption } from "@/classes/cryptography/EncryptionClass";
-import { ISessionService } from "@/classes/sessions/SessionService";
-import { text } from "express";
+import { ISession, ISessionService } from "@/classes/sessions/SessionService";
 
 import { pino } from "pino";
-import { IKeyboardService, KeyboardService } from './KeyboardService';
+import { IKeyboardService } from './KeyboardService';
 // Logger
 const logger = pino({ name: "TelegramBotService" });
 
 // Environment variables
 const { APP_CRYPTOGRAPHIC_KEY } = env;
-
-/**
- * Interface representing a user session
- */
-interface Session {
-    chatId: number;
-    username?: any;
-    step: string;
-    currentInput?: string;
-    tradingType?: string;
-    market?: string;
-    purchaseType?: string;
-    stake?: number;
-    takeProfit?: number;
-    stopLoss?: number;
-    tradeDuration?: string;
-    updateFrequency?: string;
-    timestamp?: number;
-    [key: string]: any;
-}
 
 /**
  * Interface for Telegram bot service
@@ -123,7 +102,7 @@ export class TelegramBotService implements ITelegramBotService {
      * @param {any} data - The data associated with the logged-in event
      * @public
      */
-    public async authorizeOauthData(sessionData:any): Promise<void> {
+    public async authorizeOauthData(sessionData:any): Promise<boolean> {
         
         let chatId:number = 0;
 
@@ -141,15 +120,17 @@ export class TelegramBotService implements ITelegramBotService {
 
         }
 
-        logger.info(JSON.stringify(sessionData.session))
+        if(!chatId){
+            return false;
+        }
 
         const updatedSession = await this.sessionService.updateSessionWithChatId(chatId, sessionData.session);
 
-        console.log("*** *** *** *** SESSION*** *** *** ***", chatId, updatedSession);
+        logger.info(JSON.stringify(updatedSession))
 
         this.tradingProcessFlow.handleLoginAccount(chatId, "", updatedSession);
 
-        //TODO : this.workerService.postMessageToDerivWorker("LOGGED_IN", metaData.chatId, "", {}, metaData);
+        return true;
 
     }
 
@@ -175,7 +156,7 @@ export class TelegramBotService implements ITelegramBotService {
         const text = sanitizeHtml(msg.text || "", { allowedTags: [], allowedAttributes: {} });
         const session = await this.sessionService.getUserSessionByChatId(chatId);
         if (!session) {
-            this.telegramBot.sendMessage(chatId, `Hey ***${firstname}!*** Session not found or has expired. Creating a fresh one... 🚀`, { parse_mode: "Markdown" });
+            this.telegramBot.sendMessage(chatId, `Hey ***${firstname}!*** . Your session was not found or has expired. Creating a fresh one... 🚀`, { parse_mode: "Markdown" });
             return;
         }
         // Process session step
@@ -189,9 +170,9 @@ export class TelegramBotService implements ITelegramBotService {
      * @param {Session} session - The current session
      * @private
      */
-    private async processSessionStep(chatId: number, text: string, sessionData: Session): Promise<void> {
+    private async processSessionStep(chatId: number, text: string, sessionData: ISession): Promise<void> {
         const session = sessionData.session;
-        logger.info(["+++++++++++++++++++++++", chatId, text, session.bot.tradingOptions.step])
+        logger.info(["# processSessionStep #", chatId, text, session.bot.tradingOptions.step])
         switch (session.bot.tradingOptions.step) {
             case CONSTANTS.SESSION_STEPS.LOGIN_ACCOUNT:
                 this.tradingProcessFlow.handleLoginAccount(chatId, text, session);

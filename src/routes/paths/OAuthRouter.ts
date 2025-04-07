@@ -3,7 +3,7 @@ import { env } from '@/common/utils/envConfig';
 import { ISessionService } from '@/classes/sessions/SessionService';
 import { getDerivAccountFromURLParams, getEncryptedUserAgent, serializeCookieOptions } from '../../common/utils/snippets';
 const cookieParser = require('cookie-parser');
-const { DERIV_APP_OAUTH_URL, DEVICE_AGENT } = env;
+const { DERIV_APP_OAUTH_LOGIN_URL, DERIV_APP_OAUTH_CALLBACK_URL } = env;
 
 /**
  * Interface for the data object passed to EJS templates.
@@ -12,9 +12,10 @@ export interface TemplateData {
     title?: string;
     nonce: string;
     derivLoginURL?: string;
-    params?: { session: any };
+    derivCallbackURL?: string;
+    session?: any;
     accounts?: any;
-    encid?: string;
+    encid?: any;
 }
 
 /**
@@ -74,12 +75,14 @@ export class OAuthRouter {
             const data: TemplateData = {
                 title: 'Deriv Trading Bot',
                 nonce: res.locals.nonce, // Nonce for CSP
-                derivLoginURL: DERIV_APP_OAUTH_URL, // Deriv OAuth URL from environment
+                derivLoginURL: DERIV_APP_OAUTH_LOGIN_URL, // Deriv OAuth URL from environment
             };
 
             // Render the index EJS template with the data
             res.render('index', { data });
         });
+
+
 
         /**
          * Route: GET /deriv-oauth
@@ -97,6 +100,8 @@ export class OAuthRouter {
             console.log("### 2. ROUTER ### sessionData ###", sessionData);
 
             if (encid) {
+
+                res.set('X-Session-Token', String(encid));
 
                 sessionData = await this.sessionService.getUserSessionByEncID(String(encid))
 
@@ -128,12 +133,34 @@ export class OAuthRouter {
             const data: TemplateData = {
                 title: 'Deriv Login',
                 nonce: res.locals.nonce, // Nonce for CSP
-                derivLoginURL: DERIV_APP_OAUTH_URL, // Deriv OAuth URL from environment
-                params: { session: sessionData }, // Pass session data to the template
+                encid: String(encid),
+                derivLoginURL: DERIV_APP_OAUTH_LOGIN_URL, // Deriv OAuth URL from environment
+                session: sessionData
             };
 
             // Render the deriv-oauth-template EJS template with the data
-            res.render('deriv-oauth-template', { data });
+            res.render('deriv-oauth-login', { data });
+
+        });
+
+
+
+        /**
+         * Route: GET /deriv-oauth
+         * Handles the Deriv OAuth flow and stores session data.
+         */
+        this.router.get('/callback-init', async (req: Request, res: Response) => {
+
+            const data: TemplateData = {
+                title: 'Authenticating...',
+                nonce: res.locals.nonce,
+                encid: "",
+                derivCallbackURL: DERIV_APP_OAUTH_CALLBACK_URL,
+                session: {}
+            };
+
+            // Render the deriv-oauth-template EJS template with the data
+            res.render('deriv-oauth-callback-0', { data });
 
         });
 
@@ -146,44 +173,62 @@ export class OAuthRouter {
 
             const queryParams = req.query; // Extract all query parameters
 
-            console.log("XXXXXXXXXXXXXXXXX", { queryParams })
+            if (queryParams && typeof queryParams !== undefined && ("id" in queryParams)) {
 
-            console.log("XXXXXXXXXXXXXXXXX", { x: req.session })
+                const encid = queryParams.id;
 
-            const { sessionID, sessionData } = await this.sessionService.getSessionFromCookie(req);
+                const sessionData = await this.sessionService.getUserSessionByEncID(String(encid));
 
-            console.log("XXXXXXXXXXXXXXXXX", { sessionID, sessionData })
+                if(!sessionData){
 
-            if (!sessionID && !sessionData ) {
+                    console.error('Missing session data:', sessionData);
+                    return res.status(400).send('Session data is missing');
 
-                console.error('Missing session data:', sessionData);
-                return res.status(400).send('Session data is missing');
+                }
+                
+                const sessionID = sessionData.sessionID;
+
+                if (!sessionID && !sessionData) {
+
+                    console.error('Missing session data:', sessionData);
+                    return res.status(400).send('Session data is missing');
+
+                }
+
+                const organizedData: OrganizedAccountData = getDerivAccountFromURLParams(queryParams);
+
+                // @ts-ignore
+                sessionData.session.bot.accounts.deriv.accountList = organizedData;
+
+                // Get the bot instance from the app
+                const bot = req.app.get('bot');
+
+                // Check if the bot is initialized
+                if (!bot) {
+
+                    return res.status(500).send('<h2>Telegram bot is not initialized</h2>');
+
+                }
+
+                // Notify the bot that the user has logged in
+                bot.authorizeOauthData(sessionData);
+
+                const data: TemplateData = {
+                    title: 'Authenticated!',
+                    nonce: res.locals.nonce,
+                    encid: encid,
+                    derivCallbackURL: DERIV_APP_OAUTH_CALLBACK_URL,
+                    session: sessionData
+                };
+    
+                // Render the deriv-oauth-template EJS template with the data
+                res.render('deriv-oauth-callback-1', { data });
+    
+            } else {
+
+                return res.status(500).send('<h2>Session not initialized or missing id</h2>');
 
             }
-
-            const organizedData: OrganizedAccountData = getDerivAccountFromURLParams(queryParams);
-
-            // @ts-ignore
-            sessionData.session.bot.accounts.deriv.accountList = organizedData;
-
-            // Get the bot instance from the app
-            const bot = req.app.get('bot');
-
-            // Check if the bot is initialized
-            if (!bot) {
-
-                return res.status(500).send('<h2>Telegram bot is not initialized</h2>');
-
-            }
-
-            // Notify the bot that the user has logged in
-            bot.authorizeOauthData(sessionData);
-
-            // Send a success response
-            res.status(200).send('<h2>User logged in successfully</h2>');
-
-            // Render the deriv-oauth-template EJS template with the data
-            //res.render('deriv-oauth-template', { data });
 
         });
 

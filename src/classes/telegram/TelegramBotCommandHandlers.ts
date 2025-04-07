@@ -310,25 +310,21 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
         let session = await this.getUserChatSession(chatId);
 
-        console.log(":::: BOT_SESSION_FROM_DB :::: 000", session);
-
         if(!session){
                 
             session = await this.sessionService.createSession(chatId, msg.from);
 
         }
         
-        console.log(":::: BOT_SESSION_FROM_DB :::: 111", session);
-
         const user = await this.userService.getUserByChat(chatId);
 
-        console.log(":::: USER_ACCOUNT_FROM_DB :::: 222", user); 
+        if(user && session){
 
-        if(!user){
+            await this.telegramBot.authorizeOauthData(session);
+            
+        } else {
 
-            const encid: string = Encryption.encryptAES(chatId.toString(), APP_CRYPTOGRAPHIC_KEY);
-
-            console.log(":::: SIGNED ENCID :::: 333", encid); 
+            const encid: string = Encryption.encryptAES(String(chatId), APP_CRYPTOGRAPHIC_KEY);
 
             await this.sessionService.updateSessionEncId(session.sessionID, encid);
 
@@ -336,10 +332,6 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
                 reply_markup: { inline_keyboard: this.keyboardService.getLoginKeyboard(encid) },
             });
 
-        } else {
-
-            await this.telegramBot.authorizeOauthData(session);
-            
         }
 
         return;

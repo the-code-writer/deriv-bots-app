@@ -160,11 +160,20 @@ export const CONSTANTS: IContants = {
     ["$2,500.00", "Automatic", "$5,000.00"],
   ],
   DURATION: [
-    ["1min ⏱️", "2min ⏱️", "5min ⏱️", "10min ⏱️"],
-    ["15min ⏱️", "30min ⏱️", "1hr ⏱️", "2hrs ⏱️"],
-    ["4hrs ⏱️", "8hrs ⏱️", "12hrs ⏱️", "18hrs ⏱️"],
+    ["1min ⏱️", "2min ⏱️", "5min ⏱️"],
+    ["10min ⏱️", "15min ⏱️", "20min ⏱️"],
+    ["25min ⏱️", "30min ⏱️", "35min ⏱️"],
+    ["40min ⏱️", "45min ⏱️", "50min ⏱️"],
+    ["55min ⏱️", "60min ⏱️"],
+    ["1hr ⏱️", "2hrs ⏱️", "3hrs ⏱️"],
+    ["4hrs ⏱️", "5hrs ⏱️", "6hrs ⏱️"],
+    ["8hrs ⏱️", "10hrs ⏱️", "12hrs ⏱️"],
+    ["16hrs ⏱️", "18hrs ⏱️", "20hrs ⏱️"],
     ["24hrs ⏱️", "48hrs ⏱️", "72hrs ⏱️"],
-    ["1 Tick", "3 Ticks", "5 Ticks", "10 Ticks"],
+    ["1 Tick", "2 Ticks", "3 Ticks"],
+    ["4 Ticks", "5 Ticks", "6 Ticks"],
+    ["7 Ticks", "8 Ticks"],
+    ["9 Ticks", "10 Ticks"]
   ],
   TRADE_DURATION_U: [
     ["Ticks ⏱️", "Minutes ⏱️", "Hours ⏱️"],
@@ -172,8 +181,8 @@ export const CONSTANTS: IContants = {
   TRADE_DURATION_T: [
     ["1 Tick", "2 Ticks", "3 Ticks"],
     ["4 Ticks", "5 Ticks", "6 Ticks"],
-    ["7 Ticks", "8 Ticks", "9 Ticks"],
-    ["10 Ticks"],
+    ["7 Ticks", "8 Ticks"],
+    ["9 Ticks", "10 Ticks"],
   ],
   TRADE_DURATION_M: [
     ["1min ⏱️", "2min ⏱️", "5min ⏱️", "10min ⏱️"],
@@ -183,12 +192,12 @@ export const CONSTANTS: IContants = {
   TRADE_DURATION_H: [
     ["1hr ⏱️", "2hrs ⏱️", "3hrs ⏱️", "4hrs ⏱️"],
     ["5hrs ⏱️", "6hrs ⏱️", "7hrs ⏱️", "8hrs ⏱️"],
-    ["9hrs ⏱️", "10hrs ⏱️", "12hrs ⏱️", "8hrs ⏱️"],
-    ["12hrs ⏱️", "16hrs ⏱️", "20hrs ⏱️", "24hrs ⏱️"],
+    ["9hrs ⏱️", "10hrs ⏱️", "12hrs ⏱️", "14hrs ⏱️"],
+    ["16hrs ⏱️", "18hrs ⏱️", "20hrs ⏱️", "24hrs ⏱️"],
   ],
   TRADE_MANUAL_OR_AUTO: [["📈 Manual Trading", "🎲 Auto Trading"]],
   TRADE_CONFIRM: [["✅ CONFIRM TRADE", "❌ CANCEL TRADE"]],
-  TRADE_MANUAL: [["✅ TRAGE AGAIN", "❌ STOP TRADING"]],
+  TRADE_MANUAL: [["✅ TRADE AGAIN", "❌ STOP TRADING"]],
   COMMANDS: {
     START: "/start",
     CONFIRM: "/confirm", // This command wasn't explicitly listed, but it's included here for completeness

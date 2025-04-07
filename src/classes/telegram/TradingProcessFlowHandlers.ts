@@ -429,7 +429,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         session.bot.tradingOptions.contractDurationValue = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_AUTO_OR_MANUAL;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showAutoManualTradingKeyboard(chatId, session.bot.tradingOptions.contractDurationValue);
+        this.keyboardService.showAutoManualTradingKeyboard(chatId);
     }
 
     /**
@@ -440,12 +440,10 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @public
      */
     public async handleAutoManualTrading(chatId: number, text: string, session: Session): Promise<void> {
-        console.log("::::::: >>>>>>>> handleAutoManualTrading >>>>>>>> ::::::::::", [chatId, text, session])
-        console.log("::::::: >>>>>>>> CONSTANTS.SESSION_STEPS.CONFIRM_TRADE >>>>>>>> ::::::::::", CONSTANTS.SESSION_STEPS.CONFIRM_TRADE)
         session.bot.tradingOptions.tradingMode = text;
         session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.CONFIRM_TRADE;
         await this.sessionService.updateSessionWithChatId(chatId, session);
-        this.keyboardService.showTradeConfirmationKeyboard(chatId, session.bot.tradingOptions.tradingMode);
+        this.keyboardService.showTradeConfirmationKeyboard(chatId);
     }
 
     /**
@@ -456,10 +454,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @public
      */
     public async handleTradeConfirmation(chatId: number, text: string, session: Session): Promise<void> {
-        console.log("::::::: >>>>>>>> handleTradeConfirmation >>>>>>>> ::::::::::", [chatId, text, session])
-        console.log("::::::: >>>>>>>> CONSTANTS.COMMANDS.CONFIRM >>>>>>>> ::::::::::", [(text === CONSTANTS.COMMANDS.CONFIRM), CONSTANTS.COMMANDS.CONFIRM, text])
-        console.log("::::::: >>>>>>>> CONSTANTS.SESSION_STEPS.CONFIRM_TRADE >>>>>>>> ::::::::::", CONSTANTS.SESSION_STEPS.CONFIRM_TRADE)
-        if (text === CONSTANTS.COMMANDS.CONFIRM) {
+        if (text === CONSTANTS.TRADE_CONFIRM[0][0]) {
             this.workerService.postMessageToDerivWorker(CONSTANTS.SESSION_STEPS.CONFIRM_TRADE, chatId, "", session);
         } else {
             this.telegramBot.sendMessage(chatId, `Trade not confirmed. Use ${CONSTANTS.COMMANDS.START} to begin again.`);
@@ -474,10 +469,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @public
      */
     public async handleTradeManual(chatId: number, text: string, session: Session): Promise<void> {
-        console.log("::::::: >>>>>>>> handleTradeManual >>>>>>>> ::::::::::", [chatId, text, session])
-        console.log("::::::: >>>>>>>> CONSTANTS.COMMANDS.CONFIRM >>>>>>>> ::::::::::", [(text === CONSTANTS.COMMANDS.CONFIRM), CONSTANTS.COMMANDS.CONFIRM, text])
-        console.log("::::::: >>>>>>>> CONSTANTS.SESSION_STEPS.CONFIRM_TRADE >>>>>>>> ::::::::::", CONSTANTS.SESSION_STEPS.CONFIRM_TRADE)
-        if (text === CONSTANTS.COMMANDS.CONFIRM) {
+        if (text === CONSTANTS.TRADE_MANUAL[0][0]) {
             this.workerService.postMessageToDerivWorker(CONSTANTS.SESSION_STEPS.CONFIRM_TRADE, chatId, "", session);
         } else {
             this.telegramBot.sendMessage(chatId, `Trade not confirmed. Use ${CONSTANTS.COMMANDS.START} to begin again.`);

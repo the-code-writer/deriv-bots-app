@@ -50,15 +50,13 @@ const handleLoggedIn = (
       _amount: { value: 0, currency: 'eUSDT', lang: 'EN' }
     };
 
-    /*
-
     parentPort.postMessage({
       action: "LOGIN_DERIV_ACCOUNT_READY",
       data: { userAccount, sessionData, chatId: userChatId, selectedAccount: account },
     });
 
-    */
-   
+    /*
+
     derivInstance.setAccount((userAccount) => {
       console.log("LOGIN_DERIV_ACCOUNT_READY", userAccount);
 
@@ -68,11 +66,13 @@ const handleLoggedIn = (
       });
     }, account.token);
 
+    */
+   
   } catch (error) {
     console.log("LOGIN_DERIV_ACCOUNT_ERROR", error);
 
     parentPort.postMessage({
-      action: "LOGIN_DERIV_ACCOUNT_READY",
+      action: "LOGIN_DERIV_ACCOUNT_ERROR",
       data: { error, sessionData, chatId: userChatId },
     });
   }
@@ -88,6 +88,7 @@ if (action === "LOGIN_DERIV_ACCOUNT") {
 
 // Listen for messages from the main thread
 parentPort.on("message", (message) => {
+
   console.log("MESSAGE_FROM_PARENT", message, [
     message.action,
     message.meta.data,
@@ -107,14 +108,18 @@ parentPort.on("message", (message) => {
       deriv.startTrading(meta.session);
       break;
     }
+    case "CONFIRM_MANUAL_TRADE": {
+      deriv.tradeAgain(meta.session);
+      break;
+    }
     case "LOGGED_IN": {
       handleLoggedIn(message.chatId, message.data);
       break;
     }
     default: {
-      console.log("Worker received second message:", message);
+      console.log("UNHANDLED_MESSAGE_FROM_PARENT", message);
       // Send a response back to the main thread
-      parentPort.postMessage({ type: "response", data: message });
+      parentPort.postMessage({ type: "UNHANDLED_MESSAGE_FROM_PARENT", data: message });
       break;
     }
   }

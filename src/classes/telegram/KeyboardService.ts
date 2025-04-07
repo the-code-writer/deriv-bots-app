@@ -147,15 +147,14 @@ export interface IKeyboardService {
      * @param;string} message - The confirmation message
      * @private
      */
-    showAutoManualTradingKeyboard(chatId: number, message: string): void;
+    showAutoManualTradingKeyboard(chatId: number): void;
 
     /**
      * Show the trade confirmation keyboard
      * @param;number} chatId - The chat ID of the user
-     * @param;string} message - The confirmation message
      * @private
      */
-    showTradeConfirmationKeyboard(chatId: number, message: string): void;
+    showTradeConfirmationKeyboard(chatId: number): void;
 
 
     /**
@@ -283,7 +282,7 @@ export class KeyboardService implements IKeyboardService {
 
         let contractDurationValue: KeyboardButton[][] | string[][] = [[""]];
 
-        switch (units.replace(/[^a-zA-Z]/g, "").toUpperCase()) {
+        switch (units) { //.replace(/[^a-zA-Z]/g, "").toUpperCase()
 
             case CONSTANTS.TRADE_DURATION_U[0][0]: {
 
@@ -499,8 +498,8 @@ export class KeyboardService implements IKeyboardService {
      * @param {string} message - The confirmation message
      * @private
      */
-    public showTradeConfirmationKeyboard(chatId: number, message: string): void {
-        this.sendKeyboard(chatId, message, this.getTradeConfirmationKeyboard());
+    public showAutoManualTradingKeyboard(chatId: number): void {
+        this.sendKeyboard(chatId, `How do you want to trade. Choose MANUAL(Recommended) if you want to enter each position manually or otherwise choose AUTO so that the system will enter positions automatically`, this.getAutoManualTradingKeyboard());
     }
 
     /**
@@ -509,8 +508,8 @@ export class KeyboardService implements IKeyboardService {
      * @param {string} message - The confirmation message
      * @private
      */
-    public showAutoManualTradingKeyboard(chatId: number, message: string): void {
-        this.sendKeyboard(chatId, message, this.getAutoManualTradingKeyboard());
+    public showTradeConfirmationKeyboard(chatId: number): void {
+        this.sendKeyboard(chatId, `We have gathered all the required data. Awaiting for you to confirm your trade.`, this.getTradeConfirmationKeyboard());
     }
 
     /**

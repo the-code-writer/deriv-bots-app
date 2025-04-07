@@ -70,7 +70,7 @@ export class WorkerService implements IWorkerService {
 
                     const welcomeUser: string = await this.userService.createUserWelcomeMessage(createdUser);
 
-                    this.keyboardService.sendMessage(chatId, welcomeUser);
+                    this.telegramBot.sendMessage(chatId, welcomeUser);
 
                     setTimeout(()=>{
                         

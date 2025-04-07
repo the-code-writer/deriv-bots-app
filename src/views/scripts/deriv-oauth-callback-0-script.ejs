@@ -1,0 +1,30 @@
+<!-- Inline script with nonce -->
+<script nonce="<%= data.nonce %>">
+    const encid = localStorage.getItem("encid");
+    console.log("ENCID", encid);
+    // Function to extract URL parameters
+    function getQueryParams() {
+      const params = new URLSearchParams(window.location.search);
+      const paramsObj = {};
+      for (const [key, value] of params.entries()) {
+        paramsObj[key] = value;
+      }
+      return paramsObj;
+    }
+
+    // Function to construct the new URL and redirect
+    function forwardParams() {
+      const targetDomain = "<%= data.derivCallbackURL %>"; // Replace with your target domain
+      const params = getQueryParams();
+      const queryString = new URLSearchParams(params).toString();
+      const newUrl = `${targetDomain}?${queryString}&id=${encid}`;
+      window.location.href = newUrl; // Redirect to the new URL
+    }
+
+    // Call the function on page load
+    window.onload = forwardParams;
+
+</script>
+
+
+
