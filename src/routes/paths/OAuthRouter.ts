@@ -3,7 +3,7 @@ import { env } from '@/common/utils/envConfig';
 import { ISessionService } from '@/classes/sessions/SessionService';
 import { getDerivAccountFromURLParams, getEncryptedUserAgent, serializeCookieOptions } from '../../common/utils/snippets';
 const cookieParser = require('cookie-parser');
-const { DERIV_APP_OAUTH_LOGIN_URL, DERIV_APP_OAUTH_CALLBACK_URL } = env;
+const { DERIV_APP_OAUTH_URL, DERIV_APP_OAUTH_LOGIN_URL, DERIV_APP_OAUTH_CALLBACK_URL, DERIV_APP_TG_URL } = env;
 
 /**
  * Interface for the data object passed to EJS templates.
@@ -13,6 +13,7 @@ export interface TemplateData {
     nonce: string;
     derivLoginURL?: string;
     derivCallbackURL?: string;
+    telegramBotURL?: string;
     session?: any;
     accounts?: any;
     encid?: any;
@@ -134,7 +135,7 @@ export class OAuthRouter {
                 title: 'Deriv Login',
                 nonce: res.locals.nonce, // Nonce for CSP
                 encid: String(encid),
-                derivLoginURL: DERIV_APP_OAUTH_LOGIN_URL, // Deriv OAuth URL from environment
+                derivLoginURL: DERIV_APP_OAUTH_URL, // Deriv OAuth URL from environment
                 session: sessionData
             };
 
@@ -171,29 +172,11 @@ export class OAuthRouter {
         // @ts-ignore
         this.router.get('/callback', async (req: Request, res: Response) => {
 
-            const queryParams = req.query; // Extract all query parameters
+            const queryParams: any = req.query;
 
-            if (queryParams && typeof queryParams !== undefined && ("id" in queryParams)) {
+            const { sessionID, sessionData } = await this.sessionService.getSessionFromCookie(req);
 
-                const encid = queryParams.id;
-
-                const sessionData = await this.sessionService.getUserSessionByEncID(String(encid));
-
-                if(!sessionData){
-
-                    console.error('Missing session data:', sessionData);
-                    return res.status(400).send('Session data is missing');
-
-                }
-                
-                const sessionID = sessionData.sessionID;
-
-                if (!sessionID && !sessionData) {
-
-                    console.error('Missing session data:', sessionData);
-                    return res.status(400).send('Session data is missing');
-
-                }
+            if (sessionID && sessionData) {
 
                 const organizedData: OrganizedAccountData = getDerivAccountFromURLParams(queryParams);
 
@@ -216,8 +199,8 @@ export class OAuthRouter {
                 const data: TemplateData = {
                     title: 'Authenticated!',
                     nonce: res.locals.nonce,
-                    encid: encid,
-                    derivCallbackURL: DERIV_APP_OAUTH_CALLBACK_URL,
+                    encid: sessionData.session.encid,
+                    telegramBotURL: DERIV_APP_TG_URL,
                     session: sessionData
                 };
     

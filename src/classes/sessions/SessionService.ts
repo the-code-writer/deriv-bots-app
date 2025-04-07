@@ -146,40 +146,54 @@ export class SessionService implements ISessionService {
     async getSessionFromCookie(req: any): Promise<any> {
 
         let sessionID, sessionData = null;
-        
-        console.log("################## req.headers.cookie", req.headers.cookie);
 
-        console.log("################## req.session", req.session);
+        let queryParams:any = req.query;
+
+        console.log("1. ################## req.session", req.session);
+
+        console.log("2. ################## req.headers.cookie", req.headers.cookie);
+
+        console.log("3. ################## queryParams", queryParams);
+
+        let encid: string = "";
 
         if (req.headers.cookie) {
 
-            let encid = getCookieValue(req.headers.cookie, "encid");
+            let encidFromCookie: string | undefined | null = getCookieValue(req.headers.cookie, "encid");
 
-            encid = decodeURIComponent(String(encid));
-
-            console.log("################## encid", encid);
-
-            if (encid) {
-
-                sessionData = await this.getUserSessionByEncID(encid);
-                if (sessionData) {
-                    sessionID = sessionData.sessionID;
-                }
-                console.log("Existing session found by <encid>:", { encid, sessionID, sessionData });
-
+            if (encidFromCookie && encidFromCookie !== "" && encidFromCookie !== null && typeof encidFromCookie !== undefined) {
+                encid = encidFromCookie;
             }
 
-        } else {
+        }
 
-            // Existing session found - retrieve session data
-            sessionData = await this.getUserSessionBySessionId(sessionID);
+        if (queryParams && typeof queryParams !== undefined && queryParams !== null && "id" in queryParams) {
+
+            let encidFromQueryParams: string | undefined | null = queryParams["id"];
+
+            if (encidFromQueryParams && encidFromQueryParams !== "" && encidFromQueryParams !== null && typeof encidFromQueryParams !== undefined) {
+                encid = encidFromQueryParams;
+            }
+
+        }
+
+        encid = decodeURIComponent(String(encid).replace(/ /g, '+'));
+
+        console.log("4. ################## encid", encid);
+
+        if (encid) {
+
+            sessionData = await this.getUserSessionByEncID(encid);
+
             if (sessionData) {
                 sessionID = sessionData.sessionID;
             }
-            console.log("Existing session found:", { sessionID, sessionData });
-
 
         }
+
+
+        console.log("5. ################## { sessionID, sessionData }", { sessionID, sessionData });
+
 
         return { sessionID, sessionData };
 

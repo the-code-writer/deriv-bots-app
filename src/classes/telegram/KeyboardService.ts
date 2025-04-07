@@ -499,7 +499,7 @@ export class KeyboardService implements IKeyboardService {
      * @private
      */
     public showAutoManualTradingKeyboard(chatId: number): void {
-        this.sendKeyboard(chatId, `How do you want to trade. Choose MANUAL(Recommended) if you want to enter each position manually or otherwise choose AUTO so that the system will enter positions automatically`, this.getAutoManualTradingKeyboard());
+        this.sendKeyboard(chatId, `How do you want to trade. Choose MANUAL if you want to enter each position manually or otherwise choose AUTO so that the system will enter positions automatically`, this.getAutoManualTradingKeyboard());
     }
 
     /**

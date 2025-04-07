@@ -103,6 +103,7 @@ export class WorkerService implements IWorkerService {
 
     private handleWorkerError(chatId: number, error: Error): void {
         logger.error(`Worker error: ${error.message}`);
+        console.log(error);
         delete this.workers[`WKR_${chatId}`];
     }
 

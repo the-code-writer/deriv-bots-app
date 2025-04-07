@@ -91,7 +91,7 @@ parentPort.on("message", (message) => {
 
   console.log("MESSAGE_FROM_PARENT", message, [
     message.action,
-    message.meta.data,
+    message.session,
   ]);
 
   switch (message.action) {
