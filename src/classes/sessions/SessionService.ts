@@ -153,7 +153,9 @@ export class SessionService implements ISessionService {
 
         console.log("2. ################## req.headers.cookie", req.headers.cookie);
 
-        console.log("3. ################## queryParams", queryParams);
+        let fullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
+
+        console.log("3. ################## fullUrl, queryParams", fullUrl, queryParams);
 
         let encid: string = "";
 

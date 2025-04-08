@@ -2,8 +2,13 @@ import express, { Request, Response, Router } from 'express';
 import { env } from '@/common/utils/envConfig';
 import { ISessionService } from '@/classes/sessions/SessionService';
 import { getDerivAccountFromURLParams, getEncryptedUserAgent, serializeCookieOptions } from '../../common/utils/snippets';
+import TemplateRenderer from '@/classes/templates/TemplateRenderer';
+
+
 const cookieParser = require('cookie-parser');
 const { DERIV_APP_OAUTH_URL, DERIV_APP_OAUTH_LOGIN_URL, DERIV_APP_OAUTH_CALLBACK_URL, DERIV_APP_TG_URL } = env;
+
+const templateRenderer = new TemplateRenderer('https://t.me/your_bot_url');
 
 /**
  * Interface for the data object passed to EJS templates.
@@ -108,11 +113,7 @@ export class OAuthRouter {
 
                 sessionData = await this.sessionService.getUserSessionByEncID(String(encid))
 
-                if (!sessionData) {
-
-                    return res.status(400).send('Session data is missing');
-
-                } else {
+                if (sessionData) {
 
                     sessionID = sessionData.sessionID;
 
@@ -133,25 +134,43 @@ export class OAuthRouter {
 
             }
 
-            const data: TemplateData = {
-                title: 'Error!',
-                nonce: res.locals.nonce,
-                encid: encid,
-                telegramBotURL: DERIV_APP_TG_URL,
-                session: {},
-                response: {
-                    status: "‎",
-                    oops: "‎",
-                    class: "login",
-                    pageTitle: "Redirecting",
-                    pageDescription: "If the page doesnt refresh in 1 minute navigate manually to deriv.com",
-                    pageButtonText: "Login via Deriv.com",
-                    pageButtonURL: DERIV_APP_OAUTH_URL
-                }
-            };
+            if (sessionData) {
 
-            // Render the deriv-oauth-template EJS template with the data
-            res.render('deriv-oauth-login', { data });
+                templateRenderer.render200(req, res, {
+                    template: 'deriv-oauth-login',
+                    nonce: res.locals.nonce || '',
+                    session: {},
+                    status: 200,
+                    pageTitle: 'Redirecting',
+                    pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
+                    pageButtonText: 'Login via Deriv.com',
+                    pageButtonURL: DERIV_APP_OAUTH_URL,
+                    meta: {
+                        oops: "‎",
+                        class: "login",
+                        encid: encid
+                    }
+                });
+
+            } else {
+
+                templateRenderer.render500(req, res, {
+                    template: 'deriv-oauth-login',
+                    nonce: res.locals.nonce || '',
+                    session: {},
+                    status: 200,
+                    pageTitle: 'Redirecting',
+                    pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
+                    pageButtonText: 'Login via Deriv.com',
+                    pageButtonURL: DERIV_APP_OAUTH_URL,
+                    meta: {
+                        oops: "‎",
+                        class: "login",
+                        encid: encid
+                    }
+                });
+
+            }
 
         });
 
@@ -163,25 +182,21 @@ export class OAuthRouter {
          */
         this.router.get('/callback-init', async (req: Request, res: Response) => {
 
-            const data: TemplateData = {
-                title: 'Authenticating...',
-                nonce: res.locals.nonce,
-                encid: "",
-                derivCallbackURL: DERIV_APP_OAUTH_CALLBACK_URL,
+            templateRenderer.render200(req, res, {
+                template: 'deriv-oauth-callback-0',
+                nonce: res.locals.nonce || '',
                 session: {},
-                response: {
-                    status: 500,
-                    oops: "O-ops!",
-                    class: "error-500",
-                    pageTitle: "Page not found!",
-                    pageDescription: "Try refining your search or use the navigation below to return <br />to the main home page.",
-                    pageButtonText: "Back to Home",
-                    pageButtonURL: "index.html"
+                status: 200,
+                pageTitle: 'Redirecting',
+                pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
+                pageButtonText: 'Login via Deriv.com',
+                pageButtonURL: DERIV_APP_OAUTH_URL,
+                meta: {
+                    oops: "‎",
+                    class: "login",
+                    encid: encid
                 }
-            };
-
-            // Render the deriv-oauth-template EJS template with the data
-            res.render('deriv-oauth-callback-0', { data });
+            });
 
         });
 
@@ -207,33 +222,46 @@ export class OAuthRouter {
             // Check if the bot is initialized
             if (!bot) {
 
-                return this.sessionService.renderError500(req, res, "");
+                templateRenderer.render500(req, res, {
+                    template: 'deriv-oauth-login',
+                    nonce: res.locals.nonce || '',
+                    session: {},
+                    status: 200,
+                    pageTitle: 'Redirecting',
+                    pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
+                    pageButtonText: 'Login via Deriv.com',
+                    pageButtonURL: DERIV_APP_OAUTH_URL,
+                    meta: {
+                        oops: "‎",
+                        class: "login",
+                        encid: encid
+                    }
+                });
+
+            } else {
+
+                // Notify the bot that the user has logged in
+                bot.authorizeOauthData(sessionData);
+
+                templateRenderer.render200(req, res, {
+                    template: 'deriv-oauth-callback-1',
+                    nonce: res.locals.nonce || '',
+                    session: {},
+                    status: 200,
+                    pageTitle: 'Redirecting',
+                    pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
+                    pageButtonText: 'Login via Deriv.com',
+                    pageButtonURL: DERIV_APP_OAUTH_URL,
+                    meta: {
+                        oops: "‎",
+                        class: "login",
+                        encid: encid,
+                        telegramBotURL: DERIV_APP_TG_URL,
+                        sessionId: sessionID,
+                    }
+                });
 
             }
-
-            // Notify the bot that the user has logged in
-            bot.authorizeOauthData(sessionData);
-
-
-            const data: TemplateData = {
-                title: 'Error!',
-                nonce: res.locals.nonce,
-                encid: encid,
-                telegramBotURL: DERIV_APP_TG_URL,
-                session: sessionData,
-                sessionId: sessionID,
-                response: {
-                    status: "‎",
-                    oops: "‎",
-                    class: "login",
-                    pageTitle: "Redirecting",
-                    pageDescription: "If the page doesnt refresh in 1 minute navigate manually to deriv.com",
-                    pageButtonText: "Login via Deriv.com",
-                    pageButtonURL: DERIV_APP_OAUTH_URL
-                }
-            };
-            // Render the deriv-oauth-template EJS template with the data
-            res.render('deriv-oauth-callback-1', { data });
 
         });
 
