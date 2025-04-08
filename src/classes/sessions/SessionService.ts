@@ -11,7 +11,7 @@ const uap = require('ua-parser-js');
 // Logger
 const logger = pino({ name: "SessionService" });
 
-const { NODE_ENV, DB_SERVER_SESSIONS_DATABASE_TTL, APP_CRYPTOGRAPHIC_KEY, APP_DOMAIN, DEVICE_AGENT } = env;
+const { NODE_ENV, DB_SERVER_SESSIONS_DATABASE_TTL, APP_DOMAIN, DERIV_APP_TG_URL } = env;
 
 /**
  * Interface for SessionService.
@@ -143,11 +143,11 @@ export class SessionService implements ISessionService {
     }
 
 
-    async getSessionFromCookie(req: any): Promise<any> {
+    async getSessionFromCookieQueryParams(req: any, res: any): Promise<any> {
 
         let sessionID, sessionData = null;
 
-        let queryParams:any = req.query;
+        let queryParams: any = req.query;
 
         console.log("1. ################## req.session", req.session);
 
@@ -167,7 +167,19 @@ export class SessionService implements ISessionService {
 
         }
 
-        if (queryParams && typeof queryParams !== undefined && queryParams !== null && "id" in queryParams) {
+        if (!encid && req.session && "sessionID" in req.session) {
+
+            let session:any = this.getSession(req.session.sessionID);
+
+            if (session) {
+                encid = session.session.encid;
+                sessionData = session;
+                sessionID = session.sessionID;
+            }
+
+        }
+
+        if (!encid && queryParams && typeof queryParams !== undefined && queryParams !== null && "id" in queryParams) {
 
             let encidFromQueryParams: string | undefined | null = queryParams["id"];
 
@@ -194,11 +206,41 @@ export class SessionService implements ISessionService {
 
         console.log("5. ################## { sessionID, sessionData }", { sessionID, sessionData });
 
+        if (!sessionID || sessionID === "") {
+
+            this.renderError500(req, res, "");
+
+        }
+
 
         return { encid, sessionID, sessionData };
 
     }
 
+
+    renderError500(req: any, res: any, encid: string) {
+
+            const data: TemplateData = {
+                title: 'Session Error!',
+                nonce: res.locals.nonce,
+                encid: "",
+                telegramBotURL: DERIV_APP_TG_URL,
+                session: {},
+                response: {
+                    status: 500,
+                    oops: "O-ops!",
+                    class: "error",
+                    pageTitle: "Session not found!",
+                    pageDescription: "The session was not found. Try again",
+                    pageButtonText: "Try Again",
+                    pageButtonURL: "https://inboxgroup.ai/test/scripts/oauth.html?encid=" + encid
+                }
+            };
+
+            // Render the deriv-oauth-template EJS template with the data
+            res.render('deriv-oauth-callback-1', { data });
+
+    }
 
     persistSession(req: any, res: any, sessionID: string) {
 
@@ -235,7 +277,7 @@ export class SessionService implements ISessionService {
 
             if (!encid) {
 
-                const { sessionID, sessionData } = await this.getSessionFromCookie(req);
+                const { sessionID, sessionData } = await this.getSessionFromCookieQueryParams(req, res);
 
                 if (sessionID && sessionData) {
 

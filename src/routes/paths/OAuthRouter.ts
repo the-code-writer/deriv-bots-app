@@ -15,6 +15,7 @@ export interface TemplateData {
     derivCallbackURL?: string;
     telegramBotURL?: string;
     session?: any;
+    sessionId?: any;
     accounts?: any;
     encid?: any;
     response?: any;
@@ -193,71 +194,46 @@ export class OAuthRouter {
 
             const queryParams: any = req.query;
 
-            const { encid, sessionID, sessionData } = await this.sessionService.getSessionFromCookie(req);
+            const { encid, sessionID, sessionData } = await this.sessionService.getSessionFromCookieQueryParams(req, res);
 
-            if (sessionID && sessionData) {
+            const organizedData: OrganizedAccountData = getDerivAccountFromURLParams(queryParams);
 
-                const organizedData: OrganizedAccountData = getDerivAccountFromURLParams(queryParams);
+            // @ts-ignore
+            sessionData.session.bot.accounts.deriv.accountList = organizedData;
 
-                // @ts-ignore
-                sessionData.session.bot.accounts.deriv.accountList = organizedData;
+            // Get the bot instance from the app
+            const bot = req.app.get('bot');
 
-                // Get the bot instance from the app
-                const bot = req.app.get('bot');
+            // Check if the bot is initialized
+            if (!bot) {
 
-                // Check if the bot is initialized
-                if (!bot) {
-
-                    return res.status(500).send('<h2>Telegram bot is not initialized</h2>');
-
-                }
-
-                // Notify the bot that the user has logged in
-                bot.authorizeOauthData(sessionData);
-
-
-                const data: TemplateData = {
-                    title: 'Error!',
-                    nonce: res.locals.nonce,
-                    encid: encid,
-                    telegramBotURL: DERIV_APP_TG_URL,
-                    session: {},
-                    response: {
-                        status: "‎",
-                        oops: "‎",
-                        class: "login",
-                        pageTitle: "Redirecting",
-                        pageDescription: "If the page doesnt refresh in 1 minute navigate manually to deriv.com",
-                        pageButtonText: "Login via Deriv.com",
-                        pageButtonURL: DERIV_APP_OAUTH_URL
-                    }
-                };
-                // Render the deriv-oauth-template EJS template with the data
-                res.render('deriv-oauth-callback-1', { data });
-
-            } else {
-
-                const data: TemplateData = {
-                    title: 'Session Error!',
-                    nonce: res.locals.nonce,
-                    encid: encid,
-                    telegramBotURL: DERIV_APP_TG_URL,
-                    session: sessionData,
-                    response: {
-                        status: 500,
-                        oops: "O-ops!",
-                        class: "error",
-                        pageTitle: "Session not found!",
-                        pageDescription: "The session was not found. Try again",
-                        pageButtonText: "Try Again",
-                        pageButtonURL: "https://inboxgroup.ai/test/scripts/oauth.html?encid=" + encid
-                    }
-                };
-
-                // Render the deriv-oauth-template EJS template with the data
-                res.render('deriv-oauth-callback-1', { data });
+                return this.sessionService.renderError500(req, res, "");
 
             }
+
+            // Notify the bot that the user has logged in
+            bot.authorizeOauthData(sessionData);
+
+
+            const data: TemplateData = {
+                title: 'Error!',
+                nonce: res.locals.nonce,
+                encid: encid,
+                telegramBotURL: DERIV_APP_TG_URL,
+                session: sessionData,
+                sessionId: sessionID,
+                response: {
+                    status: "‎",
+                    oops: "‎",
+                    class: "login",
+                    pageTitle: "Redirecting",
+                    pageDescription: "If the page doesnt refresh in 1 minute navigate manually to deriv.com",
+                    pageButtonText: "Login via Deriv.com",
+                    pageButtonURL: DERIV_APP_OAUTH_URL
+                }
+            };
+            // Render the deriv-oauth-template EJS template with the data
+            res.render('deriv-oauth-callback-1', { data });
 
         });
 
