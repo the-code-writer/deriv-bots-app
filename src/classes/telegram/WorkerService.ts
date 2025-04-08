@@ -30,12 +30,12 @@ export class WorkerService implements IWorkerService {
 
     private telegramBot: any;
     private keyboardService: IKeyboardService;
-    private userService:UserService;
+    private userService: UserService;
 
-    constructor(telegramBot: any, keyboardService: IKeyboardService, userService:UserService) {
+    constructor(telegramBot: any, keyboardService: IKeyboardService, userService: UserService) {
         this.telegramBot = telegramBot;
         this.keyboardService = keyboardService;
-        this.userService= userService;
+        this.userService = userService;
         logger.info("Worker Service started!");
     }
 
@@ -44,7 +44,7 @@ export class WorkerService implements IWorkerService {
         const workerID = `WKR_${chatId}`;
 
         if (this.workers[workerID]) {
-            this.workers[workerID].postMessage({action, chatId, text, session, data});
+            this.workers[workerID].postMessage({ action, chatId, text, session, data });
         } else {
             this.workers[workerID] = new Worker("./src/classes/deriv/tradeWorker.js", {
                 workerData: { action, chatId, text, session, data },
@@ -54,44 +54,44 @@ export class WorkerService implements IWorkerService {
             this.workers[workerID].on("exit", (code) => this.handleWorkerExit(chatId, code));
         }
     }
-    
 
-    handleWorkerMessage(chatId:number, message: any): void {
-        
+
+    handleWorkerMessage(chatId: number, message: any): void {
+
         console.log("MESSAGE_FROM_WORKER", chatId, message);
 
-        switch(message.action){
+        switch (message.action) {
 
-            case "LOGIN_DERIV_ACCOUNT_READY" : {
+            case "LOGIN_DERIV_ACCOUNT_READY": {
 
-                const { chatId, sessionData, userAccount, selectedAccount } = message.data;
+                const { chatId, sessionDocument, userAccount, selectedAccount } = message.data;
 
-                this.userService.createUserWithCallback(chatId, sessionData, userAccount, selectedAccount, async (createdUser: IUser)=>{
+                this.userService.createUserWithCallback(chatId, sessionDocument, userAccount, selectedAccount, async (createdUser: IUser) => {
 
                     const welcomeUser: string = await this.userService.createUserWelcomeMessage(createdUser);
 
                     this.telegramBot.sendMessage(chatId, welcomeUser);
 
-                    setTimeout(()=>{
-                        
-                        this.keyboardService.showTradingTypeKeyboard(chatId, sessionData);
+                    setTimeout(() => {
+
+                        this.keyboardService.showTradingTypeKeyboard(chatId, sessionDocument);
 
                     }, 1000)
-                    
+
                 });
 
                 break;
             }
 
-            case "sendTelegramMessage" : {
+            case "sendTelegramMessage": {
 
                 this.keyboardService.sendMessage(chatId, message.text);
 
                 break;
             }
 
-            default : {
-                
+            default: {
+
                 console.log("UNKNOWN_MESSAGE_FROM_WORKER", message);
 
                 break;

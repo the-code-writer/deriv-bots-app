@@ -145,7 +145,7 @@ export class SessionService implements ISessionService {
 
     async getSessionFromCookieQueryParams(req: any, res: any): Promise<any> {
 
-        let sessionID, sessionData = null;
+        let sessionID, sessionDocument = null;
 
         let queryParams: any = req.query;
 
@@ -183,11 +183,11 @@ export class SessionService implements ISessionService {
 
             console.log("3X. ################## fullUrl, req.session", req.session);
 
-            let session:any = this.getSession(req.session.sessionID);
+            let session: any = this.getSession(req.session.sessionID);
 
             if (session && "session" in session && "encid" in session.session) {
                 encid = session.session.encid;
-                sessionData = session;
+                sessionDocument = session;
                 sessionID = session.sessionID;
             }
 
@@ -199,43 +199,43 @@ export class SessionService implements ISessionService {
 
         if (encid) {
 
-            sessionData = await this.getUserSessionByEncID(encid);
+            sessionDocument = await this.getUserSessionByEncID(encid);
 
-            if (sessionData) {
-                sessionID = sessionData.sessionID;
+            if (sessionDocument) {
+                sessionID = sessionDocument.sessionID;
             }
 
         }
 
 
-        console.log("5. ################## { sessionID, sessionData }", { sessionID, sessionData });
+        console.log("5. ################## { sessionID, sessionDocument }", { sessionID, sessionDocument });
 
-        return { encid, sessionID, sessionData };
+        return { encid, sessionID, sessionDocument };
 
     }
 
 
     renderError500(req: any, res: any, encid: string) {
 
-            const data: TemplateData = {
-                title: 'Session Error!',
-                nonce: res.locals.nonce,
-                encid: "",
-                telegramBotURL: DERIV_APP_TG_URL,
-                session: {},
-                response: {
-                    status: 500,
-                    oops: "O-ops!",
-                    class: "error",
-                    pageTitle: "Session not found!",
-                    pageDescription: "The session was not found. Try again",
-                    pageButtonText: "Try Again",
-                    pageButtonURL: "https://inboxgroup.ai/test/scripts/oauth.html?encid=" + encid
-                }
-            };
+        const data: TemplateData = {
+            title: 'Session Error!',
+            nonce: res.locals.nonce,
+            encid: "",
+            telegramBotURL: DERIV_APP_TG_URL,
+            session: {},
+            response: {
+                status: 500,
+                oops: "O-ops!",
+                class: "error",
+                pageTitle: "Session not found!",
+                pageDescription: "The session was not found. Try again",
+                pageButtonText: "Try Again",
+                pageButtonURL: "https://inboxgroup.ai/test/scripts/oauth.html?encid=" + encid
+            }
+        };
 
-            // Render the deriv-oauth-template EJS template with the data
-            res.render('deriv-oauth-callback-1', { data });
+        // Render the deriv-oauth-template EJS template with the data
+        res.render('deriv-oauth-callback-1', { data });
 
     }
 
@@ -274,15 +274,15 @@ export class SessionService implements ISessionService {
 
             if (!encid) {
 
-                const { sessionID, sessionData } = await this.getSessionFromCookieQueryParams(req, res);
+                const { sessionID, sessionDocument } = await this.getSessionFromCookieQueryParams(req, res);
 
-                if (sessionID && sessionData) {
+                if (sessionID && sessionDocument) {
 
                     // 2. Validate session expiration
-                    await this.validateSessionExpiration(req, res, sessionID, sessionData);
+                    await this.validateSessionExpiration(req, res, sessionID, sessionDocument);
 
                     // 3. Attach session data to request object
-                    this.attachSessionToRequest(req, res, sessionID, sessionData);
+                    this.attachSessionToRequest(req, res, sessionID, sessionDocument);
 
                     // 4. Set up response finish handler to log final session state
                     this.setupResponseFinishHandler(req, res);
@@ -301,13 +301,13 @@ export class SessionService implements ISessionService {
 
                     console.log("Middleware completed - Final locals state:", { locals: req.locals });
 
-                    console.log("Middleware completed - Final req state:", { sessionID: req.sessionID, sessionData: req.session });
+                    console.log("Middleware completed - Final req state:", { sessionID: req.sessionID, sessionDocument: req.session });
 
-                    console.log("Middleware completed - Final session state:", { sessionID, sessionData });
+                    console.log("Middleware completed - Final session state:", { sessionID, sessionDocument });
 
                 } else {
 
-                    console.log("Middleware completed - Session not found:", { sessionID, sessionData });
+                    console.log("Middleware completed - Session not found:", { sessionID, sessionDocument });
 
                 }
 
@@ -355,14 +355,14 @@ export class SessionService implements ISessionService {
     * @param req - The HTTP request object.
     * @param res - The HTTP response object.
     * @param sessionID - Current session ID.
-    * @param sessionData - Current session data.
+    * @param sessionDocument - Current session data.
     * @returns A promise that resolves when validation is complete.
     */
     private async validateSessionExpiration(
         req: any,
         res: any,
         sessionID: string,
-        sessionData: any
+        sessionDocument: any
     ): Promise<void> {
         const now = Date.now();
 
@@ -374,7 +374,7 @@ export class SessionService implements ISessionService {
         }
 
         // Check if session's maxAge is expired (individual session expiration)
-        if (sessionData && now > parseInt(sessionData.maxAge.toString())) {
+        if (sessionDocument && now > parseInt(sessionDocument.maxAge.toString())) {
             console.log("Session data expired - cleaning up:", sessionID);
 
             // Destroy expired session
@@ -393,29 +393,29 @@ export class SessionService implements ISessionService {
     * Attaches session data to the request object.
     * @param req - The HTTP request object.
     * @param sessionID - Current session ID.
-    * @param sessionData - Current session data.
+    * @param sessionDocument - Current session data.
     */
     attachSessionToRequest(
         req: any,
         res: any,
         sessionID: string,
-        sessionData: any
+        sessionDocument: any
     ): void {
-        req.session = sessionData;
+        req.session = sessionDocument;
         req.sessionID = sessionID;
         req.cookieName = this.cookieName;
 
         // Also store in locals for template rendering if needed
         req.locals = req.locals || {};
-        req.locals.session = sessionData;
+        req.locals.session = sessionDocument;
         req.locals.sessionID = sessionID;
         req.locals.cookieName = this.cookieName;
 
         const cookieName = "encid";
 
-        res.cookie(cookieName, sessionData.session.encid, sessionData.cookie);
+        res.cookie(cookieName, sessionDocument.session.encid, sessionDocument.cookie);
 
-        console.log("### 5. ROUTER ### cookieString ###", cookieName, sessionData.session.encid, sessionData.cookie);
+        console.log("### 5. ROUTER ### cookieString ###", cookieName, sessionDocument.session.encid, sessionDocument.cookie);
 
         console.log("### 6. ROUTER ### req.session ###", req.session);
 
@@ -545,7 +545,7 @@ export class SessionService implements ISessionService {
 
         }
 
-        const sessionData: any = {
+        const sessionDocument: any = {
             _id: sessionID,
             sessionID: sessionID,
             chatId: chatId,
@@ -554,7 +554,7 @@ export class SessionService implements ISessionService {
             session: this.getSessionObject(chatId, sessionID, telegramUser),
         };
 
-        return sessionData;
+        return sessionDocument;
 
     }
 
@@ -622,24 +622,24 @@ export class SessionService implements ISessionService {
     async validateSession(sessionID: string, chatId: number = 0): Promise<any> {
 
         // Retrieve session data from the session store
-        let sessionData: any = await this.getSession(sessionID);
+        let sessionDocument: any = await this.getSession(sessionID);
 
         // If no session data exists, initialize an empty session and store it
-        if (!sessionData) {
+        if (!sessionDocument) {
 
-            sessionData = this.initializeSessionObject(sessionID, chatId);
+            sessionDocument = this.initializeSessionObject(sessionID, chatId);
 
-            await this.sessionStore.set(sessionID, sessionData);
+            await this.sessionStore.set(sessionID, sessionDocument);
 
         }
 
-        if (!sessionData) {
+        if (!sessionDocument) {
 
             return;
 
         }
 
-        return { session: sessionData.session, sessionData: sessionData, sessionID: sessionData.sessionID, chatId: sessionData.chatId };
+        return { session: sessionDocument.session, sessionDocument: sessionDocument, sessionID: sessionDocument.sessionID, chatId: sessionDocument.chatId };
 
     }
 
@@ -653,15 +653,15 @@ export class SessionService implements ISessionService {
         const sessionID: string = uuidv4();
 
         // Retrieve session data from the session store
-        let sessionData: any = await this.getUserSessionByChatId(chatId);
+        let sessionDocument: any = await this.getUserSessionByChatId(chatId);
 
         // If no session data exists, initialize an empty session and store it
-        if (!sessionData) {
-            sessionData = this.initializeSessionObject(sessionID, chatId);
-            await this.sessionStore.set(sessionID, sessionData);
+        if (!sessionDocument) {
+            sessionDocument = this.initializeSessionObject(sessionID, chatId);
+            await this.sessionStore.set(sessionID, sessionDocument);
         }
 
-        return { sessionData: sessionData.session, data: sessionData, sessionID: sessionID };
+        return { sessionDocument: sessionDocument.session, data: sessionDocument, sessionID: sessionID };
 
     }
 
@@ -753,13 +753,13 @@ export class SessionService implements ISessionService {
     */
     async updateSessionWithChatId(chatId: number, session: any): Promise<ISession | undefined> {
 
-        const sessionData = await this.getUserSessionByChatId(chatId);
+        const sessionDocument = await this.getUserSessionByChatId(chatId);
 
-        if (!sessionData) {
+        if (!sessionDocument) {
             return;
         };
 
-        const sessionID = sessionData.session.sessionID || sessionData.sessionID;
+        const sessionID = sessionDocument.session.sessionID || sessionDocument.sessionID;
 
         return await this.doUpdateSessionWithSessionId(sessionID, session);
 
@@ -773,9 +773,9 @@ export class SessionService implements ISessionService {
      */
     async updateSessionWithSessionId(sessionID: string, session: any): Promise<ISession | undefined> {
 
-        const sessionData = await this.getUserSessionBySessionId(sessionID);
+        const sessionDocument = await this.getUserSessionBySessionId(sessionID);
 
-        if (!sessionData) {
+        if (!sessionDocument) {
             return;
         };
 
@@ -786,20 +786,20 @@ export class SessionService implements ISessionService {
     /**
         * Performs the actual session update by session ID.
         * @param sessionID - The session ID to update.
-        * @param sessionData - The new session data.
+        * @param sessionDocument - The new session data.
         * @returns A promise that resolves with the updated session data.
         */
-    private async doUpdateSessionWithSessionId(sessionID: string, sessionData: any): Promise<any> {
+    private async doUpdateSessionWithSessionId(sessionID: string, sessionDocument: any): Promise<any> {
 
-        if (sessionData && sessionID) {
+        if (sessionDocument && sessionID) {
 
-            await this.sessionStore.set(sessionID, "session", sessionData);
+            await this.sessionStore.set(sessionID, "session", sessionDocument);
 
-            const sessionDataUpdated: any = await this.getUserSessionBySessionId(sessionID);
+            const sessionDocumentUpdated: any = await this.getUserSessionBySessionId(sessionID);
 
-            logger.info(JSON.stringify(sessionDataUpdated))
+            logger.info(JSON.stringify(sessionDocumentUpdated))
 
-            return sessionDataUpdated.session;
+            return sessionDocumentUpdated.session;
 
         }
 
@@ -867,8 +867,8 @@ export class SessionService implements ISessionService {
      * @param sessionID - The session ID to retrieve.
      * @returns A promise that resolves with the session data or null if not found.
      */
-    async setSession(sessionID: string, sessionData: any): Promise<ISession | undefined> {
-        await this.sessionStore.setSessionRecord(sessionID, sessionData);
+    async setSession(sessionID: string, sessionDocument: any): Promise<ISession | undefined> {
+        await this.sessionStore.setSessionRecord(sessionID, sessionDocument);
         return await this.getSession(sessionID);
     }
 

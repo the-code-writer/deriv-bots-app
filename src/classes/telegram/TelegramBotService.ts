@@ -102,29 +102,29 @@ export class TelegramBotService implements ITelegramBotService {
      * @param {any} data - The data associated with the logged-in event
      * @public
      */
-    public async authorizeOauthData(sessionData:any): Promise<boolean> {
-        
-        let chatId:number = 0;
+    public async authorizeOauthData(sessionDocument: any): Promise<boolean> {
 
-        let encid: string = sessionData.session.encid;
-        
-        if(encid){
-                
+        let chatId: number = 0;
+
+        let encid: string = sessionDocument.session.encid;
+
+        if (encid) {
+
             encid = String(encid).replace(/ /g, '+');
 
             chatId = parseInt(Encryption.decryptAES(encid, APP_CRYPTOGRAPHIC_KEY));
 
-        }else{
+        } else {
 
-            chatId = sessionData.session.chatId;
+            chatId = sessionDocument.session.chatId;
 
         }
 
-        if(!chatId){
+        if (!chatId) {
             return false;
         }
 
-        const updatedSession = await this.sessionService.updateSessionWithChatId(chatId, sessionData.session);
+        const updatedSession = await this.sessionService.updateSessionWithChatId(chatId, sessionDocument.session);
 
         logger.info(JSON.stringify(updatedSession))
 
@@ -140,7 +140,7 @@ export class TelegramBotService implements ITelegramBotService {
      * @private
      */
     private handlePollingError(error: Error): void {
-        
+
         if (String(error.message).includes("ECONNRESET")) {
             // Handle ECONNRESET error
         }
@@ -170,8 +170,8 @@ export class TelegramBotService implements ITelegramBotService {
      * @param {Session} session - The current session
      * @private
      */
-    private async processSessionStep(chatId: number, text: string, sessionData: ISession): Promise<void> {
-        const session = sessionData.session;
+    private async processSessionStep(chatId: number, text: string, sessionDocument: ISession): Promise<void> {
+        const session = sessionDocument.session;
         logger.info(["# processSessionStep #", chatId, text, session.bot.tradingOptions.step])
         switch (session.bot.tradingOptions.step) {
             case CONSTANTS.SESSION_STEPS.LOGIN_ACCOUNT:

@@ -14,15 +14,14 @@ const handleLoggedIn = (
   userAction,
   userChatId,
   textString,
-  sessionData,
+  sessionDocument,
   metaData
 ) => {
-
   console.log("LOGIN_DERIV_ACCOUNT", {
     userAction,
     userChatId,
     textString,
-    sessionData,
+    sessionDocument,
     metaData,
   });
 
@@ -39,20 +38,24 @@ const handleLoggedIn = (
   console.log("ACCOUNT_TOKEN", account);
 
   try {
-
     let userAccount = {
-      _email: 'digitalcurrencyonline@gmail.com',
-      _country: 'zw',
-      _currency: 'eUSDT',
-      _loginid: 'CR8424472',
+      _email: "digitalcurrencyonline@gmail.com",
+      _country: "zw",
+      _currency: "eUSDT",
+      _loginid: "CR8424472",
       _user_id: 5716997,
-      _fullname: 'Mr Douglas Maposa',
-      _amount: { value: 0, currency: 'eUSDT', lang: 'EN' }
+      _fullname: "Mr Douglas Maposa",
+      _amount: { value: 0, currency: "eUSDT", lang: "EN" },
     };
 
     parentPort.postMessage({
       action: "LOGIN_DERIV_ACCOUNT_READY",
-      data: { userAccount, sessionData, chatId: userChatId, selectedAccount: account },
+      data: {
+        userAccount,
+        sessionDocument,
+        chatId: userChatId,
+        selectedAccount: account,
+      },
     });
 
     /*
@@ -62,18 +65,17 @@ const handleLoggedIn = (
 
       parentPort.postMessage({
         action: "LOGIN_DERIV_ACCOUNT_READY",
-        data: { userAccount, sessionData, chatId: userChatId },
+        data: { userAccount, sessionDocument, chatId: userChatId },
       });
     }, account.token);
 
     */
-   
   } catch (error) {
     console.log("LOGIN_DERIV_ACCOUNT_ERROR", error);
 
     parentPort.postMessage({
       action: "LOGIN_DERIV_ACCOUNT_ERROR",
-      data: { error, sessionData, chatId: userChatId },
+      data: { error, sessionDocument, chatId: userChatId },
     });
   }
 };
@@ -88,7 +90,6 @@ if (action === "LOGIN_DERIV_ACCOUNT") {
 
 // Listen for messages from the main thread
 parentPort.on("message", (message) => {
-
   console.log("MESSAGE_FROM_PARENT", message, [
     message.action,
     message.session,
@@ -119,7 +120,10 @@ parentPort.on("message", (message) => {
     default: {
       console.log("UNHANDLED_MESSAGE_FROM_PARENT", message);
       // Send a response back to the main thread
-      parentPort.postMessage({ type: "UNHANDLED_MESSAGE_FROM_PARENT", data: message });
+      parentPort.postMessage({
+        type: "UNHANDLED_MESSAGE_FROM_PARENT",
+        data: message,
+      });
       break;
     }
   }

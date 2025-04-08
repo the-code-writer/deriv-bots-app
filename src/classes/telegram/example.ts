@@ -88,38 +88,38 @@ const startTelegramBotService = (
 
   const organizedData: any = getDerivAccountFromURLParams(queryParams);
 
-  let sessionData: any = await sessionService.getUserSessionByChatId(chatId);
+  let sessionDocument: any = await sessionService.getUserSessionByChatId(chatId);
 
-  console.log("*** SESSION - 001 ***", chatId, sessionData);
+  console.log("*** SESSION - 001 ***", chatId, sessionDocument);
 
-  sessionData.session.bot.accounts.deriv.accountList = organizedData;
+  sessionDocument.session.bot.accounts.deriv.accountList = organizedData;
 
-  await bot.authorizeOauthData(sessionData);
+  await bot.authorizeOauthData(sessionDocument);
 
-  sessionData = await sessionService.getUserSessionByChatId(chatId);
+  sessionDocument = await sessionService.getUserSessionByChatId(chatId);
 
-  console.log("*** SESSION - 002 ***", chatId, sessionData);
+  console.log("*** SESSION - 002 ***", chatId, sessionDocument);
 
   let text: string | KeyboardButton = "CR8424472 ( eUSDT )";
 
-  await tradingProcessFlow.handleAccountTypeSelection(chatId, text, sessionData.session)
+  await tradingProcessFlow.handleAccountTypeSelection(chatId, text, sessionDocument.session)
 
-  sessionData = await sessionService.getUserSessionByChatId(chatId);
+  sessionDocument = await sessionService.getUserSessionByChatId(chatId);
 
-  console.log("*** SESSION - 003 ***", chatId, sessionData);
+  console.log("*** SESSION - 003 ***", chatId, sessionDocument);
 
   text = CONSTANTS.TRADING_TYPES.DERIVATIVES;
 
   console.log("CONSTANTS.TRADING_TYPES.DERIVATIVES", [CONSTANTS.TRADING_TYPES.DERIVATIVES, text])
 
-  await tradingProcessFlow.handleTradingTypeSelection(chatId, text, sessionData.session)
+  await tradingProcessFlow.handleTradingTypeSelection(chatId, text, sessionDocument.session)
 
-  sessionData = await sessionService.getUserSessionByChatId(chatId);
+  sessionDocument = await sessionService.getUserSessionByChatId(chatId);
 
-  console.log("*** SESSION - 004 ***", chatId, sessionData);
+  console.log("*** SESSION - 004 ***", chatId, sessionDocument);
 
-  text = CONSTANTS.PURCHASE_TYPES.DERIVATIVES[4][1]; 
+  text = CONSTANTS.PURCHASE_TYPES.DERIVATIVES[4][1];
 
-  await tradingProcessFlow.handleMarketSelection(chatId, text, sessionData.session)
+  await tradingProcessFlow.handleMarketSelection(chatId, text, sessionDocument.session)
 
 })();

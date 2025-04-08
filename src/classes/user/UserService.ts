@@ -9,7 +9,7 @@ export class UserService implements IUserService {
 
     constructor(private userRepository: IUserRepository) { }
 
-    async createUserWelcomeMessage(user: IUser) : Promise<string> {
+    async createUserWelcomeMessage(user: IUser): Promise<string> {
 
         const message: string = `Account Details:\n================\nFirst Name:${user.name}`;
 
@@ -17,12 +17,12 @@ export class UserService implements IUserService {
 
     }
 
-    async createUserWithCallback(chatId: number, sessionData: any, userAccount: any, selectedAccount: any, callBack: any): Promise<void> {
+    async createUserWithCallback(chatId: number, sessionDocument: any, userAccount: any, selectedAccount: any, callBack: any): Promise<void> {
 
-        const userData:any = {
+        const userData: any = {
             userId: Encryption.md5(`${chatId}`),
             chatId: chatId,
-            sessionID: sessionData.sessionID,
+            sessionID: sessionDocument.sessionID,
             accountID: Encryption.md5(`${userAccount._user_id}`),
             name: userAccount._fullname,
             username: userAccount._email.split("@")[0],
@@ -36,12 +36,12 @@ export class UserService implements IUserService {
                 fullname: userAccount._fullname,
                 selectedAccount: selectedAccount,
             },
-            telegramAccount: sessionData.bot.accounts.telegram,
+            telegramAccount: sessionDocument.bot.accounts.telegram,
         };
-        
+
         const newUser = await this.create(userData);
 
-        if(typeof callBack === "function"){
+        if (typeof callBack === "function") {
 
             callBack(newUser);
 

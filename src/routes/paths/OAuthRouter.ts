@@ -100,35 +100,35 @@ export class OAuthRouter {
 
             const { encid } = req.query; // Extract query parameters
 
-            let sessionData = null;
+            let sessionDocument = null;
             let sessionID = null;
 
             console.log("### 1. ROUTER ### encid ###", encid);
 
-            console.log("### 2. ROUTER ### sessionData ###", sessionData);
+            console.log("### 2. ROUTER ### sessionDocument ###", sessionDocument);
 
             if (encid) {
 
                 res.set('X-Session-Token', String(encid));
 
-                sessionData = await this.sessionService.getUserSessionByEncID(String(encid))
+                sessionDocument = await this.sessionService.getUserSessionByEncID(String(encid))
 
-                if (sessionData) {
+                if (sessionDocument) {
 
-                    sessionID = sessionData.sessionID;
+                    sessionID = sessionDocument.sessionID;
 
-                    console.log("### 3. ROUTER ### sessionID, sessionData ###", sessionID, sessionData);
+                    console.log("### 3. ROUTER ### sessionID, sessionDocument ###", sessionID, sessionDocument);
 
                     const { encuaKey, encuaData } = getEncryptedUserAgent(req.get('User-Agent'));
 
                     console.log("### 4. ROUTER ### encuaKey, encuaData ###", encuaKey, encuaData);
 
-                    sessionData.session.encua = encuaKey;
-                    sessionData.session.encuaData = encuaData;
+                    sessionDocument.session.encua = encuaKey;
+                    sessionDocument.session.encuaData = encuaData;
 
-                    await this.sessionService.setSession(sessionData.sessionID, sessionData);
+                    await this.sessionService.setSession(sessionDocument.sessionID, sessionDocument);
 
-                    this.sessionService.attachSessionToRequest(req, res, sessionID, sessionData);
+                    this.sessionService.attachSessionToRequest(req, res, sessionID, sessionDocument);
 
                 }
 
@@ -183,12 +183,12 @@ export class OAuthRouter {
 
             const queryParams: any = req.query;
 
-            const { encid, sessionID, sessionData } = await this.sessionService.getSessionFromCookieQueryParams(req, res);
+            const { encid, sessionID, sessionDocument } = await this.sessionService.getSessionFromCookieQueryParams(req, res);
 
             const organizedData: OrganizedAccountData = getDerivAccountFromURLParams(queryParams);
 
             // @ts-ignore
-            sessionData.session.bot.accounts.deriv.accountList = organizedData;
+            sessionDocument.session.bot.accounts.deriv.accountList = organizedData;
 
             // Get the bot instance from the app
             const bot = req.app.get('bot');
@@ -215,7 +215,7 @@ export class OAuthRouter {
             } else {
 
                 // Notify the bot that the user has logged in
-                bot.authorizeOauthData(sessionData);
+                bot.authorizeOauthData(sessionDocument);
 
                 templateRenderer.render200(req, res, {
                     template: 'deriv-oauth-callback-1',
