@@ -70,4 +70,5 @@ export const env = cleanEnv(process.env, {
   SESSION_STORE_MONGODB_URL: str({ devDefault: testOnly("mongodb://localhost:27017") }),
   SESSION_STORE_COLLECTION: str({ devDefault: testOnly("sessions") }),
   SESSION_STORE_TTL: num({ devDefault: testOnly(604800) }),
+  SPACE_CHARACTER: str({ devDefault: testOnly("‎") }),
 });

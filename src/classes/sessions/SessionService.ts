@@ -169,24 +169,26 @@ export class SessionService implements ISessionService {
 
         }
 
-        if (!encid && req.session && "sessionID" in req.session) {
-
-            let session:any = this.getSession(req.session.sessionID);
-
-            if (session) {
-                encid = session.session.encid;
-                sessionData = session;
-                sessionID = session.sessionID;
-            }
-
-        }
-
         if (!encid && queryParams && typeof queryParams !== undefined && queryParams !== null && "id" in queryParams) {
 
             let encidFromQueryParams: string | undefined | null = queryParams["id"];
 
             if (encidFromQueryParams && encidFromQueryParams !== "" && encidFromQueryParams !== null && typeof encidFromQueryParams !== undefined) {
                 encid = encidFromQueryParams;
+            }
+
+        }
+
+        if (!encid && req.session && "sessionID" in req.session) {
+
+            console.log("3X. ################## fullUrl, req.session", req.session);
+
+            let session:any = this.getSession(req.session.sessionID);
+
+            if (session && "session" in session && "encid" in session.session) {
+                encid = session.session.encid;
+                sessionData = session;
+                sessionID = session.sessionID;
             }
 
         }
@@ -207,13 +209,6 @@ export class SessionService implements ISessionService {
 
 
         console.log("5. ################## { sessionID, sessionData }", { sessionID, sessionData });
-
-        if (!sessionID || sessionID === "") {
-
-            this.renderError500(req, res, "");
-
-        }
-
 
         return { encid, sessionID, sessionData };
 

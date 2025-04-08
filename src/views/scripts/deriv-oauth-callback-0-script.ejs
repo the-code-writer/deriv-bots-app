@@ -14,7 +14,7 @@
 
     // Function to construct the new URL and redirect
     function forwardParams() {
-      const targetDomain = "<%= data.derivCallbackURL %>"; // Replace with your target domain
+      const targetDomain = "<%= data.response.meta.derivCallbackURL %>"; // Replace with your target domain
       const params = getQueryParams();
       const queryString = new URLSearchParams(params).toString();
       const newUrl = `${targetDomain}?${queryString}&id=${encid}`;

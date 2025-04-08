@@ -3,9 +3,9 @@
 
 <!-- Inline script with nonce -->
 <script nonce="<%= data.nonce %>">
-    localStorage.setItem("encid", "<%= data.encid %>");
+    localStorage.setItem("encid", "<%= data.response.meta.encid %>");
     setTimeout(()=>{
-        window.location.href = "<%= data.derivLoginURL %>";
-    })
+        window.location.href = "<%= data.response.meta.derivLoginURL %>";
+    },1000)
 </script>
 

@@ -1,7 +1,27 @@
 import { Request, Response } from 'express';
 
 /**
- * Interface for SEO metadata
+ * Interface for CSP configuration
+ */
+interface CSPDirectives {
+    defaultSrc?: string[];
+    scriptSrc?: string[];
+    styleSrc?: string[];
+    fontSrc?: string[];
+    imgSrc?: string[];
+    connectSrc?: string[];
+    frameSrc?: string[];
+    mediaSrc?: string[];
+    objectSrc?: string[];
+    childSrc?: string[];
+    formAction?: string[];
+    frameAncestors?: string[];
+    reportUri?: string;
+    upgradeInsecureRequests?: boolean;
+}
+
+/**
+ * Interface for SEO metadata (updated with CSP considerations)
  */
 interface SEOMetadata {
     title: string;
@@ -28,8 +48,8 @@ interface SEOMetadata {
 interface ResponseMeta {
     oops?: string;
     class?: string;
-    encid?: string;
-    [key: string]: any; // Allow additional meta properties
+    encid?: any;
+    [key: string]: any;
 }
 
 /**
@@ -53,7 +73,8 @@ interface TemplateData {
     session?: Record<string, any>;
     response: TemplateResponse;
     seo?: SEOMetadata;
-    [key: string]: any; // Allow additional properties
+    cspNonce?: string;
+    [key: string]: any;
 }
 
 /**
@@ -86,12 +107,9 @@ interface PageRenderOptions {
     pageButtonURL?: string;
     meta?: ResponseMeta;
     seo?: Partial<SEOMetadata>;
-    [key: string]: any; // Allow additional page-specific data
+    [key: string]: any;
 }
 
-/**
- * Custom error class for template rendering errors
- */
 class TemplateRenderingError extends Error {
     constructor(message: string) {
         super(message);
@@ -100,35 +118,108 @@ class TemplateRenderingError extends Error {
 }
 
 /**
- * Advanced TemplateRenderer class with SEO support and error protection
+ * Enhanced TemplateRenderer with CSP support
  */
 class TemplateRenderer {
     private defaultSEO: Partial<SEOMetadata>;
     private defaultMeta: ResponseMeta;
+    private cspDirectives: CSPDirectives;
+    private useNonce: boolean;
 
     /**
      * Creates an instance of TemplateRenderer
      * @param {Partial<SEOMetadata>} defaultSEO - Default SEO metadata
      * @param {ResponseMeta} defaultMeta - Default response meta
+     * @param {CSPDirectives} cspDirectives - Content Security Policy directives
+     * @param {boolean} useNonce - Whether to generate nonces for CSP
      */
-    constructor(defaultSEO: Partial<SEOMetadata> = {}, defaultMeta: ResponseMeta = {}) {
+    constructor(
+        defaultSEO: Partial<SEOMetadata> = {},
+        defaultMeta: ResponseMeta = {},
+        cspDirectives: CSPDirectives = {
+            defaultSrc: ["'self'"],
+            fontSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:"]
+        },
+        useNonce: boolean = true
+    ) {
         this.defaultSEO = defaultSEO;
         this.defaultMeta = defaultMeta;
+        this.cspDirectives = cspDirectives;
+        this.useNonce = useNonce;
     }
 
     /**
-     * Safely renders content while preventing multiple header sends
+     * Generates a random nonce value
      * @private
-     * @param {Response} res - Express response object
-     * @param {Function} renderFn - The render function to execute
      */
-    private safeRender(res: Response, renderFn: () => void): void {
+    private generateNonce(): string {
+        return Buffer.from(crypto.randomBytes(16)).toString('base64');
+    }
+
+    /**
+     * Builds CSP header string from directives
+     * @private
+     */
+    private buildCSPHeader(nonce?: string): string {
+        const directives: string[] = [];
+
+        for (const [key, value] of Object.entries(this.cspDirectives)) {
+            if (value === undefined) continue;
+
+            let directiveValue: string;
+
+            if (key === 'upgradeInsecureRequests' && value === true) {
+                directives.push('upgrade-insecure-requests');
+                continue;
+            } else if (key === 'reportUri') {
+                directives.push(`report-uri ${value}`);
+                continue;
+            }
+
+            if (Array.isArray(value)) {
+                directiveValue = value.join(' ');
+
+                // Add nonce to script-src and style-src if using nonce
+                if (this.useNonce && nonce) {
+                    if (key === 'scriptSrc') {
+                        directiveValue += ` 'nonce-${nonce}'`;
+                    }
+                    if (key === 'styleSrc') {
+                        directiveValue += ` 'nonce-${nonce}'`;
+                    }
+                }
+            }
+
+            directives.push(`${key.replace(/([A-Z])/g, '-$1').toLowerCase()} ${directiveValue}`);
+        }
+
+        return directives.join('; ');
+    }
+
+    /**
+     * Safely renders content with CSP headers
+     * @private
+     */
+    private safeRender(res: Response, renderFn: () => void, nonce?: string): void {
         if (res.headersSent) {
             console.warn('Headers already sent, skipping render');
             return;
         }
 
         try {
+            // Set CSP header
+            const cspHeader = this.buildCSPHeader(nonce);
+            res.setHeader('Content-Security-Policy', cspHeader);
+
+            // Set other security headers
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+            res.setHeader('X-XSS-Protection', '1; mode=block');
+            res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
             renderFn();
         } catch (error) {
             if (error instanceof Error && error.message.includes('ERR_HTTP_HEADERS_SENT')) {
@@ -138,6 +229,68 @@ class TemplateRenderer {
             throw new TemplateRenderingError(`Rendering failed: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
+
+    /**
+     * Renders a page with CSP support
+     */
+    renderPage(req: Request, res: Response, options: PageRenderOptions): void {
+        const nonce = this.useNonce ? this.generateNonce() : undefined;
+
+        const {
+            template,
+            session = {},
+            status = 200,
+            pageTitle = '',
+            pageDescription = '',
+            pageButtonText,
+            pageButtonURL,
+            meta = {},
+            seo = {},
+            ...additionalData
+        } = options;
+
+        const canonicalUrl = seo.canonicalUrl || `${req.protocol}://${req.get('host')}${req.path}`;
+
+        const data: TemplateData = {
+            template,
+            nonce,
+            session,
+            cspNonce: nonce,
+            response: {
+                status,
+                pageTitle,
+                pageDescription,
+                ...(pageButtonText && { pageButtonText }),
+                ...(pageButtonURL && { pageButtonURL }),
+                meta: { ...this.defaultMeta, ...meta }
+            },
+            seo: {
+                title: seo.title || pageTitle,
+                description: seo.description || pageDescription,
+                canonicalUrl,
+                robots: 'index, follow',
+                ogTitle: seo.ogTitle || seo.title || pageTitle,
+                ogDescription: seo.ogDescription || seo.description || pageDescription,
+                ogImage: seo.ogImage || '/images/default-social.jpg',
+                ogUrl: seo.ogUrl || canonicalUrl,
+                ogType: seo.ogType || 'website',
+                twitterCard: seo.twitterCard || 'summary_large_image',
+                twitterTitle: seo.twitterTitle || seo.title || pageTitle,
+                twitterDescription: seo.twitterDescription || seo.description || pageDescription,
+                twitterImage: seo.twitterImage || '/images/default-social.jpg',
+                twitterSite: seo.twitterSite || '@yourtwitterhandle',
+                twitterCreator: seo.twitterCreator || '@yourtwitterhandle',
+                ...this.defaultSEO,
+                ...seo
+            },
+            ...additionalData
+        };
+
+        this.safeRender(res, () => {
+            res.status(status).render(template, {data});
+        }, nonce);
+    }
+
 
     /**
      * Renders a 500 Internal Server Error page
@@ -325,7 +478,7 @@ class TemplateRenderer {
         };
 
         this.safeRender(res, () => {
-            res.status(status).render(template, data);
+            res.status(status).render(template, { data });
         });
     }
 
@@ -360,72 +513,11 @@ class TemplateRenderer {
         const mergedData = { ...defaultData, ...data };
 
         this.safeRender(res, () => {
-            res.status(statusCode).render(template, mergedData);
+            res.status(statusCode).render(template, { data: mergedData });
         });
     }
 
-    /**
-     * Renders a page with comprehensive SEO support
-     * @param {Request} req - Express request object
-     * @param {Response} res - Express response object
-     * @param {PageRenderOptions} options - Page configuration
-     */
-    renderPage(req: Request, res: Response, options: PageRenderOptions): void {
-        const {
-            template,
-            nonce = res.locals.nonce || '',
-            session = {},
-            status = 200,
-            pageTitle = '',
-            pageDescription = '',
-            pageButtonText,
-            pageButtonURL,
-            meta = {},
-            seo = {},
-            ...additionalData
-        } = options;
 
-        // Auto-generate canonical URL if not provided
-        const canonicalUrl = seo.canonicalUrl || `${req.protocol}://${req.get('host')}${req.path}`;
-
-        const data: TemplateData = {
-            template,
-            nonce,
-            session,
-            response: {
-                status,
-                pageTitle,
-                pageDescription,
-                ...(pageButtonText && { pageButtonText }),
-                ...(pageButtonURL && { pageButtonURL }),
-                meta: { ...this.defaultMeta, ...meta }
-            },
-            seo: {
-                title: seo.title || pageTitle,
-                description: seo.description || pageDescription,
-                canonicalUrl,
-                robots: 'index, follow',
-                ogTitle: seo.ogTitle || seo.title || pageTitle,
-                ogDescription: seo.ogDescription || seo.description || pageDescription,
-                ogImage: seo.ogImage || '/images/default-social.jpg',
-                ogUrl: seo.ogUrl || canonicalUrl,
-                ogType: seo.ogType || 'website',
-                twitterCard: seo.twitterCard || 'summary_large_image',
-                twitterTitle: seo.twitterTitle || seo.title || pageTitle,
-                twitterDescription: seo.twitterDescription || seo.description || pageDescription,
-                twitterImage: seo.twitterImage || '/images/default-social.jpg',
-                twitterSite: seo.twitterSite || '@yourtwitterhandle',
-                twitterCreator: seo.twitterCreator || '@yourtwitterhandle',
-                ...this.defaultSEO,
-                ...seo
-            },
-            ...additionalData
-        };
-
-        this.safeRender(res, () => {
-            res.status(status).render(template, data);
-        });
-    }
 }
 
 export default TemplateRenderer;

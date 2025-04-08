@@ -12403,6 +12403,14 @@ label.error{
   margin-bottom: 92px;
 }
 
+.error-section .content-box h1.empty{
+  display: block;
+  font-size: 300px;
+  line-height: 180px;
+  font-weight: 600;
+  margin-bottom: 250px !important;
+}
+
 .error-section .content-box h1.error-404:before{
   position: absolute;
   content: '';

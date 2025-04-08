@@ -6,9 +6,9 @@ import TemplateRenderer from '@/classes/templates/TemplateRenderer';
 
 
 const cookieParser = require('cookie-parser');
-const { DERIV_APP_OAUTH_URL, DERIV_APP_OAUTH_LOGIN_URL, DERIV_APP_OAUTH_CALLBACK_URL, DERIV_APP_TG_URL } = env;
+const { DERIV_APP_OAUTH_URL, DERIV_APP_OAUTH_CALLBACK_URL, DERIV_APP_TG_URL, SPACE_CHARACTER } = env;
 
-const templateRenderer = new TemplateRenderer('https://t.me/your_bot_url');
+const templateRenderer = new TemplateRenderer();
 
 /**
  * Interface for the data object passed to EJS templates.
@@ -83,7 +83,7 @@ export class OAuthRouter {
             const data: TemplateData = {
                 title: 'Deriv Trading Bot',
                 nonce: res.locals.nonce, // Nonce for CSP
-                derivLoginURL: DERIV_APP_OAUTH_LOGIN_URL, // Deriv OAuth URL from environment
+                derivLoginURL: DERIV_APP_OAUTH_URL, // Deriv OAuth URL from environment
             };
 
             // Render the index EJS template with the data
@@ -134,43 +134,22 @@ export class OAuthRouter {
 
             }
 
-            if (sessionData) {
-
-                templateRenderer.render200(req, res, {
-                    template: 'deriv-oauth-login',
-                    nonce: res.locals.nonce || '',
-                    session: {},
-                    status: 200,
-                    pageTitle: 'Redirecting',
-                    pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
-                    pageButtonText: 'Login via Deriv.com',
-                    pageButtonURL: DERIV_APP_OAUTH_URL,
-                    meta: {
-                        oops: "‎",
-                        class: "login",
-                        encid: encid
-                    }
-                });
-
-            } else {
-
-                templateRenderer.render500(req, res, {
-                    template: 'deriv-oauth-login',
-                    nonce: res.locals.nonce || '',
-                    session: {},
-                    status: 200,
-                    pageTitle: 'Redirecting',
-                    pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
-                    pageButtonText: 'Login via Deriv.com',
-                    pageButtonURL: DERIV_APP_OAUTH_URL,
-                    meta: {
-                        oops: "‎",
-                        class: "login",
-                        encid: encid
-                    }
-                });
-
-            }
+            templateRenderer.render200(req, res, {
+                template: 'deriv-oauth-login',
+                nonce: res.locals.nonce || '',
+                session: {},
+                status: 200,
+                pageTitle: 'Redirecting',
+                pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
+                pageButtonText: 'Login via Deriv.com',
+                pageButtonURL: DERIV_APP_OAUTH_URL,
+                meta: {
+                    oops: SPACE_CHARACTER,
+                    headingClass: "login empty",
+                    encid: encid,
+                    derivLoginURL: DERIV_APP_OAUTH_URL,
+                }
+            });
 
         });
 
@@ -188,13 +167,8 @@ export class OAuthRouter {
                 session: {},
                 status: 200,
                 pageTitle: 'Redirecting',
-                pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
-                pageButtonText: 'Login via Deriv.com',
-                pageButtonURL: DERIV_APP_OAUTH_URL,
                 meta: {
-                    oops: "‎",
-                    class: "login",
-                    encid: encid
+                    derivCallbackURL: DERIV_APP_OAUTH_CALLBACK_URL,
                 }
             });
 
@@ -226,14 +200,14 @@ export class OAuthRouter {
                     template: 'deriv-oauth-login',
                     nonce: res.locals.nonce || '',
                     session: {},
-                    status: 200,
-                    pageTitle: 'Redirecting',
-                    pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
-                    pageButtonText: 'Login via Deriv.com',
+                    status: 500,
+                    pageTitle: 'Authentication Error',
+                    pageDescription: 'Telegram Boit has not been initialized',
+                    pageButtonText: 'Contact Support',
                     pageButtonURL: DERIV_APP_OAUTH_URL,
                     meta: {
-                        oops: "‎",
-                        class: "login",
+                        oops: SPACE_CHARACTER,
+                        headingClass: "login",
                         encid: encid
                     }
                 });
@@ -248,16 +222,14 @@ export class OAuthRouter {
                     nonce: res.locals.nonce || '',
                     session: {},
                     status: 200,
-                    pageTitle: 'Redirecting',
-                    pageDescription: 'If the page doesnt refresh in 1 minute navigate manually to deriv.com',
-                    pageButtonText: 'Login via Deriv.com',
-                    pageButtonURL: DERIV_APP_OAUTH_URL,
+                    pageTitle: 'Authenticated!',
+                    pageDescription: 'You have logged in successfully, now you can continue trading using Telegram. Click the button below to continue.',
+                    pageButtonText: 'Open Telegram',
+                    pageButtonURL: DERIV_APP_TG_URL,
                     meta: {
-                        oops: "‎",
-                        class: "login",
+                        oops: SPACE_CHARACTER,
+                        headingClass: "login empty",
                         encid: encid,
-                        telegramBotURL: DERIV_APP_TG_URL,
-                        sessionId: sessionID,
                     }
                 });
 
