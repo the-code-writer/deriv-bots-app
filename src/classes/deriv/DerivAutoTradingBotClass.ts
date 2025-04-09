@@ -1519,8 +1519,12 @@ class DerivAutoTradingBotClass {
       // Log the attempt to create the contract
       logger.info("Creating contract with parameters:", contractParameters);
 
+      const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
+
+      const account = await api.account(this._userAccountToken);
+
       // Create the contract using the Deriv API
-      const contractPromise = this.api.contract(contractParameters);
+      const contractPromise = api.contract(contractParameters);
 
       // Race between the contract creation and the timeout promise
       const contract: ContractResponse = await Promise.race([contractPromise, timeoutPromise]);
@@ -1878,6 +1882,9 @@ class DerivAutoTradingBotClass {
 
   // Purchase PUT / CALL contract (private)
   private async purchaseAuto(): Promise<ITradeData> {
+
+    console.log(333333)
+
     const { currency } = this.userAccount;
 
     const contractParameters: ContractParams = {
@@ -2238,7 +2245,11 @@ class DerivAutoTradingBotClass {
  * @param {boolean} retryAfterError - Whether this is a retry after an error occurred.
  * @returns {Promise<void>} - Resolves when trading is stopped.
  */
-  async startTrading(session: any, retryAfterError: boolean = false): Promise<void> {
+  async startTrading(session: any, retryAfterError: boolean = false, userAccountToken: string = ""): Promise<void> {
+
+    if (userAccountToken) {
+      this._userAccountToken = userAccountToken;
+    }
 
     // Validate session parameters
     const errorObject = {
@@ -2340,12 +2351,14 @@ class DerivAutoTradingBotClass {
    * @returns {Promise<void>} - Resolves when the trade is completed and the next trade is scheduled.
    */
   private async executeTrade(purchaseType: string): Promise<void> {
+
     // Stop trading if the flag is false or the connection is closed
-    if (!this._isTrading || !this.api) {
+    if (!this._isTrading) {
       return;
     }
 
     try {
+
       let response: ITradeData = {} as ITradeData;
 
       // Purchase the next contract based on the purchase type
@@ -2418,22 +2431,10 @@ class DerivAutoTradingBotClass {
       // Calculate the next trading amount based on the result of the previous trade
       this.currentStake = this.getTradingAmount(resultIsWin, profitAfterSale);
 
+      this.sleep(3000)
+
       // Schedule the next trade after a short delay
-      await this.connect(() => {
-
-        this.setAccount((userAccount: any) => {
-
-          console.log("TRADE AGAIN");
-
-          if(userAccount){
-
-            this.executeTrade(purchaseType);
-
-          }
-
-        }, this._userAccountToken);
-
-      });
+      this.executeTrade(purchaseType);
 
     } catch (err: any) {
       console.error("Error during trading:", err);

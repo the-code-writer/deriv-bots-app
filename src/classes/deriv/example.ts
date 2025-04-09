@@ -41,9 +41,9 @@ const sessionDocument:any = {
         "tradingType": "Derivatives 📊",
         "market": "Volatility 50(1s) 📈",
         "purchaseType": "Rise ⬆️",
-        "stake": 15,
-        "takeProfit": 15,
-        "stopLoss": 10,
+        "stake": 1000,
+        "takeProfit": 5000,
+        "stopLoss": 10000,
         "tradeDuration": "45min ⏱️",
         "updateFrequency": "35min ⏱️",
         "contractDurationUnits": "Hours ⏱️",
@@ -62,12 +62,12 @@ const sessionDocument:any = {
           "accountList": {
             "1": {
               "acct": "CR518993",
-              "token": "a1-rYXhGcfx5ABjchoJoCRumDrkx66XT",
+              "token": "a1-rYXhGcfx5ABjchoJoCRumDrkx66XT", 
               "cur": "USD"
             },
             "2": {
               "acct": "CR2029443",
-              "token": "a1-GFnPO0vy5aAVY7bMQDESKJyJad9Pj",
+              "token": "a1-GFnPO0vy5aAVY7bMQDESKJyJad9Pj", 
               "cur": "USDC"
             },
             "3": {
@@ -157,25 +157,10 @@ const sessionDocument:any = {
 
 */
 
+console.log("sessionDocument.session.bot.tradingOptions", sessionDocument.session.bot.tradingOptions)
 
 const derivInstance = new DerivAutoTradingBotClass();
 
-const accountToken = "a1-28VUaap8ZFN3G4lMgf5P3S3IPtUQl";
+const userAccountToken = "a1-28VUaap8ZFN3G4lMgf5P3S3IPtUQl";
 
-derivInstance.connect(() => {
-
-    derivInstance.setAccount((userAccount: any) => {
-
-        console.log("LOGIN_DERIV_ACCOUNT_READY", userAccount);
-
-        tradeData();
-
-    }, accountToken);
-
-}, accountToken);
-
-function tradeData() {
-    
-    derivInstance.startTrading(sessionDocument.session.bot.tradingOptions);
-
-}
+derivInstance.startTrading(sessionDocument.session.bot.tradingOptions, false, userAccountToken);
