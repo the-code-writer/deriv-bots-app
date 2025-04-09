@@ -11,7 +11,13 @@ import { parseTimeToSeconds } from "@/common/utils/snippets";
 
 import { ITradeData, TradeData } from "@/classes/deriv/TradingDataClass";
 
-const { parentPort } = require("node:worker_threads");
+//const { parentPort } = require("node:worker_threads");
+
+const parentPort = {
+  postMessage: (data: any) => {
+    console.log("POST_MESSAGE", data);
+  }
+}
 
 global.WebSocket = require("ws");
 const { find } = require("rxjs/operators");
@@ -634,7 +640,7 @@ interface BotConfig {
 
 class DerivAutoTradingBotClass {
   // Private properties with explicit types
-  
+
   private _api: any;
 
   // @ts-ignore: see this.resetState()
@@ -732,11 +738,6 @@ class DerivAutoTradingBotClass {
 
     // Call the resetState function to initialize all properties
     this.resetState();
-
-    // Connect to the Dervi servers via web sockets
-    setTimeout(() => {
-      this.connect(() => this.setAccount());
-    }, 1000)
 
   }
 
@@ -1146,7 +1147,13 @@ class DerivAutoTradingBotClass {
 
     this.api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
+    const ping = await this.api.basic.ping();
+
+    console.log("PING_CONNECT", ping);
+
     logger.info("Connection established via DerivAPI endpoint.");
+
+    parentPort.postMessage({ action: "sendTelegramMessage", text: "🟢 Connection to Deriv server established!", meta: {} });
 
     logger.info("Start Ping <-> Pong:");
 
@@ -1164,13 +1171,17 @@ class DerivAutoTradingBotClass {
   private ping(): void {
     // Sends a ping message every 30 seconds
     this._pingIntervalID = setInterval(() => {
+      if (!this.api) {
+        console.log("DISCONNECT")
+        return this.disconnect()
+      }
       this.api.basic.ping().then((pong: any) => {
         logger.info(`Ping-Pong-Received : ${pong.req_id}`);
       });
     }, CONNECTION_PING_TIMEOUT);
   }
 
-  public getAccountToken(accounts:any, key:string, value:string) {
+  public getAccountToken(accounts: any, key: string, value: string) {
 
     // Iterate through the object
     for (const index in accounts) {
@@ -1182,7 +1193,7 @@ class DerivAutoTradingBotClass {
         return entry; // Return the matching entry
       }
     }
-  
+
     // Return null if no match is found
     return null;
   }
@@ -1201,14 +1212,14 @@ class DerivAutoTradingBotClass {
       throw new Error("Invalid user token provided.");
     }
 
-    if(!this._userAccountToken && typeof token === "string" && token.length > 10){
+    if (!this._userAccountToken && typeof token === "string" && token.length > 10) {
       this._userAccountToken = token;
     }
 
-    if(!this.api){
+    if (!this.api) {
 
-      this.connect(()=>{
-        
+      await this.connect(() => {
+
         this.setAccount(callBackFunction, token);
 
       });
@@ -1218,8 +1229,6 @@ class DerivAutoTradingBotClass {
     try {
       // Initialize the account using the Deriv API
       const account = await this.api.account(userToken);
-
-      logger.info(`API hangs with ${userToken}`);
 
       // Validate the account data
       if (!account || !account.balance || !account.balance.amount) {
@@ -1286,90 +1295,110 @@ class DerivAutoTradingBotClass {
 
     if (this._tradingType === CONSTANTS.TRADING_TYPES.DERIVATIVES) {
 
+      console.log("PURCHASE TYPE DERIVATIVES", purchaseType, CONSTANTS.PURCHASE_TYPES.DERIVATIVES)
+
       switch (purchaseType) {
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][0]: {
+
+          console.log("purchaseAuto");
           response = await this.purchaseAuto();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][1]: {
+          console.log("purchaseCall");
           response = await this.purchaseCall();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][2]: {
+          console.log("purchasePut");
           response = await this.purchasePut();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[1][0]: {
+          console.log("purchaseDigitAuto");
           response = await this.purchaseDigitAuto();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[1][1]: {
+          console.log("purchaseDigitEven");
           response = await this.purchaseDigitEven();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[1][2]: {
+          console.log("purchaseDigitOdd");
           response = await this.purchaseDigitOdd();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[2][0]: {
+          console.log("purchaseDigitUnder9");
           response = await this.purchaseDigitUnder9();
 
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[2][1]: {
+          console.log("purchaseDigitUnder8");
           response = await this.purchaseDigitUnder8();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[3][0]: {
+          console.log("purchaseDigitUnder7");
           response = await this.purchaseDigitUnder7();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[3][1]: {
+          console.log("purchaseDigitUnder");
           response = await this.purchaseDigitUnder(6);
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[4][0]: {
+          console.log("purchaseDigitOver0");
           response = await this.purchaseDigitOver0();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[4][1]: {
+          console.log("purchaseDigitOver1");
           response = await this.purchaseDigitOver1();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[5][0]: {
+          console.log("purchaseDigitOver2");
           response = await this.purchaseDigitOver2();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[5][1]: {
+          console.log("purchaseDigitOver");
           response = await this.purchaseDigitOver(3);
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[6][0]: {
+          console.log("purchaseDigitDiff");
           response = await this.purchaseDigitDiff(this.getDigitNotLast());
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[6][1]: {
+          console.log("purchaseDigitDiff");
           response = await this.purchaseDigitDiff(this.getDigitRandom());
           break;
         }
 
         default: {
+          console.log("purchaseDigitDiff");
           response = await this.purchaseDigitDiff(this.getDigitRandom());
           break;
         }
@@ -1377,6 +1406,72 @@ class DerivAutoTradingBotClass {
     }
 
     return response;
+
+  }
+
+  parseDefaultMarket(): string {
+
+    let market = "R_100";
+
+    switch (this.defaultMarket) {
+
+      case CONSTANTS.MARKETS.DERIVATIVES[0][0]: {
+        market = "R_10";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[0][1]: {
+        market = "R_10(1s)";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[1][0]: {
+        market = "R_25";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[1][1]: {
+        market = "R_25(1s)";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[2][0]: {
+        market = "R_50";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[2][1]: {
+        market = "R_50";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[3][0]: {
+        market = "R_75";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[3][1]: {
+        market = "R_75(1s)";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[4][0]: {
+        market = "R_100";
+        break;
+      }
+
+      case CONSTANTS.MARKETS.DERIVATIVES[4][1]: {
+        market = "R_100(1s)";
+        break;
+      }
+
+      default: {
+        console.log("DEFAULT", this.defaultMarket, CONSTANTS.MARKETS.DERIVATIVES)
+        break;
+      }
+    }
+
+    return market;
 
   }
 
@@ -1398,6 +1493,11 @@ class DerivAutoTradingBotClass {
  * @throws {Error} - Throws an error if the contract purchase fails or times out.
  */
   private async purchaseContract(contractParameters: ContractParams): Promise<ITradeData> {
+
+
+    console.log("PURCHASE_CONTRACT_PARAMS", contractParameters);
+
+
     // Validate the contract parameters to ensure all required fields are present
     if (!contractParameters || !contractParameters.amount || !contractParameters.contract_type) {
       throw new Error("Invalid contract parameters provided.");
@@ -1410,6 +1510,7 @@ class DerivAutoTradingBotClass {
     let tradeData: ITradeData = {} as ITradeData;
 
     try {
+
       // Create a timeout promise to handle cases where the contract creation takes too long
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Contract creation timed out")), CONNECTION_CONTRACT_CREATION_TIMEOUT)
@@ -1419,7 +1520,7 @@ class DerivAutoTradingBotClass {
       logger.info("Creating contract with parameters:", contractParameters);
 
       // Create the contract using the Deriv API
-      const contractPromise = this.api.basic.contract(contractParameters);
+      const contractPromise = this.api.contract(contractParameters);
 
       // Race between the contract creation and the timeout promise
       const contract: ContractResponse = await Promise.race([contractPromise, timeoutPromise]);
@@ -1537,7 +1638,7 @@ class DerivAutoTradingBotClass {
 
       // Return an empty trade data object in case of failure
       return {} as ITradeData;
-      
+
     }
   }
 
@@ -1555,7 +1656,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: predictedDigit.toString(),
     };
 
@@ -1581,7 +1682,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: barrier.toString(),
     };
 
@@ -1606,7 +1707,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: 0,
     };
 
@@ -1631,7 +1732,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: 1,
     };
 
@@ -1656,7 +1757,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: 2,
     };
 
@@ -1681,7 +1782,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: barrier.toString(),
     };
 
@@ -1737,7 +1838,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: 8,
     };
 
@@ -1762,7 +1863,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: 7,
     };
 
@@ -1787,7 +1888,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: "EVEN",
     };
 
@@ -1808,12 +1909,11 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "DIGITEVEN",
+      contract_type: "CALL",
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
-      barrier: "EVEN",
+      symbol: this.parseDefaultMarket(),
     };
 
     // Calculate profit percentage for DIGIT EVEN
@@ -1837,7 +1937,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: "EVEN",
     };
 
@@ -1862,7 +1962,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: "EVEN",
     };
 
@@ -1887,7 +1987,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: "EVEN",
     };
 
@@ -1912,7 +2012,7 @@ class DerivAutoTradingBotClass {
       currency: currency || "USD",
       duration: this._contractDuration,
       duration_unit: this._contractDurationUnit,
-      symbol: this.defaultMarket,
+      symbol: this.parseDefaultMarket(),
       barrier: "ODD",
     };
 
@@ -2319,7 +2419,22 @@ class DerivAutoTradingBotClass {
       this.currentStake = this.getTradingAmount(resultIsWin, profitAfterSale);
 
       // Schedule the next trade after a short delay
-      setTimeout(() => this.executeTrade(purchaseType), 3000);
+      await this.connect(() => {
+
+        this.setAccount((userAccount: any) => {
+
+          console.log("TRADE AGAIN");
+
+          if(userAccount){
+
+            this.executeTrade(purchaseType);
+
+          }
+
+        }, this._userAccountToken);
+
+      });
+
     } catch (err: any) {
       console.error("Error during trading:", err);
       this.handleErrorExemption(err, this._cachedSession);
@@ -2493,55 +2608,65 @@ class DerivAutoTradingBotClass {
 
   async handleErrorExemption(err: any, contractParams: any): Promise<void> {
 
-    const errorCode: string = err.error.code;
-    const errorMessage: string = err.error.message;
-    const errorMessageType: string = err.msg_type;
+    console.log("HANDLE_PURCHASE_ERROR", err);
 
-    const self = this;
+    try {
 
-    logger.error(`Purchase Error: ${errorCode} - ${errorMessageType} - ${errorMessage}`);
+      const errorCode: string = err.error.code;
+      const errorMessage: string = err.error.message;
+      const errorMessageType: string = err.msg_type;
 
-    switch (errorCode) {
+      const self = this;
 
-      case "AuthorizationRequired": {
+      logger.error(`Purchase Error: ${errorCode} - ${errorMessageType} - ${errorMessage}`);
 
-        this.setAccount(() => {
-          self.startTrading(contractParams, false);
-        })
+      switch (errorCode) {
 
-        break;
+        case "AuthorizationRequired": {
+
+          this.setAccount(() => {
+            self.startTrading(contractParams, false);
+          })
+
+          break;
+
+        }
+
+        case "InvalidParameters": {
+
+          this.stopTrading("Invalid parameters, please try again.", false);
+
+          console.log("InvalidParameters", err, contractParams);
+
+          break;
+
+        }
+
+        case "InsufficientBalance": {
+
+          //TODO: get the current balance vs stake, the better to take the one from the server.
+
+          this.stopTrading("Insufficient balance, please topup your account to continue.", false);
+
+          console.log("InsufficientBalance", err);
+
+          break;
+
+        }
+
+        default: {
+
+          this.stopTrading("An unknoen error occured. Please try again later.", false);
+
+          console.log("Unknown error", err, contractParams);
+
+        }
 
       }
 
-      case "InvalidParameters": {
+    } catch (error) {
 
-        this.stopTrading("Invalid parameters, please try again.", false);
-
-        console.log("InvalidParameters", err, contractParams);
-
-        break;
-
-      }
-
-      case "InsufficientBalance": {
-
-        //TODO: get the current balance vs stake, the better to take the one from the server.
-
-        this.stopTrading("Insufficient balance, please topup your account to continue.", false);
-
-        console.log("InsufficientBalance", err);
-
-        break;
-
-      }
-
-      default: {
-
-        this.stopTrading("An unknoen error occured. Please try again later.", false);
-
-        console.log("Unknown error", err, contractParams);
-
-      }
+      console.log("UN_HANDLE_PURCHASE_ERROR !!!!!!", error);
 
     }
 

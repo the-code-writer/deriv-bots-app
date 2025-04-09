@@ -10,6 +10,8 @@ if (!action) {
 
 const derivInstance = new DerivAutoTradingBotClass();
 
+
+
 const handleLoggedIn = (
   userAction,
   userChatId,
@@ -38,38 +40,18 @@ const handleLoggedIn = (
   console.log("ACCOUNT_TOKEN", account);
 
   try {
-    let userAccount = {
-      _email: "digitalcurrencyonline@gmail.com",
-      _country: "zw",
-      _currency: "eUSDT",
-      _loginid: "CR8424472",
-      _user_id: 5716997,
-      _fullname: "Mr Douglas Maposa",
-      _amount: { value: 0, currency: "eUSDT", lang: "EN" },
-    };
-
-    parentPort.postMessage({
-      action: "LOGIN_DERIV_ACCOUNT_READY",
-      data: {
-        userAccount,
-        sessionDocument,
-        chatId: userChatId,
-        selectedAccount: account,
-      },
-    });
-
-    /*
 
     derivInstance.setAccount((userAccount) => {
+      
       console.log("LOGIN_DERIV_ACCOUNT_READY", userAccount);
 
       parentPort.postMessage({
         action: "LOGIN_DERIV_ACCOUNT_READY",
         data: { userAccount, sessionDocument, chatId: userChatId },
       });
+
     }, account.token);
 
-    */
   } catch (error) {
     console.log("LOGIN_DERIV_ACCOUNT_ERROR", error);
 
