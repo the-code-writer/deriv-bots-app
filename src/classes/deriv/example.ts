@@ -41,7 +41,7 @@ const sessionDocument:any = {
         "tradingType": "Derivatives 📊",
         "market": "Volatility 50(1s) 📈",
         "purchaseType": "Rise ⬆️",
-        "stake": 1000,
+        "stake": 1,
         "takeProfit": 5000,
         "stopLoss": 10000,
         "tradeDuration": "45min ⏱️",

@@ -1295,110 +1295,90 @@ class DerivAutoTradingBotClass {
 
     if (this._tradingType === CONSTANTS.TRADING_TYPES.DERIVATIVES) {
 
-      console.log("PURCHASE TYPE DERIVATIVES", purchaseType, CONSTANTS.PURCHASE_TYPES.DERIVATIVES)
-
       switch (purchaseType) {
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][0]: {
-
-          console.log("purchaseAuto");
           response = await this.purchaseAuto();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][1]: {
-          console.log("purchaseCall");
           response = await this.purchaseCall();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][2]: {
-          console.log("purchasePut");
           response = await this.purchasePut();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[1][0]: {
-          console.log("purchaseDigitAuto");
           response = await this.purchaseDigitAuto();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[1][1]: {
-          console.log("purchaseDigitEven");
           response = await this.purchaseDigitEven();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[1][2]: {
-          console.log("purchaseDigitOdd");
           response = await this.purchaseDigitOdd();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[2][0]: {
-          console.log("purchaseDigitUnder9");
           response = await this.purchaseDigitUnder9();
 
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[2][1]: {
-          console.log("purchaseDigitUnder8");
           response = await this.purchaseDigitUnder8();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[3][0]: {
-          console.log("purchaseDigitUnder7");
           response = await this.purchaseDigitUnder7();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[3][1]: {
-          console.log("purchaseDigitUnder");
           response = await this.purchaseDigitUnder(6);
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[4][0]: {
-          console.log("purchaseDigitOver0");
           response = await this.purchaseDigitOver0();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[4][1]: {
-          console.log("purchaseDigitOver1");
           response = await this.purchaseDigitOver1();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[5][0]: {
-          console.log("purchaseDigitOver2");
           response = await this.purchaseDigitOver2();
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[5][1]: {
-          console.log("purchaseDigitOver");
           response = await this.purchaseDigitOver(3);
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[6][0]: {
-          console.log("purchaseDigitDiff");
           response = await this.purchaseDigitDiff(this.getDigitNotLast());
           break;
         }
 
         case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[6][1]: {
-          console.log("purchaseDigitDiff");
           response = await this.purchaseDigitDiff(this.getDigitRandom());
           break;
         }
 
         default: {
-          console.log("purchaseDigitDiff");
           response = await this.purchaseDigitDiff(this.getDigitRandom());
           break;
         }
@@ -1495,7 +1475,7 @@ class DerivAutoTradingBotClass {
   private async purchaseContract(contractParameters: ContractParams): Promise<ITradeData> {
 
 
-    console.log("PURCHASE_CONTRACT_PARAMS", contractParameters);
+    //console.log("PURCHASE_CONTRACT_PARAMS", contractParameters);
 
 
     // Validate the contract parameters to ensure all required fields are present
