@@ -199,6 +199,7 @@ export class DerivTradingBot {
                 await this.adjustTradeDelay(tradeResult);
 
             } catch (error) {
+                console.log(error);
                 logger.error('Error in trading loop', error);
                 this.consecutiveLosses++;
 

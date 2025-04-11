@@ -84,7 +84,7 @@ export class TradeManager {
      * @returns {Promise<ITradeData>} Trade execution result
      */
     async executeTrade(purchaseType: PurchaseType): Promise<ITradeData> {
-        if (!this.api || !this.account) {
+        if (false) {
             throw new Error('TradeManager not initialized');
         }
 
