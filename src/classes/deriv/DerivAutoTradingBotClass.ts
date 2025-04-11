@@ -638,95 +638,280 @@ interface BotConfig {
   userAccountToken?: string;
 }
 
+/**
+ * Factory for creating contract parameters
+ */
+class ContractParamsFactory {
+  static createDigitDiffParams(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string,
+    predictedDigit: number
+  ): ContractParams {
+    return {
+      amount: stake,
+      basis: "stake",
+      contract_type: "DIGITDIFF",
+      currency: currency,
+      duration: duration,
+      duration_unit: durationUnit,
+      symbol: market,
+      barrier: predictedDigit.toString()
+    };
+  }
+
+  static createDigitOverParams(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string,
+    barrier: number
+  ): ContractParams {
+    return {
+      amount: stake,
+      basis: "stake",
+      contract_type: "DIGITOVER",
+      currency: currency,
+      duration: duration,
+      duration_unit: durationUnit,
+      symbol: market,
+      barrier: barrier.toString()
+    };
+  }
+
+  static createDigitUnderParams(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string,
+    barrier: number
+  ): ContractParams {
+    return {
+      amount: stake,
+      basis: "stake",
+      contract_type: "DIGITUNDER",
+      currency: currency,
+      duration: duration,
+      duration_unit: durationUnit,
+      symbol: market,
+      barrier: barrier.toString()
+    };
+  }
+
+  static createDigitEvenParams(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string
+  ): ContractParams {
+    return {
+      amount: stake,
+      basis: "stake",
+      contract_type: "EVEN",
+      currency: currency,
+      duration: duration,
+      duration_unit: durationUnit,
+      symbol: market,
+      barrier: "EVEN"
+    };
+  }
+
+  static createDigitOddParams(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string
+  ): ContractParams {
+    return {
+      amount: stake,
+      basis: "stake",
+      contract_type: "ODD",
+      currency: currency,
+      duration: duration,
+      duration_unit: durationUnit,
+      symbol: market,
+      barrier: "ODD"
+    };
+  }
+
+  // Specific digit methods
+  static createDigitOver0Params(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string
+  ): ContractParams {
+    return this.createDigitOverParams(stake, currency, duration, durationUnit, market, 0);
+  }
+
+  static createDigitOver1Params(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string
+  ): ContractParams {
+    return this.createDigitOverParams(stake, currency, duration, durationUnit, market, 1);
+  }
+
+  static createDigitOver2Params(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string
+  ): ContractParams {
+    return this.createDigitOverParams(stake, currency, duration, durationUnit, market, 2);
+  }
+
+  static createDigitUnder9Params(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string
+  ): ContractParams {
+    return this.createDigitUnderParams(stake, currency, duration, durationUnit, market, 9);
+  }
+
+  static createDigitUnder8Params(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string
+  ): ContractParams {
+    return this.createDigitUnderParams(stake, currency, duration, durationUnit, market, 8);
+  }
+
+  static createDigitUnder7Params(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string
+  ): ContractParams {
+    return this.createDigitUnderParams(stake, currency, duration, durationUnit, market, 7);
+  }
+
+  // Special case for recovery trade
+  static createRecoveryDigitUnderParams(
+    stake: number,
+    currency: string,
+    duration: number,
+    durationUnit: string,
+    market: string,
+    barrier: number
+  ): ContractParams {
+    return {
+      amount: stake * 12.37345, // Recovery multiplier
+      basis: "stake",
+      contract_type: "DIGITUNDER",
+      currency: currency,
+      duration: duration,
+      duration_unit: durationUnit,
+      symbol: market,
+      barrier: barrier.toString()
+    };
+  }
+}
+
 class DerivAutoTradingBotClass {
   // Private properties with explicit types
 
-  private _api: any;
+  private api: any;
 
   // @ts-ignore: see this.resetState()
-  private _auditTrail: Array<any>;
-  private _cachedSession: any
-  private _pingIntervalID: NodeJS.Timeout | string | number | undefined | any;
-  private _tradeDurationTimeoutID: NodeJS.Timeout | string | number | undefined | any;
-  private _updateFrequencyTimeIntervalID: NodeJS.Timeout | string | number | undefined | any;
+  private auditTrail: Array<any>;
+  private cachedSession: any
+  private pingIntervalID: NodeJS.Timeout | string | number | undefined | any;
+  private tradeDurationTimeoutID: NodeJS.Timeout | string | number | undefined | any;
+  private updateFrequencyTimeIntervalID: NodeJS.Timeout | string | number | undefined | any;
   // @ts-ignore: see this.resetState()
-  private _tradingType: TradingType;
+  private tradingType: TradingType;
   // @ts-ignore: see this.resetState()
-  private _defaultMarket: MarketType;
+  private defaultMarket: MarketType;
   // @ts-ignore: see this.resetState()
-  private _currentStake: number;
+  private currentStake: number;
   // @ts-ignore: see this.resetState()
-  private _baseStake: number;
+  private baseStake: number;
   // @ts-ignore: see this.resetState()
-  private _maxStake: number;
+  private maxStake: number;
   // @ts-ignore: see this.resetState()
-  private _minStake: number;
+  private minStake: number;
   // @ts-ignore: see this.resetState()
-  private _maxRecoveryTrades: number;
+  private maxRecoveryTrades: number;
   // @ts-ignore: see this.resetState()
-  private _currentRecoveryTradeIndex: number;
+  private currentRecoveryTradeIndex: number;
   // @ts-ignore: see this.resetState()
-  private _profit: number;
+  private profit: number;
   // @ts-ignore: see this.resetState()
-  private _isTrading: boolean;
+  private isTrading: boolean;
   // @ts-ignore: see this.resetState()
-  private _takeProfit: number;
+  private takeProfit: number;
   // @ts-ignore: see this.resetState()
-  private _totalStake: number;
+  private totalStake: number;
   // @ts-ignore: see this.resetState()
-  private _totalPayout: number;
+  private totalPayout: number;
   // @ts-ignore: see this.resetState()
-  private _stopLoss: number;
+  private stopLoss: number;
   // @ts-ignore: see this.resetState()
-  private _consecutiveTrades: number;
+  private consecutiveTrades: number;
   // @ts-ignore: see this.resetState()
-  private _profitPercentage: number;
+  private profitPercentage: number;
   // @ts-ignore: see this.resetState()
-  private _originalPurchaseType: PurchaseType;
+  private originalPurchaseType: PurchaseType;
   // @ts-ignore: see this.resetState()
-  private _currentPurchaseType: PurchaseType;
+  private currentPurchaseType: PurchaseType;
 
   // @ts-ignore: see this.resetState()
-  private _cumulativeLossAmount: number;
+  private cumulativeLossAmount: number;
   // @ts-ignore: see this.resetState()
-  private _cumulativeLosses: number;
+  private cumulativeLosses: number;
   // @ts-ignore: see this.resetState()
-  private _numberOfWins: number;
+  private numberOfWins: number;
   // @ts-ignore: see this.resetState()
-  private _numberOfLosses: number;
+  private numberOfLosses: number;
   // @ts-ignore: see this.resetState()
-  private _totalNumberOfRuns: number;
+  private totalNumberOfRuns: number;
 
   // @ts-ignore: see this.resetState()
-  private _tradeStartedAt: number;
+  private tradeStartedAt: number;
   // @ts-ignore: see this.resetState()
-  private _tradeDuration: number;
+  private tradeDuration: number;
   // @ts-ignore: see this.resetState()
-  private _updateFrequency: number;
+  private updateFrequency: number;
 
   // @ts-ignore: see this.resetState()
-  private _lastTick: string;
+  private lastTick: string;
   // @ts-ignore: see this.resetState()
-  private _lastDigit: number;
+  private lastDigit: number;
   // @ts-ignore: see this.resetState()
-  private _lastDigitsArray: [number];
+  private lastDigitsArray: [number];
 
   // @ts-ignore: see this.resetState()
-  private _contractDuration: number;
+  private contractDuration: number;
   // @ts-ignore: see this.resetState()
-  private _contractDurationUnit: string;
+  private contractDurationUnit: string;
 
   // @ts-ignore: see this.resetState()
-  private _userAccount: IDerivUserAccount;
+  private userAccount: IDerivUserAccount;
 
   // @ts-ignore: see this.resetState()
-  private _userAccountToken: string;
+  private userAccountToken: string;
 
   // @ts-ignore: see this.resetState()
-  private _userBalance: [string, string];
+  private userBalance: [string, string];
 
   // Save the BotConfig passed to the constructor
-  private _botConfig: BotConfig;
+  private botConfig: BotConfig;
 
   /**
    * Constructor for DerivAutoTradingBotClass.
@@ -734,7 +919,7 @@ class DerivAutoTradingBotClass {
    */
   constructor(config: BotConfig = {}) {
     // Save the config for future use
-    this._botConfig = config;
+    this.botConfig = config;
 
     // Call the resetState function to initialize all properties
     this.resetState();
@@ -748,437 +933,66 @@ class DerivAutoTradingBotClass {
    */
   private resetState(config: Partial<BotConfig> = {}): void {
     // Merge the reset config with the original config, giving preference to the reset config
-    const mergedConfig: BotConfig = { ...this._botConfig, ...config };
+    const mergedConfig: BotConfig = { ...this.botConfig, ...config };
 
     // Deriv API connection
-    this._api = null;
+    this.api = null;
 
     // Audit trail and session management
-    this._auditTrail = [];
-    this._cachedSession = null;
+    this.auditTrail = [];
+    this.cachedSession = null;
 
     // Timers and intervals
-    this._pingIntervalID = undefined;
-    this._tradeDurationTimeoutID = undefined;
-    this._updateFrequencyTimeIntervalID = undefined;
+    this.pingIntervalID = undefined;
+    this.tradeDurationTimeoutID = undefined;
+    this.updateFrequencyTimeIntervalID = undefined;
 
     // Trading configuration
-    this._tradingType = mergedConfig.tradingType || "Derivatives 📊";
-    this._defaultMarket = mergedConfig.defaultMarket || "R_100";
-    this._currentStake = mergedConfig.baseStake || MIN_STAKE;
-    this._baseStake = mergedConfig.baseStake || MIN_STAKE;
-    this._maxStake = mergedConfig.maxStake || MAX_STAKE;
-    this._minStake = mergedConfig.minStake || MIN_STAKE;
-    this._maxRecoveryTrades = mergedConfig.maxRecoveryTrades || MAX_RECOVERY_TRADES_X2;
-    this._currentRecoveryTradeIndex = 0;
-    this._profit = 0;
-    this._isTrading = false;
-    this._takeProfit = mergedConfig.takeProfit || 0;
-    this._totalStake = 0;
-    this._totalPayout = 0;
-    this._stopLoss = mergedConfig.stopLoss || 0;
-    this._consecutiveTrades = 0;
-    this._profitPercentage = 0;
-    this._originalPurchaseType = "CALL";
-    this._currentPurchaseType = "CALL";
+    this.tradingType = mergedConfig.tradingType || "Derivatives 📊";
+    this.defaultMarket = mergedConfig.defaultMarket || "R_100";
+    this.currentStake = mergedConfig.baseStake || MIN_STAKE;
+    this.baseStake = mergedConfig.baseStake || MIN_STAKE;
+    this.maxStake = mergedConfig.maxStake || MAX_STAKE;
+    this.minStake = mergedConfig.minStake || MIN_STAKE;
+    this.maxRecoveryTrades = mergedConfig.maxRecoveryTrades || MAX_RECOVERY_TRADES_X2;
+    this.currentRecoveryTradeIndex = 0;
+    this.profit = 0;
+    this.isTrading = false;
+    this.takeProfit = mergedConfig.takeProfit || 0;
+    this.totalStake = 0;
+    this.totalPayout = 0;
+    this.stopLoss = mergedConfig.stopLoss || 0;
+    this.consecutiveTrades = 0;
+    this.profitPercentage = 0;
+    this.originalPurchaseType = "CALL";
+    this.currentPurchaseType = "CALL";
 
     // Loss and win tracking
-    this._cumulativeLossAmount = 0;
-    this._cumulativeLosses = 0;
-    this._numberOfWins = 0;
-    this._numberOfLosses = 0;
-    this._totalNumberOfRuns = 0;
+    this.cumulativeLossAmount = 0;
+    this.cumulativeLosses = 0;
+    this.numberOfWins = 0;
+    this.numberOfLosses = 0;
+    this.totalNumberOfRuns = 0;
 
     // Trade timing
-    this._tradeStartedAt = 0;
-    this._tradeDuration = 0;
-    this._updateFrequency = 0;
+    this.tradeStartedAt = 0;
+    this.tradeDuration = 0;
+    this.updateFrequency = 0;
 
     // Last tick and digits
-    this._lastTick = "";
-    this._lastDigit = 0;
-    this._lastDigitsArray = [0];
+    this.lastTick = "";
+    this.lastDigit = 0;
+    this.lastDigitsArray = [0];
 
     // Contract duration
-    this._contractDuration = mergedConfig.contractDuration || 1;
-    this._contractDurationUnit = mergedConfig.contractDurationUnit || "t";
+    this.contractDuration = mergedConfig.contractDuration || 1;
+    this.contractDurationUnit = mergedConfig.contractDurationUnit || "t";
 
     // User account and balance
-    this._userAccount = {} as IDerivUserAccount;
-    this._userAccountToken = mergedConfig.userAccountToken || DERIV_APP_TOKEN;
-    this._userBalance = ["", ""];
+    this.userAccount = {} as IDerivUserAccount;
+    this.userAccountToken = mergedConfig.userAccountToken || DERIV_APP_TOKEN;
+    this.userBalance = ["", ""];
 
-  }
-
-  // Getters and Setters
-
-  // Deriv API connection
-  get api(): any {
-    return this._api;
-  }
-
-  set api(value: any) {
-    this._api = value;
-  }
-
-  // Audit trail and session management
-  get auditTrail(): Array<any> {
-    return this._auditTrail;
-  }
-
-  set auditTrail(value: Array<any>) {
-    this._auditTrail = value;
-  }
-
-  get cachedSession(): any {
-    return this._cachedSession;
-  }
-
-  set cachedSession(value: any) {
-    this._cachedSession = value;
-  }
-
-  // Timers and intervals
-  get pingIntervalID(): NodeJS.Timeout | string | number | undefined | any {
-    return this._pingIntervalID;
-  }
-
-  set pingIntervalID(value: NodeJS.Timeout | string | number | undefined | any) {
-    this._pingIntervalID = value;
-  }
-
-  get tradeDurationTimeoutID(): NodeJS.Timeout | string | number | undefined | any {
-    return this._tradeDurationTimeoutID;
-  }
-
-  set tradeDurationTimeoutID(value: NodeJS.Timeout | string | number | undefined | any) {
-    this._tradeDurationTimeoutID = value;
-  }
-
-  get updateFrequencyTimeIntervalID(): NodeJS.Timeout | string | number | undefined | any {
-    return this._updateFrequencyTimeIntervalID;
-  }
-
-  set updateFrequencyTimeIntervalID(value: NodeJS.Timeout | string | number | undefined | any) {
-    this._updateFrequencyTimeIntervalID = value;
-  }
-
-  // Trading configuration
-  get tradingType(): TradingType {
-    return this._tradingType;
-  }
-
-  set tradingType(value: TradingType) {
-    this._tradingType = value;
-  }
-
-  get defaultMarket(): MarketType {
-    return this._defaultMarket;
-  }
-
-  set defaultMarket(value: MarketType) {
-    this._defaultMarket = value;
-  }
-
-  get currentStake(): number {
-    return this._currentStake;
-  }
-
-  set currentStake(value: number) {
-    this._currentStake = value;
-  }
-
-  get baseStake(): number {
-    return this._baseStake;
-  }
-
-  set baseStake(value: number) {
-    this._baseStake = value;
-  }
-
-  get maxStake(): number {
-    return this._maxStake;
-  }
-
-  set maxStake(value: number) {
-    this._maxStake = value;
-  }
-
-  get minStake(): number {
-    return this._minStake;
-  }
-
-  set minStake(value: number) {
-    this._minStake = value;
-  }
-
-  get maxRecoveryTrades(): number {
-    return this._maxRecoveryTrades;
-  }
-
-  set maxRecoveryTrades(value: number) {
-    this._maxRecoveryTrades = value;
-  }
-
-  get currentRecoveryTradeIndex(): number {
-    return this._currentRecoveryTradeIndex;
-  }
-
-  set currentRecoveryTradeIndex(value: number) {
-    this._currentRecoveryTradeIndex = value;
-  }
-
-  get profit(): number {
-    return this._profit;
-  }
-
-  set profit(value: number) {
-    this._profit = value;
-  }
-
-  get isTrading(): boolean {
-    return this._isTrading;
-  }
-
-  set isTrading(value: boolean) {
-    this._isTrading = value;
-  }
-
-  get takeProfit(): number {
-    return this._takeProfit;
-  }
-
-  set takeProfit(value: number) {
-    this._takeProfit = value;
-  }
-
-  get totalStake(): number {
-    return this._totalStake;
-  }
-
-  set totalStake(value: number) {
-    this._totalStake = value;
-  }
-
-  get totalPayout(): number {
-    return this._totalPayout;
-  }
-
-  set totalPayout(value: number) {
-    this._totalPayout = value;
-  }
-
-  get stopLoss(): number {
-    return this._stopLoss;
-  }
-
-  set stopLoss(value: number) {
-    this._stopLoss = value;
-  }
-
-  get consecutiveTrades(): number {
-    return this._consecutiveTrades;
-  }
-
-  set consecutiveTrades(value: number) {
-    this._consecutiveTrades = value;
-  }
-
-  get profitPercentage(): number {
-    return this._profitPercentage;
-  }
-
-  set profitPercentage(value: number) {
-    this._profitPercentage = value;
-  }
-
-  get originalPurchaseType(): PurchaseType {
-    return this._originalPurchaseType;
-  }
-
-  set originalPurchaseType(value: PurchaseType) {
-    this._originalPurchaseType = value;
-  }
-
-  get currentPurchaseType(): PurchaseType {
-    return this._currentPurchaseType;
-  }
-
-  set currentPurchaseType(value: PurchaseType) {
-    this._currentPurchaseType = value;
-  }
-
-  // Loss and win tracking
-  get cumulativeLossAmount(): number {
-    return this._cumulativeLossAmount;
-  }
-
-  set cumulativeLossAmount(value: number) {
-    this._cumulativeLossAmount = value;
-  }
-
-  get cumulativeLosses(): number {
-    return this._cumulativeLosses;
-  }
-
-  set cumulativeLosses(value: number) {
-    this._cumulativeLosses = value;
-  }
-
-  get numberOfWins(): number {
-    return this._numberOfWins;
-  }
-
-  set numberOfWins(value: number) {
-    this._numberOfWins = value;
-  }
-
-  get numberOfLosses(): number {
-    return this._numberOfLosses;
-  }
-
-  set numberOfLosses(value: number) {
-    this._numberOfLosses = value;
-  }
-
-  get totalNumberOfRuns(): number {
-    return this._totalNumberOfRuns;
-  }
-
-  set totalNumberOfRuns(value: number) {
-    this._totalNumberOfRuns = value;
-  }
-
-  // Trade timing
-  get tradeStartedAt(): number {
-    return this._tradeStartedAt;
-  }
-
-  set tradeStartedAt(value: number) {
-    this._tradeStartedAt = value;
-  }
-
-  get tradeDuration(): number {
-    return this._tradeDuration;
-  }
-
-  set tradeDuration(value: number) {
-    this._tradeDuration = value;
-  }
-
-  get updateFrequency(): number {
-    return this._updateFrequency;
-  }
-
-  set updateFrequency(value: number) {
-    this._updateFrequency = value;
-  }
-
-  // Last tick and digits
-  get lastTick(): string {
-    return this._lastTick;
-  }
-
-  set lastTick(value: string) {
-    this._lastTick = value;
-  }
-
-  get lastDigit(): number {
-    return this._lastDigit;
-  }
-
-  set lastDigit(value: number) {
-    this._lastDigit = value;
-  }
-
-  get lastDigitsArray(): [number] {
-    return this._lastDigitsArray;
-  }
-
-  set lastDigitsArray(value: [number]) {
-    this._lastDigitsArray = value;
-  }
-
-  // Contract duration
-  get contractDuration(): number {
-    return this._contractDuration;
-  }
-
-  set contractDuration(value: number) {
-    this._contractDuration = value;
-  }
-
-  get contractDurationUnit(): string {
-    return this._contractDurationUnit;
-  }
-
-  set contractDurationUnit(value: string) {
-    this._contractDurationUnit = value;
-  }
-
-  // User account and balance
-  get userAccount(): IDerivUserAccount {
-    return this._userAccount;
-  }
-
-  set userAccount(value: IDerivUserAccount) {
-    this._userAccount = value;
-  }
-
-  get userAccountToken(): string {
-    return this._userAccountToken;
-  }
-
-  set userAccountToken(value: string) {
-    this._userAccountToken = value;
-  }
-
-  get userBalance(): [string, string] {
-    return this._userBalance;
-  }
-
-  set userBalance(value: [string, string]) {
-    this._userBalance = value;
-  }
-
-  private async connect(callback?: any): Promise<void> {
-    logger.info("Connecting...");
-    parentPort.postMessage({ action: "sendTelegramMessage", text: "🟡 Establishing connection to Deriv server...", meta: {} });
-
-    this.api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
-
-    const ping = await this.api.basic.ping();
-
-    console.log("PING_CONNECT", ping);
-
-    logger.info("Connection established via DerivAPI endpoint.");
-
-    parentPort.postMessage({ action: "sendTelegramMessage", text: "🟢 Connection to Deriv server established!", meta: {} });
-
-    logger.info("Start Ping <-> Pong:");
-
-    this.ping();
-
-    if (typeof callback === "function") {
-      await callback();
-    }
-  }
-
-  private disconnect(): void {
-    this.api = null;
-  }
-
-  private ping(): void {
-    // Sends a ping message every 30 seconds
-    this._pingIntervalID = setInterval(() => {
-      if (!this.api) {
-        console.log("DISCONNECT")
-        return this.disconnect()
-      }
-      this.api.basic.ping().then((pong: any) => {
-        logger.info(`Ping-Pong-Received : ${pong.req_id}`);
-      });
-    }, CONNECTION_PING_TIMEOUT);
   }
 
   public getAccountToken(accounts: any, key: string, value: string) {
@@ -1198,80 +1012,6 @@ class DerivAutoTradingBotClass {
     return null;
   }
 
-  /**
- * Initializes the user account and sets up balance tracking.
- * @param {string} [token] - Optional user token. If not provided, the default token will be used.
- * @returns {Promise<IDerivUserAccount>} - Returns the initialized user account.
- * @throws {Error} - Throws an error if the account cannot be initialized.
- */
-  public async setAccount(callBackFunction?: any, token?: string): Promise<IDerivUserAccount> {
-    // Validate the token
-    const userToken = token || this._userAccountToken;
-
-    if (!userToken || typeof userToken !== "string") {
-      throw new Error("Invalid user token provided.");
-    }
-
-    if (!this._userAccountToken && typeof token === "string" && token.length > 10) {
-      this._userAccountToken = token;
-    }
-
-    if (!this.api) {
-
-      await this.connect(() => {
-
-        this.setAccount(callBackFunction, token);
-
-      });
-
-    }
-
-    try {
-      // Initialize the account using the Deriv API
-      const account = await this.api.account(userToken);
-
-      // Validate the account data
-      if (!account || !account.balance || !account.balance.amount) {
-        throw new Error("Invalid account data received from the API.");
-      }
-
-      // Parse and set the user account
-      const userAccount = DerivUserAccount.parseDerivUserAccount(account);
-      this._userAccount = userAccount;
-
-      // Set the user balance
-      const balance: [string, string] = [
-        account.balance.amount._data.currency || "USD", // Fallback to "USD" if currency is not provided
-        account.balance.amount._data.value,
-      ];
-      this._userBalance = balance;
-
-      logger.info(`Welcome, ${userAccount.fullname}`);
-      logger.info(`Balance: ${balance[0]} ${balance[1]}`);
-
-      // Set up balance updates
-      account.balance.onUpdate((val: any) => {
-        if (val && val._data) {
-          this._userBalance = [val._data.currency, val._data.value];
-          logger.info(`Balance updated: ${val._data.currency} ${val._data.value}`);
-        }
-      });
-
-      if (typeof callBackFunction === "function") {
-
-        callBackFunction(userAccount);
-
-      }
-
-      return userAccount;
-
-    } catch (error) {
-      logger.error("Failed to initialize user account:", error);
-      console.log(error);
-      throw new Error("An unexpected error occurred while initializing the account.");
-    }
-  }
-
   // Sleep function (private)
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1284,16 +1024,16 @@ class DerivAutoTradingBotClass {
 
     let response: ITradeData = {} as ITradeData;
 
-    if (this._tradingType === CONSTANTS.TRADING_TYPES.FOREX) {
+    if (this.tradingType === CONSTANTS.TRADING_TYPES.FOREX) {
     }
 
-    if (this._tradingType === CONSTANTS.TRADING_TYPES.COMMODITIES) {
+    if (this.tradingType === CONSTANTS.TRADING_TYPES.COMMODITIES) {
     }
 
-    if (this._tradingType === CONSTANTS.TRADING_TYPES.CRYPTO) {
+    if (this.tradingType === CONSTANTS.TRADING_TYPES.CRYPTO) {
     }
 
-    if (this._tradingType === CONSTANTS.TRADING_TYPES.DERIVATIVES) {
+    if (this.tradingType === CONSTANTS.TRADING_TYPES.DERIVATIVES) {
 
       switch (purchaseType) {
 
@@ -1501,7 +1241,7 @@ class DerivAutoTradingBotClass {
 
       const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
-      const account = await api.account(this._userAccountToken);
+      const account = await api.account(this.userAccountToken);
 
       // Create the contract using the Deriv API
       const contractPromise = api.contract(contractParameters);
@@ -1638,8 +1378,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITDIFF",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: predictedDigit.toString(),
     };
@@ -1664,8 +1404,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITOVER",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: barrier.toString(),
     };
@@ -1689,8 +1429,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITOVER",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: 0,
     };
@@ -1714,8 +1454,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITOVER",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: 1,
     };
@@ -1739,8 +1479,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITOVER",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: 2,
     };
@@ -1764,8 +1504,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITUNDER",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: barrier.toString(),
     };
@@ -1795,8 +1535,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITUNDER",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: "R_100", //this.defaultMarket,
       barrier: 6,
     };
@@ -1820,8 +1560,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITUNDER",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: 8,
     };
@@ -1845,8 +1585,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "DIGITUNDER",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: 7,
     };
@@ -1871,10 +1611,10 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "DIGITEVEN",
+      contract_type: "EVEN",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: "EVEN",
     };
@@ -1898,8 +1638,8 @@ class DerivAutoTradingBotClass {
       basis: "stake",
       contract_type: "CALL",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
     };
 
@@ -1920,10 +1660,10 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "DIGITEVEN",
+      contract_type: "EVEN",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: "EVEN",
     };
@@ -1945,10 +1685,10 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "DIGITEVEN",
+      contract_type: "EVEN",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: "EVEN",
     };
@@ -1970,10 +1710,10 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "DIGITEVEN",
+      contract_type: "EVEN",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: "EVEN",
     };
@@ -1995,10 +1735,10 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "DIGITODD",
+      contract_type: "ODD",
       currency: currency || "USD",
-      duration: this._contractDuration,
-      duration_unit: this._contractDurationUnit,
+      duration: this.contractDuration,
+      duration_unit: this.contractDurationUnit,
       symbol: this.parseDefaultMarket(),
       barrier: "ODD",
     };
@@ -2185,20 +1925,20 @@ class DerivAutoTradingBotClass {
   ): number {
     // If the previous trade was a win, reset the stake to the base stake
     if (resultIsWin) {
-      this._cumulativeLossAmount = 0; // Reset cumulative losses
-      this._cumulativeLosses = 0; // Reset the number of consecutive losses
-      return this._baseStake; // Return the base stake
+      this.cumulativeLossAmount = 0; // Reset cumulative losses
+      this.cumulativeLosses = 0; // Reset the number of consecutive losses
+      return this.baseStake; // Return the base stake
     }
 
     // If the previous trade was a loss, update cumulative losses
-    this._cumulativeLossAmount += Math.abs(profitAfterSale); // Add the loss to the cumulative loss amount
-    this._cumulativeLosses++; // Increment the number of consecutive losses
+    this.cumulativeLossAmount += Math.abs(profitAfterSale); // Add the loss to the cumulative loss amount
+    this.cumulativeLosses++; // Increment the number of consecutive losses
 
     // Calculate the recovery factor based on the profit percentage
-    const recoveryFactor = (1 + this._profitPercentage / 100) / (this._profitPercentage / 100);
+    const recoveryFactor = (1 + this.profitPercentage / 100) / (this.profitPercentage / 100);
 
     // Calculate the next stake to recover cumulative losses and ensure profitability
-    let nextStake = this._cumulativeLossAmount * recoveryFactor + this._baseStake;
+    let nextStake = this.cumulativeLossAmount * recoveryFactor + this.baseStake;
 
     // Ensure the stake is within the minimum and maximum limits
     nextStake = this.clampStake(nextStake);
@@ -2213,7 +1953,7 @@ class DerivAutoTradingBotClass {
    * @returns {number} - The clamped stake amount.
    */
   private clampStake(stake: number): number {
-    return Math.min(Math.max(stake, this._minStake), this._maxStake);
+    return Math.min(Math.max(stake, this.minStake), this.maxStake);
   }
 
   /**
@@ -2228,7 +1968,7 @@ class DerivAutoTradingBotClass {
   async startTrading(session: any, retryAfterError: boolean = false, userAccountToken: string = ""): Promise<void> {
 
     if (userAccountToken) {
-      this._userAccountToken = userAccountToken;
+      this.userAccountToken = userAccountToken;
     }
 
     // Validate session parameters
@@ -2242,16 +1982,16 @@ class DerivAutoTradingBotClass {
     };
 
     // Input validation and error handling
-    if (retryAfterError && !this._cachedSession) {
+    if (retryAfterError && !this.cachedSession) {
       errorObject.error.message = "No cached session available for retry.";
       return this.handleErrorExemption(errorObject, session);
     }
 
     // Use cached session if retrying after an error
-    if (retryAfterError && this._cachedSession) {
-      session = this._cachedSession;
+    if (retryAfterError && this.cachedSession) {
+      session = this.cachedSession;
     } else {
-      this._cachedSession = session; // Cache the session for future retries
+      this.cachedSession = session; // Cache the session for future retries
     }
 
     // Destructure session parameters for easier access
@@ -2292,32 +2032,46 @@ class DerivAutoTradingBotClass {
       return this.handleErrorExemption(errorObject, session);
     }
 
+    logger.info("Connecting...");
+
+    parentPort.postMessage({ action: "sendTelegramMessage", text: "🟡 Establishing connection to Deriv server...", meta: {} });
+
+    this.api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
+
+    const ping = await this.api.basic.ping();
+
+    console.log("PING_CONNECT", ping);
+
+    logger.info("Connection established via DerivAPI endpoint.");
+
+    parentPort.postMessage({ action: "sendTelegramMessage", text: "🟢 Connection to Deriv server established!", meta: {} });
+
     // Initialize trading session if not retrying after an error
     if (!retryAfterError) {
-      this._cachedSession = session;
-      this._defaultMarket = session.market;
-      this._originalPurchaseType = session.purchaseType;
-      this._baseStake = session.stake;
-      this._currentStake = session.stake;
-      this._takeProfit = session.takeProfit;
-      this._stopLoss = session.stopLoss;
-      this._tradeDuration = this.parseTradeDuration(tradeDuration);
-      this._updateFrequency = this.parseUpdateFrequency(updateFrequency);
-      this._tradeStartedAt = Date.now() / 1000; // Record the start time of the trade
+      this.cachedSession = session;
+      this.defaultMarket = session.market;
+      this.originalPurchaseType = session.purchaseType;
+      this.baseStake = session.stake;
+      this.currentStake = session.stake;
+      this.takeProfit = session.takeProfit;
+      this.stopLoss = session.stopLoss;
+      this.tradeDuration = this.parseTradeDuration(tradeDuration);
+      this.updateFrequency = this.parseUpdateFrequency(updateFrequency);
+      this.tradeStartedAt = Date.now() / 1000; // Record the start time of the trade
 
       // Set a timeout to stop trading after the specified duration
-      this._tradeDurationTimeoutID = setTimeout(async () => {
-        this.stopTrading(`You have reached your trade duration limit: ${this._tradeDuration}s (${tradeDuration}) `);
-      }, this._tradeDuration * 1000);
+      this.tradeDurationTimeoutID = setTimeout(async () => {
+        this.stopTrading(`You have reached your trade duration limit: ${this.tradeDuration}s (${tradeDuration}) `);
+      }, this.tradeDuration * 1000);
 
-      this._updateFrequencyTimeIntervalID = setInterval(async () => {
+      this.updateFrequencyTimeIntervalID = setInterval(async () => {
         this.generateTelemetry();
-      }, this._updateFrequency * 1000);
+      }, this.updateFrequency * 1000);
 
     }
 
     // Start the trading process using recursive scheduling
-    this._isTrading = true;
+    this.isTrading = true;
 
     await this.executeTrade(purchaseType);
 
@@ -2333,7 +2087,7 @@ class DerivAutoTradingBotClass {
   private async executeTrade(purchaseType: string): Promise<void> {
 
     // Stop trading if the flag is false or the connection is closed
-    if (!this._isTrading) {
+    if (!this.isTrading) {
       return;
     }
 
@@ -2361,7 +2115,7 @@ class DerivAutoTradingBotClass {
       this.profit += profitAfterSale;
 
       // Increment the total number of trades
-      this._totalNumberOfRuns++;
+      this.totalNumberOfRuns++;
 
       // Log trade details
       logger.warn("*******************************************************************************************");
@@ -2397,13 +2151,13 @@ class DerivAutoTradingBotClass {
       }
 
       // Check if take profit is reached
-      if (this.profit >= this._takeProfit) {
+      if (this.profit >= this.takeProfit) {
         this.stopTrading(`Take Profit reached. TP[${tradeData.profit_currency} ${tradeData.profit_value}]. Stopping trades...`);
         return;
       }
 
       // Check if stop loss is reached
-      if (this.profit <= -this._stopLoss) {
+      if (this.profit <= -this.stopLoss) {
         this.stopTrading(`Stop Loss reached. SL[${tradeData.profit_currency} ${tradeData.profit_value}]. Stopping trades...`);
         return;
       }
@@ -2418,7 +2172,7 @@ class DerivAutoTradingBotClass {
 
     } catch (err: any) {
       console.error("Error during trading:", err);
-      this.handleErrorExemption(err, this._cachedSession);
+      this.handleErrorExemption(err, this.cachedSession);
       this.stopTrading("Error occurred. Stopping trades...");
     }
   }
@@ -2432,14 +2186,14 @@ class DerivAutoTradingBotClass {
   }
 
   async saveData(data: any, key: string) {
-    this._auditTrail.push({
+    this.auditTrail.push({
       key: key,
       data: data
     })
   }
 
   async stopTrading(message: string, generateStatistics: boolean = true): Promise<void> {
-    this._isTrading = false;
+    this.isTrading = false;
     parentPort.postMessage(
       {
         action: "sendTelegramMessage",
@@ -2459,9 +2213,9 @@ class DerivAutoTradingBotClass {
   }
 
   async clearTimers(): Promise<void> {
-    await clearInterval(this._pingIntervalID);
-    await clearInterval(this._updateFrequencyTimeIntervalID);
-    await clearTimeout(this._tradeDurationTimeoutID);
+    await clearInterval(this.pingIntervalID);
+    await clearInterval(this.updateFrequencyTimeIntervalID);
+    await clearTimeout(this.tradeDurationTimeoutID);
   }
 
   /**
@@ -2469,23 +2223,23 @@ class DerivAutoTradingBotClass {
    */
   private generateTelemetry(): void {
     // Retrieve account and balance information
-    const accountId = this._userAccount.loginid || "N/A";
-    const currency = this._userAccount.currency || "USD";
-    const totalBalance = parseFloat(this._userBalance[1] || '0').toFixed(2);
+    const accountId = this.userAccount.loginid || "N/A";
+    const currency = this.userAccount.currency || "USD";
+    const totalBalance = parseFloat(this.userBalance[1] || '0').toFixed(2);
 
     // Calculate total profit, payout, and stake
-    const totalProfit = this._profit;
-    const totalPayout = this._totalPayout;
-    const totalStake = this._totalStake;
+    const totalProfit = this.profit;
+    const totalPayout = this.totalPayout;
+    const totalStake = this.totalStake;
 
     // Calculate win rate and average profit per run
-    const winRate = (this._numberOfWins / this._totalNumberOfRuns) * 100;
-    const averageProfitPerRun = totalProfit / this._totalNumberOfRuns;
+    const winRate = (this.numberOfWins / this.totalNumberOfRuns) * 100;
+    const averageProfitPerRun = totalProfit / this.totalNumberOfRuns;
 
     // Format start time, stop time, and duration
-    const startTime = new Date(this._tradeStartedAt * 1000);
+    const startTime = new Date(this.tradeStartedAt * 1000);
     const stopTime = new Date(); // Current time as stop time
-    const durationSeconds = Math.floor((Date.now() / 1000) - this._tradeStartedAt);
+    const durationSeconds = Math.floor((Date.now() / 1000) - this.tradeStartedAt);
     const duration = `${Math.floor(durationSeconds / 3600)}h ${Math.floor((durationSeconds % 3600) / 60)}m ${durationSeconds % 60}s`;
 
     // Format start and stop times into two lines (date and time)
@@ -2504,9 +2258,9 @@ class DerivAutoTradingBotClass {
     Account:        ${accountId.padEnd(20)} 
     Currency:       ${currency.padEnd(20)} 
 
-    Wins:           ${this._numberOfWins.toString().padEnd(20)} 
-    Losses:         ${this._numberOfLosses.toString().padEnd(20)} 
-    Runs:           ${this._totalNumberOfRuns.toString().padEnd(20)} 
+    Wins:           ${this.numberOfWins.toString().padEnd(20)} 
+    Losses:         ${this.numberOfLosses.toString().padEnd(20)} 
+    Runs:           ${this.totalNumberOfRuns.toString().padEnd(20)} 
          
     Total Payout:   $${totalPayout.toFixed(2).padEnd(20)} 
     Total Stake:    $${totalStake.toFixed(2).padEnd(20)} 
@@ -2529,13 +2283,13 @@ class DerivAutoTradingBotClass {
     // Log the telemetry table
     console.log(telemetryTable);
 
-    parentPort.postMessage({ action: "generateTelemetry", text: telemetryTable, meta: { user: this.userAccount, audit: this._auditTrail } });
+    parentPort.postMessage({ action: "generateTelemetry", text: telemetryTable, meta: { user: this.userAccount, audit: this.auditTrail } });
 
   }
 
   async generateTradingStatement(): Promise<any> {
     //generateTradingStatement
-    parentPort.postMessage({ action: "generateTradingStatement", message: "Generating statement, this may take a while please wait...", meta: { user: this.userAccount, audit: this._auditTrail } });
+    parentPort.postMessage({ action: "generateTradingStatement", message: "Generating statement, this may take a while please wait...", meta: { user: this.userAccount, audit: this.auditTrail } });
 
   }
 
@@ -2577,7 +2331,7 @@ class DerivAutoTradingBotClass {
     console.log(tradeSummary);
 
     //generateSummary
-    parentPort.postMessage({ action: "generateTradingSummary", message: "Generating trading summary, please wait...", meta: { user: this.userAccount, audit: this._auditTrail } });
+    parentPort.postMessage({ action: "generateTradingSummary", message: "Generating trading summary, please wait...", meta: { user: this.userAccount, audit: this.auditTrail } });
 
   }
 

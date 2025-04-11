@@ -44,8 +44,8 @@ const sessionDocument:any = {
         "stake": 1,
         "takeProfit": 5000,
         "stopLoss": 10000,
-        "tradeDuration": "45min ⏱️",
-        "updateFrequency": "35min ⏱️",
+        "tradeDuration": "1min ⏱️",
+        "updateFrequency": "10sec ⏱️",
         "contractDurationUnits": "Hours ⏱️",
         "contractDurationValue": "18hrs ⏱️",
         "tradingMode": "📈 Manual Trading"

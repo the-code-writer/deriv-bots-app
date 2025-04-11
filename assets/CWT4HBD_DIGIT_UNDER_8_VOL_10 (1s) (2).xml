@@ -788,7 +788,7 @@
                                                         </value>
                                                         <next>
                                                           <block type="purchase" id="TdqKf!ySSLH)tgIt88rL">
-                                                            <field name="PURCHASE_LIST">DIGITODD</field>
+                                                            <field name="PURCHASE_LIST">ODD</field>
                                                           </block>
                                                         </next>
                                                       </block>
