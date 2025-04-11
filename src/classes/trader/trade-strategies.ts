@@ -33,7 +33,8 @@ export abstract class TradeStrategy {
         currency: string,
         duration: number,
         durationUnit: string,
-        market: string
+        market: string,
+        userAccountToken: string
     ): Promise<ITradeData>;
 
     /**
@@ -86,7 +87,8 @@ export class DigitDiffStrategy extends TradeStrategy {
         currency: string,
         duration: number,
         durationUnit: string,
-        market: string
+        market: string,
+        userAccountToken: string
     ): Promise<ITradeData> {
         this.validateParameters(stake, currency, market);
 
@@ -102,7 +104,7 @@ export class DigitDiffStrategy extends TradeStrategy {
         };
 
         logger.debug(`Executing DIGITDIFF strategy with digit ${this.predictedDigit}`);
-        return this.executor.purchaseContract(params);
+        return this.executor.purchaseContract(params, userAccountToken);
     }
 
     /**
@@ -137,7 +139,8 @@ export class DigitEvenStrategy extends TradeStrategy {
         currency: string,
         duration: number,
         durationUnit: string,
-        market: string
+        market: string,
+        userAccountToken: string
     ): Promise<ITradeData> {
         this.validateParameters(stake, currency, market);
 
@@ -153,7 +156,7 @@ export class DigitEvenStrategy extends TradeStrategy {
         };
 
         logger.debug('Executing EVEN strategy');
-        return this.executor.purchaseContract(params);
+        return this.executor.purchaseContract(params, userAccountToken);
     }
 }
 
@@ -174,7 +177,8 @@ export class DigitOddStrategy extends TradeStrategy {
         currency: string,
         duration: number,
         durationUnit: string,
-        market: string
+        market: string,
+        userAccountToken: string
     ): Promise<ITradeData> {
         this.validateParameters(stake, currency, market);
 
@@ -190,7 +194,7 @@ export class DigitOddStrategy extends TradeStrategy {
         };
 
         logger.debug('Executing ODD strategy');
-        return this.executor.purchaseContract(params);
+        return this.executor.purchaseContract(params, userAccountToken);
     }
 }
 
@@ -211,7 +215,8 @@ export class CallStrategy extends TradeStrategy {
         currency: string,
         duration: number,
         durationUnit: string,
-        market: string
+        market: string,
+        userAccountToken: string
     ): Promise<ITradeData> {
         this.validateParameters(stake, currency, market);
 
@@ -226,7 +231,7 @@ export class CallStrategy extends TradeStrategy {
         };
 
         logger.debug('Executing CALL strategy');
-        return this.executor.purchaseContract(params);
+        return this.executor.purchaseContract(params, userAccountToken);
     }
 }
 
@@ -247,7 +252,8 @@ export class PutStrategy extends TradeStrategy {
         currency: string,
         duration: number,
         durationUnit: string,
-        market: string
+        market: string,
+        userAccountToken: string
     ): Promise<ITradeData> {
         this.validateParameters(stake, currency, market);
 
@@ -262,7 +268,7 @@ export class PutStrategy extends TradeStrategy {
         };
 
         logger.debug('Executing PUT strategy');
-        return this.executor.purchaseContract(params);
+        return this.executor.purchaseContract(params, userAccountToken);
     }
 }
 
@@ -290,7 +296,8 @@ export class DigitUnderStrategy extends TradeStrategy {
         currency: string,
         duration: number,
         durationUnit: string,
-        market: string
+        market: string,
+        userAccountToken: string
     ): Promise<ITradeData> {
         this.validateParameters(stake, currency, market);
 
@@ -306,7 +313,7 @@ export class DigitUnderStrategy extends TradeStrategy {
         };
 
         logger.debug(`Executing DIGITUNDER strategy with barrier ${this.barrier}`);
-        return this.executor.purchaseContract(params);
+        return this.executor.purchaseContract(params, userAccountToken);
     }
 
     /**
@@ -348,7 +355,8 @@ export class DigitOverStrategy extends TradeStrategy {
         currency: string,
         duration: number,
         durationUnit: string,
-        market: string
+        market: string,
+        userAccountToken: string
     ): Promise<ITradeData> {
         this.validateParameters(stake, currency, market);
 
@@ -364,7 +372,7 @@ export class DigitOverStrategy extends TradeStrategy {
         };
 
         logger.debug(`Executing DIGITOVER strategy with barrier ${this.barrier}`);
-        return this.executor.purchaseContract(params);
+        return this.executor.purchaseContract(params, userAccountToken);
     }
 
     /**

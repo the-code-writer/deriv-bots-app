@@ -11,6 +11,20 @@ import { env } from "@/common/utils/envConfig";
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const logger = pino({ name: "Trade Executor" });
+
+const {
+    CONNECTION_PING_TIMEOUT,
+    CONNECTION_CONTRACT_CREATION_TIMEOUT,
+    DERIV_APP_ENDPOINT_DOMAIN,
+    DERIV_APP_ENDPOINT_APP_ID,
+    DERIV_APP_ENDPOINT_LANG,
+    DERIV_APP_TOKEN,
+    MIN_STAKE,
+    MAX_STAKE,
+    MAX_RECOVERY_TRADES_X2,
+    MAX_RECOVERY_TRADES_X10,
+} = env;
+
 /**
  * Handles trade execution and contract lifecycle management
  */
@@ -19,6 +33,7 @@ export class TradeExecutor {
     private connectionTimeout: number;
     private maxRetryAttempts: number;
     private retryDelayBase: number;
+    private userAccountToken: string;
 
     /**
      * Constructs a new TradeExecutor instance
@@ -34,41 +49,17 @@ export class TradeExecutor {
         this.connectionTimeout = connectionTimeout;
         this.maxRetryAttempts = maxRetryAttempts;
         this.retryDelayBase = retryDelayBase;
+        this.userAccountToken = "";
     }
 
     /**
-     * Initializes the trade executor with API connection
-     * @returns {Promise<void>}
-     */
-    async initialize(): Promise<void> {
-        if (this.api) {
-            logger.warn('TradeExecutor already initialized');
-            return;
-        }
-
-        try {
-            this.api = new DerivAPI({
-                endpoint: env.DERIV_APP_ENDPOINT_DOMAIN,
-                app_id: env.DERIV_APP_ENDPOINT_APP_ID,
-                lang: env.DERIV_APP_ENDPOINT_LANG
-            });
-
-            // Test connection
-            await this.api.basic.ping();
-            logger.info('TradeExecutor initialized successfully');
-        } catch (error:any) {
-            logger.error('Failed to initialize TradeExecutor', error);
-            throw new Error(`TradeExecutor initialization failed: ${error.message}`);
-        }
-    }
-
     /**
      * Purchases a contract with retry logic and comprehensive error handling
      * @param {ContractParams} contractParameters - Parameters for the contract
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async purchaseContract(contractParameters: ContractParams): Promise<ITradeData> {
-        if (!this.api) {
+    async purchaseContract(contractParameters: ContractParams, userAccountToken: string): Promise<ITradeData> {
+        if (!contractParameters) {
             throw new Error('TradeExecutor not initialized');
         }
 
@@ -80,9 +71,9 @@ export class TradeExecutor {
         while (attempt < this.maxRetryAttempts) {
             try {
                 attempt++;
-                logger.debug(`Attempt ${attempt} to purchase contract`);
+                logger.info(`Attempt ${attempt} to purchase contract`);
 
-                const contract = await this.createContract(contractParameters);
+                const contract = await this.createContract(contractParameters, userAccountToken);
                 this.setupContractUpdates(contract);
 
                 await this.buyContract(contract);
@@ -93,7 +84,8 @@ export class TradeExecutor {
 
             } catch (error:any) {
                 lastError = error;
-                logger.warn(`Attempt ${attempt} failed: ${error.message}`);
+                console.log(error)
+                logger.warn(`Attempt ${attempt} failed:::: ${error.message}`);
 
                 if (attempt < this.maxRetryAttempts) {
                     const delay = this.calculateRetryDelay(attempt);
@@ -104,6 +96,15 @@ export class TradeExecutor {
 
         logger.error('All purchase attempts failed');
         throw lastError || new Error('Unknown error during contract purchase');
+    }
+
+
+    /**
+     * Safely disconnects from the Deriv API
+     * @returns {Promise<void>}
+     */
+    setToken(token: string): void {
+        this.userAccountToken = token;
     }
 
     /**
@@ -153,8 +154,9 @@ export class TradeExecutor {
      * @returns {Promise<ContractResponse>} Created contract
      * @private
      */
-    private async createContract(params: ContractParams): Promise<ContractResponse> {
-        if (!this.api) throw new Error('API not initialized');
+    private async createContract(params: ContractParams, userAccountToken: string): Promise<ContractResponse> {
+        if (!params) throw new Error('API not initialized');
+        if (!userAccountToken) throw new Error('Invalid token');
 
         const timeoutPromise = new Promise<never>((_, reject) =>
             setTimeout(
@@ -163,7 +165,12 @@ export class TradeExecutor {
             )
         );
 
-        const contractPromise = this.api.contract(params);
+        const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
+
+        await api.account(userAccountToken);
+
+        const contractPromise = api.contract(params);
+
         return Promise.race([contractPromise, timeoutPromise]);
     }
 

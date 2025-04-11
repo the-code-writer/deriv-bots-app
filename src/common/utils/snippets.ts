@@ -1,5 +1,6 @@
 import { env } from '@/common/utils/envConfig';
 import { Encryption } from '@/classes/cryptography/EncryptionClass';
+import { CONSTANTS } from './constants';
 
 const uap = require('ua-parser-js');
 
@@ -366,4 +367,28 @@ export const getCookieValue = (cookieHeader:string, name:string) => {
     }
   }
   return null;
+}
+
+export const parsePurchaseType = (purchaseType: string) => {
+  let resolvedPurchaseType: string = "CALL";
+  switch (purchaseType) {
+    case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][0]: {
+      resolvedPurchaseType = "CALL";
+      break;
+    }
+    case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][1]: {
+      resolvedPurchaseType = "CALL";
+      break;
+    }
+
+    case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][0]: {
+      resolvedPurchaseType = "PUT";
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  return resolvedPurchaseType;
+  // ["Auto ⬆️⬇️", "Rise ⬆️", "Fall ⬇️"],
 }

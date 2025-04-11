@@ -36,6 +36,7 @@ export class DerivTradingBot {
     private totalTrades: number = 0;
     private winningTrades: number = 0;
     private losingTrades: number = 0;
+    private userAccountToken: string;
 
     /**
      * Constructs a new DerivTradingBot instance
@@ -54,6 +55,7 @@ export class DerivTradingBot {
         this.currentPurchaseType = "CALL";
         this.originalPurchaseType = "CALL";
         this.cachedSession = null;
+        this.userAccountToken = "";
     }
 
     /**
@@ -145,6 +147,9 @@ export class DerivTradingBot {
         },
         userAccountToken: string
     ): Promise<void> {
+
+        this.userAccountToken = userAccountToken;
+
         // Set initial configuration
         this.defaultMarket = session.market;
         this.originalPurchaseType = session.purchaseType;
@@ -182,8 +187,9 @@ export class DerivTradingBot {
     private async executeTradingLoop(purchaseType: PurchaseType): Promise<void> {
         while (this.isTrading) {
             try {
+
                 // Execute trade with current strategy
-                const tradeResult = await this.tradeManager.executeTrade(purchaseType);
+                const tradeResult = await this.tradeManager.executeTrade(purchaseType, this.userAccountToken);
                 this.totalTrades++;
 
                 // Process trade result
@@ -235,6 +241,88 @@ export class DerivTradingBot {
         // Log trade details
         logger.info(`Trade completed - ${tradeResult.profit_is_win ? 'WIN' : 'LOSS'}`);
         logger.debug('Trade details:', tradeResult);
+
+        console.log(tradeResult)
+
+        /*
+
+        {
+  symbol_short: '',
+  symbol_full: '',
+  start_time: 1744400407,
+  expiry_time: 1744400410,
+  purchase_time: 0,
+  entry_spot_value: 1672.3,
+  entry_spot_time: 1744400408,
+  exit_spot_value: 1671.6,
+  exit_spot_time: 1744400412.381,
+  ask_price_currency: '',
+  ask_price_value: 0,
+  buy_price_currency: '',
+  buy_price_value: 0,
+  buy_transaction: 554821900608,
+  bid_price_currency: 'USD',
+  bid_price_value: 0,
+  sell_price_currency: 'USD',
+  sell_price_value: 0,
+  sell_spot: 1671.6,
+  sell_spot_time: 1744400410,
+  sell_transaction: 554821907808,
+  payout: 1.88,
+  payout_currency: 'USD',
+  profit_value: 1,
+  profit_currency: 'USD',
+  profit_percentage: -100,
+  profit_is_win: false,
+  profit_sign: -1,
+  status: 'lost',
+  longcode: '',
+  proposal_id: undefined,
+  balance_currency: '',
+  balance_value: '',
+  audit_details: [
+    { epoch: 1744400404, tick: 1671.91, tick_display_value: '1671.91' },
+    { epoch: 1744400406, tick: 1672.29, tick_display_value: '1672.29' },
+    { epoch: 1744400407, flag: 'highlight_time', name: 'Start Time' },
+    {
+      epoch: 1744400408,
+      flag: 'highlight_tick',
+      name: 'Entry Spot',
+      tick: 1672.3,
+      tick_display_value: '1672.30'
+    },
+    {
+      epoch: 1744400410,
+      flag: 'highlight_tick',
+      name: 'End Time and Exit Spot',
+      tick: 1671.6,
+      tick_display_value: '1671.60'
+    },
+    { epoch: 1744400412, tick: 1671.69, tick_display_value: '1671.69' }
+  ],
+  ticks: t {
+    raw: { epoch: 1744400408, quote: 1672.3 },
+    time: t { _data: [Object] },
+    quote: t { pip: 0.01, _data: [Object] },
+    ask: t { pip: 0.01, _data: [Object] },
+    bid: t { pip: 0.01, _data: [Object] },
+    _data: {}
+  }
+}
+
+*/
+
+
+        // Log trade details
+        logger.warn("*******************************************************************************************");
+        logger.info(`DEAL: ${tradeResult.longcode}`);
+        logger.info(`SPOT: ${tradeResult.entry_spot_value} -> ${tradeResult.exit_spot_value}`);
+        logger.info(`BUY : ${tradeResult.buy_price_currency} ${tradeResult.buy_price_value}`);
+        logger.info(`BID : ${tradeResult.bid_price_currency} ${tradeResult.bid_price_value}`);
+        logger.info(`SELL: ${tradeResult.sell_price_currency} ${tradeResult.sell_price_value} :: Status : ${tradeResult.status}`);
+        //logger.info(`${resultIsWin ? 'WON' : 'LOST'} : ${tradeResult.profit_currency} ${tradeResult.profit_value * tradeResult.profit_sign} :: IS_WIN : ${resultIsWin}`);
+        //logger.info(`VALIDITY: ${tradeValid} :*: PROFIT: ${[profit]} :*: IS_WIN : ${[resultIsWin]}`);
+        logger.warn("*******************************************************************************************");
 
         // Update strategy based on results
         this.tradeManager.updateStrategy(tradeResult.profit_is_win);

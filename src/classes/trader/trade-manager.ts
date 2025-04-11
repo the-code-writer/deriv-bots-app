@@ -10,6 +10,7 @@ import { ContractParamsFactory } from './contract-factory';
 import { ProfitCalculator } from './profit-calculator';
 import { env } from "@/common/utils/envConfig";
 import { TradeStrategy, DigitDiffStrategy, DigitEvenStrategy, DigitOddStrategy, CallStrategy, PutStrategy } from "./trade-strategies";
+import { parsePurchaseType } from "@/common/utils/snippets";
 
 const logger = pino({ name: "TradeManager" });
 
@@ -83,12 +84,13 @@ export class TradeManager {
      * @param {PurchaseType} purchaseType - Type of trade to execute
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async executeTrade(purchaseType: PurchaseType): Promise<ITradeData> {
+    async executeTrade(purchaseType: PurchaseType, userAccountToken: string): Promise<ITradeData> {
         if (false) {
             throw new Error('TradeManager not initialized');
         }
 
         try {
+
             // Select appropriate strategy
             this.selectStrategy(purchaseType);
 
@@ -98,7 +100,8 @@ export class TradeManager {
                 this.currency,
                 this.contractDuration,
                 this.contractDurationUnit,
-                this.getMarketSymbol()
+                this.getMarketSymbol(),
+                userAccountToken
             );
 
             // Validate and process trade result
@@ -165,11 +168,14 @@ export class TradeManager {
      * @private
      */
     private selectStrategy(purchaseType: PurchaseType): void {
+
         this.currentStrategy = this.createStrategy(purchaseType);
+
         this.profitPercentage = this.profitCalculator.calculateProfitPercentage(
             purchaseType,
             this.currentStake
         );
+
     }
 
     /**
@@ -179,6 +185,7 @@ export class TradeManager {
      * @private
      */
     private createStrategy(strategyType: PurchaseType): TradeStrategy {
+
         switch (strategyType) {
             case 'DIGITDIFF':
                 return new DigitDiffStrategy(this.getRandomDigit());
