@@ -53,6 +53,7 @@ export const env = cleanEnv(process.env, {
   MIN_STAKE: num({ devDefault: testOnly(0.35) }),
   MAX_RECOVERY_TRADES_X2: num({ devDefault: testOnly(4) }),
   MAX_RECOVERY_TRADES_X10: num({ devDefault: testOnly(2) }),
+  MAX_CONSECUTIVE_LOSSES: num({ devDefault: testOnly(4) }),
   MONGODB_MAX_RETRIES: num({ devDefault: testOnly(5) }),
   MONGODB_RETRY_DELAY: num({ devDefault: testOnly(3000) }),
   DB_SERVER_SESSIONS_DATABASE_TTL: str({ devDefault: testOnly("1 week") }),

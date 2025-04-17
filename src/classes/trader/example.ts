@@ -27,7 +27,7 @@ const tradingSession = {
     "market": "Volatility 50(1s) 📈",
     "purchaseType": "Rise ⬆️",
     "stake": 1,
-    "takeProfit": 5000,
+    "takeProfit": "USD5,000.34",
     "stopLoss": 10000,
     "tradeDuration": "1min ⏱️",
     "updateFrequency": "10sec ⏱️",
@@ -35,8 +35,6 @@ const tradingSession = {
     "contractDurationValue": "18hrs ⏱️",
     "tradingMode": "📈 Manual Trading"
 };
-
-tradingSession.purchaseType = parsePurchaseType(tradingSession.purchaseType);
 
 // @ts-ignore
 tradingBot.startTrading(tradingSession, false, 'a1-28VUaap8ZFN3G4lMgf5P3S3IPtUQl')

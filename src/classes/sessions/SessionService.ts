@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique session IDs
 import { ISessionStore, ISession, IBotAccounts, ITelegramAccount } from '@/classes/sessions/SessionManagerStorageClass';
 import { Encryption } from '@/classes/cryptography/EncryptionClass';
-import { calculateExpiry, getCookieValue, getEncryptedUserAgent } from '@/common/utils/snippets';
+import { convertTimeStringToSeconds, getCookieValue, getEncryptedUserAgent } from '@/common/utils/snippets';
 import { env } from '@/common/utils/envConfig';
 import { pino } from "pino";
 const cookie = require('cookie-signature');
@@ -139,7 +139,7 @@ export class SessionService implements ISessionService {
         }
         this.sessionStore = sessionStore;
         this.cookieName = cookieName;
-        this.maxAge = maxAge ? calculateExpiry(maxAge) : DB_SERVER_SESSIONS_DATABASE_TTL;
+        this.maxAge = maxAge ? convertTimeStringToSeconds(maxAge) : DB_SERVER_SESSIONS_DATABASE_TTL;
     }
 
 

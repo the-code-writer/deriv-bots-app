@@ -29,6 +29,8 @@ export class TradeManager {
     private currency: string;
 
     // State properties
+    private market: string | undefined;
+    private purchaseType: string | undefined;
     private currentStake: number;
     private profitPercentage: number = 0;
     private currentStrategy: TradeStrategy;
@@ -42,12 +44,15 @@ export class TradeManager {
      * @param {BotConfig} config - Configuration object for the trade manager
      */
     constructor(config: BotConfig) {
+
+        this.market = config.market;
+        this.purchaseType = config.purchaseType;
         this.baseStake = config.baseStake || 1;
-        this.currentStake = this.baseStake;
+        this.currentStake = this.baseStake || 1;
         this.minStake = config.minStake || 0.35;
         this.maxStake = config.maxStake || 5;
-        this.contractDuration = config.contractDuration || 1;
-        this.contractDurationUnit = config.contractDurationUnit || 't';
+        this.contractDuration = config.contractDurationValue || 1;
+        this.contractDurationUnit = config.contractDurationUnits || 't';
         this.currency = 'USD'; // Default, can be overridden by account
 
         this.profitCalculator = new ProfitCalculator();
@@ -56,57 +61,40 @@ export class TradeManager {
     }
 
     /**
-     * Initializes the trade manager with API connection
-     * @param {string} token - User account token
-     * @returns {Promise<void>}
-     */
-    async initialize(token: string): Promise<void> {
-        try {
-            this.api = new DerivAPI({
-                endpoint: env.DERIV_APP_ENDPOINT_DOMAIN,
-                app_id: env.DERIV_APP_ENDPOINT_APP_ID,
-                lang: env.DERIV_APP_ENDPOINT_LANG
-            });
-
-            this.account = await this.api.account(token);
-            const balance = await this.account.balance();
-            this.currency = balance.currency || 'USD';
-
-            logger.info('TradeManager initialized successfully');
-        } catch (error:any) {
-            logger.error('Failed to initialize TradeManager', error);
-            throw new Error(`TradeManager initialization failed: ${error.message}`);
-        }
-    }
-
-    /**
      * Executes a trade based on the specified purchase type
      * @param {PurchaseType} purchaseType - Type of trade to execute
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async executeTrade(purchaseType: PurchaseType, userAccountToken: string): Promise<ITradeData> {
-        if (false) {
-            throw new Error('TradeManager not initialized');
+    async executeTrade(previousTradeResultData: any): Promise<ITradeData> {
+
+        if (!previousTradeResultData) {
+            throw new Error('TradeManager not initialized : Missing previousTradeResultData');
         }
 
         try {
 
-            // Select appropriate strategy
-            this.selectStrategy(purchaseType);
+            console.log(":: previousTradeResultData ::", previousTradeResultData);
 
-            // Execute the trade using current strategy
-            const tradeResult = await this.currentStrategy.execute(
-                this.currentStake,
-                this.currency,
-                this.contractDuration,
-                this.contractDurationUnit,
-                this.getMarketSymbol(),
-                userAccountToken
+            // Select appropriate strategy
+            this.selectStrategy(previousTradeResultData.purchaseType);
+
+            this.currentStrategy.updateParams(
+                previousTradeResultData.market,
+                previousTradeResultData.purchaseType,
+                previousTradeResultData.currency,
+                previousTradeResultData.contractDuration,
+                previousTradeResultData.contractDurationUnit,
+                previousTradeResultData.userAccountToken,
+                previousTradeResultData,
             );
 
+            // Execute the trade using current strategy
+            const response = await this.currentStrategy.execute();
+
             // Validate and process trade result
-            return this.processTradeResult(tradeResult);
-        } catch (error:any) {
+            return this.processTradeResult(response);
+
+        } catch (error: any) {
             logger.error('Trade execution failed', error);
             throw new Error(`Trade execution failed: ${error.message}`);
         }
@@ -116,14 +104,14 @@ export class TradeManager {
      * Updates trading strategy based on previous results
      * @param {boolean} wasSuccessful - Whether the previous trade was successful
      */
-    updateStrategy(wasSuccessful: boolean): void {
-        if (wasSuccessful) {
+    updateStrategy(tradeResult: any): void {
+        if (tradeResult.resultIsWin) {
             // Reset to original strategy after success
-            this.currentStrategy = this.createStrategy(this.currentStrategy.getStrategyType());
+            this.currentStrategy.resetStrategyType();
             this.currentStake = this.baseStake; // Reset stake to base
         } else {
             // Implement intelligent strategy adaptation
-            this.adaptStrategyAfterLoss();
+            this.adaptStrategyAfterLoss(tradeResult);
         }
 
         logger.debug(`Strategy updated to: ${this.currentStrategy.getStrategyType()}`);
@@ -207,7 +195,7 @@ export class TradeManager {
      * Adapts strategy after a losing trade
      * @private
      */
-    private adaptStrategyAfterLoss(): void {
+    private adaptStrategyAfterLoss(tradeResult: any): void {
         // Implement intelligent strategy rotation
         const strategies: PurchaseType[] = ['DIGITDIFF', 'EVEN', 'ODD', 'CALL', 'PUT'];
         const currentIndex = strategies.indexOf(this.currentStrategy.getStrategyType());
@@ -262,16 +250,6 @@ export class TradeManager {
     }
 
     /**
-     * Gets the current market symbol
-     * @returns {string} Market symbol
-     * @private
-     */
-    private getMarketSymbol(): string {
-        // In a real implementation, this would map to the configured market
-        return 'R_100'; // Default market
-    }
-
-    /**
      * Generates a random digit (0-9)
      * @returns {number} Random digit
      * @private
@@ -280,26 +258,4 @@ export class TradeManager {
         return Math.floor(Math.random() * 10);
     }
 
-    /**
-     * Calculates the next stake amount based on trade results
-     * @param {boolean} wasSuccessful - Whether the trade was successful
-     * @param {number} profit - Profit amount from the trade
-     * @returns {number} New stake amount
-     */
-    calculateNextStake(wasSuccessful: boolean, profit: number): number {
-        if (wasSuccessful) {
-            return this.baseStake; // Reset to base after win
-        }
-
-        // Martingale-like progression with limits
-        let nextStake = this.profitCalculator.getTradingAmount(
-            wasSuccessful,
-            profit,
-            this.baseStake,
-            this.profitPercentage
-        );
-
-        // Apply stake limits
-        return Math.min(Math.max(nextStake, this.minStake), this.maxStake);
-    }
 }

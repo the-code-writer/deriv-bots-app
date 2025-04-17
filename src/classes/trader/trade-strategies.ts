@@ -6,36 +6,35 @@
 import { pino } from "pino";
 import { ContractParams, ITradeData, PurchaseType } from './types';
 import { TradeExecutor } from './trade-executor';
+import { ProfitCalculator } from "./profit-calculator";
 const logger = pino({ name: "TradeStrategy" });
 
 /**
  * Abstract base class for all trading strategies
  */
 export abstract class TradeStrategy {
+
+    private profitCalculator: ProfitCalculator;
     protected executor: TradeExecutor;
-    protected strategyType: PurchaseType = "DIGITDIFF";
+    protected strategyType: PurchaseType = "CALL";
+    protected currency: string = "USD";
+    protected contractDuration: number | string = 1;
+    protected contractDurationUnit: string = "t";
+    protected market: string = "R_100";
+    protected previousTradeResultData: any = {};
+    protected userAccountToken: string = "";
 
     constructor() {
+        this.profitCalculator = new ProfitCalculator();
         this.executor = new TradeExecutor();
+        this.previousTradeResultData = {};
     }
 
     /**
      * Executes the trade strategy
-     * @param {number} stake - Trade stake amount
-     * @param {string} currency - Currency for the trade
-     * @param {number} duration - Trade duration
-     * @param {string} durationUnit - Trade duration unit (s, m, h, d, t)
-     * @param {string} market - Market symbol
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    abstract execute(
-        stake: number,
-        currency: string,
-        duration: number,
-        durationUnit: string,
-        market: string,
-        userAccountToken: string
-    ): Promise<ITradeData>;
+    abstract execute(): Promise<ITradeData>;
 
     /**
      * Gets the strategy type
@@ -46,6 +45,30 @@ export abstract class TradeStrategy {
     }
 
     /**
+     * Gets the strategy type
+     * @returns {PurchaseType} The strategy type identifier
+     */
+    resetStrategyType(): PurchaseType {
+        return this.strategyType;
+    }
+
+    /**
+     * Gets the strategy type
+     * @returns {PurchaseType} The strategy type identifier
+     */
+    updateParams(market: any, strategyType: any, currency: any, contractDuration: any, contractDurationUnit: any, previousTradeResultData:any, userAccountToken:string): void {
+
+        this.market = market;
+        this.strategyType = strategyType;
+        this.currency = currency;
+        this.contractDuration = contractDuration;
+        this.contractDurationUnit = contractDurationUnit;
+        this.previousTradeResultData = previousTradeResultData;
+        this.userAccountToken = userAccountToken;
+
+    }
+
+    /**
      * Validates trade parameters before execution
      * @param {number} stake - Trade stake amount
      * @param {string} currency - Trade currency
@@ -53,20 +76,78 @@ export abstract class TradeStrategy {
      * @throws {Error} If parameters are invalid
      */
     protected validateParameters(
-        stake: number,
-        currency: string,
-        market: string
+        params:any
     ): void {
-        if (stake <= 0) throw new Error('Stake must be positive');
-        if (!currency) throw new Error('Currency must be specified');
-        if (!market) throw new Error('Market must be specified');
+
+        console.log("PARAMS", params);
+                     
+        if (params.amount <= 0) throw new Error('Stake must be positive');
+        if (!params.basis) throw new Error('Basis must be set');
+        if (!params.currency) throw new Error('Currency must be specified');
+        if (!params.duration) throw new Error('Duration must be specified');
+        if (!params.duration_unit) throw new Error('Duration units must be specified');
+        if (!params.symbol) throw new Error('Market must be specified');
+
     }
+
+    protected getDefaultParams(contractType: any, amount: number, barrier?: number | string) {
+
+        const contractParameters: ContractParams = {
+            amount: amount,
+            basis: "stake",
+            contract_type: contractType,
+            currency: this.currency || "USD",
+            duration: this.contractDuration,
+            duration_unit: this.contractDurationUnit,
+            symbol: this.market,
+        };
+
+        if (barrier) {
+            contractParameters.barrier = barrier;
+        }
+
+        return contractParameters;
+
+    }
+
+    protected getContractNextStake(): number {
+        
+        this.previousTradeResultData = {
+            baseStake: 1,
+            buy: 1,
+            bid: 1,
+            sell: 1,
+            status: 'won',
+            profitSign: 1,
+            profit: 0,
+            resultIsWin: true,
+            tradeResult: {}
+        };
+
+        if (this.previousTradeResultData && this.previousTradeResultData.resultIswin) {
+            return this.previousTradeResultData.baseStake; // Reset to base after win
+        }
+
+        // Martingale-like progression with limits
+        let nextStake = this.profitCalculator.getTradingAmount(
+            this.previousTradeResultData.resultIswin,
+            this.previousTradeResultData.profit,
+            this.previousTradeResultData.baseStake,
+            this.profitPercentage
+        );
+
+        // Apply stake limits
+        return nextStake;
+
+    }
+
 }
 
 /**
  * Digit Difference trading strategy
  */
 export class DigitDiffStrategy extends TradeStrategy {
+
     private predictedDigit: number;
 
     /**
@@ -81,30 +162,20 @@ export class DigitDiffStrategy extends TradeStrategy {
 
     /**
      * Executes a DIGITDIFF trade
+     * @returns {Promise<ITradeData>} Trade execution result
      */
-    async execute(
-        stake: number,
-        currency: string,
-        duration: number,
-        durationUnit: string,
-        market: string,
-        userAccountToken: string
-    ): Promise<ITradeData> {
-        this.validateParameters(stake, currency, market);
+    async execute(): Promise<ITradeData> {
 
-        const params: ContractParams = {
-            amount: stake,
-            basis: 'stake',
-            contract_type: 'DIGITDIFF',
-            currency,
-            duration,
-            duration_unit: durationUnit,
-            symbol: market,
-            barrier: this.predictedDigit.toString()
-        };
+        const stake: number = this.getContractNextStake();
 
-        logger.debug(`Executing DIGITDIFF strategy with digit ${this.predictedDigit}`);
-        return this.executor.purchaseContract(params, userAccountToken);
+        logger.warn(`Executing DIGITDIFF strategy with digit ${this.predictedDigit}`);
+
+        const params: ContractParams = this.getDefaultParams(this.strategyType, stake, this.predictedDigit.toString());
+
+        this.validateParameters(params);
+
+        return this.executor.purchaseContract(params, this.userAccountToken);
+
     }
 
     /**
@@ -133,30 +204,19 @@ export class DigitEvenStrategy extends TradeStrategy {
 
     /**
      * Executes a EVEN trade
+     * @returns {Promise<ITradeData>} Trade execution result
      */
-    async execute(
-        stake: number,
-        currency: string,
-        duration: number,
-        durationUnit: string,
-        market: string,
-        userAccountToken: string
-    ): Promise<ITradeData> {
-        this.validateParameters(stake, currency, market);
+    async execute(): Promise<ITradeData> {
 
-        const params: ContractParams = {
-            amount: stake,
-            basis: 'stake',
-            contract_type: 'EVEN',
-            currency,
-            duration,
-            duration_unit: durationUnit,
-            symbol: market,
-            barrier: 'EVEN'
-        };
+        const stake: number = this.getContractNextStake();
 
-        logger.debug('Executing EVEN strategy');
-        return this.executor.purchaseContract(params, userAccountToken);
+        logger.warn('Executing EVEN strategy');
+        
+        const params: ContractParams = this.getDefaultParams(this.strategyType, stake);
+
+        this.validateParameters(params);
+
+        return this.executor.purchaseContract(params, this.userAccountToken);
     }
 }
 
@@ -171,30 +231,19 @@ export class DigitOddStrategy extends TradeStrategy {
 
     /**
      * Executes a ODD trade
+     * @returns {Promise<ITradeData>} Trade execution result
      */
-    async execute(
-        stake: number,
-        currency: string,
-        duration: number,
-        durationUnit: string,
-        market: string,
-        userAccountToken: string
-    ): Promise<ITradeData> {
-        this.validateParameters(stake, currency, market);
+    async execute(): Promise<ITradeData> {
 
-        const params: ContractParams = {
-            amount: stake,
-            basis: 'stake',
-            contract_type: 'ODD',
-            currency,
-            duration,
-            duration_unit: durationUnit,
-            symbol: market,
-            barrier: 'ODD'
-        };
+        const stake: number = this.getContractNextStake();
 
-        logger.debug('Executing ODD strategy');
-        return this.executor.purchaseContract(params, userAccountToken);
+        logger.warn('Executing ODD strategy');
+
+        const params: ContractParams = this.getDefaultParams(this.strategyType, stake);
+
+        this.validateParameters(params);
+
+        return this.executor.purchaseContract(params, this.userAccountToken);
     }
 }
 
@@ -209,29 +258,19 @@ export class CallStrategy extends TradeStrategy {
 
     /**
      * Executes a CALL trade
+     * @returns {Promise<ITradeData>} Trade execution result
      */
-    async execute(
-        stake: number,
-        currency: string,
-        duration: number,
-        durationUnit: string,
-        market: string,
-        userAccountToken: string
-    ): Promise<ITradeData> {
-        this.validateParameters(stake, currency, market);
+    async execute(): Promise<ITradeData> {
 
-        const params: ContractParams = {
-            amount: stake,
-            basis: 'stake',
-            contract_type: 'CALL',
-            currency,
-            duration,
-            duration_unit: durationUnit,
-            symbol: market
-        };
+        const stake: number = this.getContractNextStake();
 
-        logger.debug('Executing CALL strategy');
-        return this.executor.purchaseContract(params, userAccountToken);
+        logger.warn('Executing CALL strategy');
+
+        const params: ContractParams = this.getDefaultParams(this.strategyType, stake);
+
+        this.validateParameters(params);
+
+        return this.executor.purchaseContract(params, this.userAccountToken);
     }
 }
 
@@ -246,31 +285,22 @@ export class PutStrategy extends TradeStrategy {
 
     /**
      * Executes a PUT trade
+     * @returns {Promise<ITradeData>} Trade execution result
      */
-    async execute(
-        stake: number,
-        currency: string,
-        duration: number,
-        durationUnit: string,
-        market: string,
-        userAccountToken: string
-    ): Promise<ITradeData> {
-        this.validateParameters(stake, currency, market);
+    async execute(): Promise<ITradeData> {
 
-        const params: ContractParams = {
-            amount: stake,
-            basis: 'stake',
-            contract_type: 'PUT',
-            currency,
-            duration,
-            duration_unit: durationUnit,
-            symbol: market
-        };
+        const stake: number = this.getContractNextStake();
 
-        logger.debug('Executing PUT strategy');
-        return this.executor.purchaseContract(params, userAccountToken);
+        logger.warn('Executing PUT strategy');
+
+        const params: ContractParams = this.getDefaultParams(this.strategyType, stake);
+
+        this.validateParameters(params);
+        return this.executor.purchaseContract(params, this.userAccountToken);
     }
 }
+
+
 
 /**
  * Digit Under trading strategy
@@ -290,30 +320,19 @@ export class DigitUnderStrategy extends TradeStrategy {
 
     /**
      * Executes a DIGITUNDER trade
+     * @returns {Promise<ITradeData>} Trade execution result
      */
-    async execute(
-        stake: number,
-        currency: string,
-        duration: number,
-        durationUnit: string,
-        market: string,
-        userAccountToken: string
-    ): Promise<ITradeData> {
-        this.validateParameters(stake, currency, market);
+    async execute(): Promise<ITradeData> {
 
-        const params: ContractParams = {
-            amount: stake,
-            basis: 'stake',
-            contract_type: 'DIGITUNDER',
-            currency,
-            duration,
-            duration_unit: durationUnit,
-            symbol: market,
-            barrier: this.barrier.toString()
-        };
+        const stake: number = this.getContractNextStake();
 
-        logger.debug(`Executing DIGITUNDER strategy with barrier ${this.barrier}`);
-        return this.executor.purchaseContract(params, userAccountToken);
+        logger.warn(`Executing DIGITUNDER strategy with barrier ${this.barrier}`);
+
+        const params: ContractParams = this.getDefaultParams(this.strategyType, stake, this.barrier.toString());
+
+        this.validateParameters(params);
+
+        return this.executor.purchaseContract(params, this.userAccountToken);
     }
 
     /**
@@ -349,30 +368,18 @@ export class DigitOverStrategy extends TradeStrategy {
 
     /**
      * Executes a DIGITOVER trade
+     * @returns {Promise<ITradeData>} Trade execution result
      */
-    async execute(
-        stake: number,
-        currency: string,
-        duration: number,
-        durationUnit: string,
-        market: string,
-        userAccountToken: string
-    ): Promise<ITradeData> {
-        this.validateParameters(stake, currency, market);
+    async execute(): Promise<ITradeData> {
 
-        const params: ContractParams = {
-            amount: stake,
-            basis: 'stake',
-            contract_type: 'DIGITOVER',
-            currency,
-            duration,
-            duration_unit: durationUnit,
-            symbol: market,
-            barrier: this.barrier.toString()
-        };
+        const stake: number = this.getContractNextStake();
 
-        logger.debug(`Executing DIGITOVER strategy with barrier ${this.barrier}`);
-        return this.executor.purchaseContract(params, userAccountToken);
+        logger.warn(`Executing DIGITOVER strategy with barrier ${this.barrier}`);
+
+        const params: ContractParams = this.getDefaultParams(this.strategyType, stake, this.barrier.toString());
+
+        this.validateParameters(params);
+        return this.executor.purchaseContract(params, this.userAccountToken);
     }
 
     /**

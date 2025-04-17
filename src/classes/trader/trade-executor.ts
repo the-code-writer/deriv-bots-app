@@ -59,6 +59,7 @@ export class TradeExecutor {
      * @returns {Promise<ITradeData>} Trade execution result
      */
     async purchaseContract(contractParameters: ContractParams, userAccountToken: string): Promise<ITradeData> {
+        
         if (!contractParameters) {
             throw new Error('TradeExecutor not initialized');
         }
@@ -71,10 +72,15 @@ export class TradeExecutor {
         while (attempt < this.maxRetryAttempts) {
             try {
                 attempt++;
-                logger.info(`Attempt ${attempt} to purchase contract`);
+                logger.info(`Attempt 00 : ${attempt} to purchase contract`);
 
                 const contract = await this.createContract(contractParameters, userAccountToken);
+
+                logger.info(`Attempt 01 : ${attempt} to purchase contract`);
+
                 this.setupContractUpdates(contract);
+
+                logger.info(`Attempt 02 : ${attempt} to purchase contract`);
 
                 await this.buyContract(contract);
                 const tradeData = await this.waitForContractCompletion(contract);
@@ -157,7 +163,7 @@ export class TradeExecutor {
     private async createContract(params: ContractParams, userAccountToken: string): Promise<ContractResponse> {
         if (!params) throw new Error('API not initialized');
         if (!userAccountToken) throw new Error('Invalid token');
-
+        logger.info(`Attempt : A001 to purchase contract`);
         const timeoutPromise = new Promise<never>((_, reject) =>
             setTimeout(
                 () => reject(new Error('Contract creation timed out')),
@@ -165,10 +171,12 @@ export class TradeExecutor {
             )
         );
 
+        logger.info(`Attempt : A002 to purchase contract`);
+
         const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
         await api.account(userAccountToken);
-
+        logger.info(`Attempt : A003 to purchase contract`);
         const contractPromise = api.contract(params);
 
         return Promise.race([contractPromise, timeoutPromise]);

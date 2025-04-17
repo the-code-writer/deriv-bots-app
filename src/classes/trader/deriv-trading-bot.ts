@@ -5,57 +5,119 @@
  */
 
 import { pino } from "pino";
-import { BotConfig, ITradeData, MarketType, PurchaseType, TradingType } from './types';
+import { BotConfig, ITradeData, MarketType, PurchaseType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, PurchaseTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType } from './types';
 import { TradeManager } from './trade-manager';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
+import { convertTimeStringToSeconds } from '@/common/utils/snippets';
+import { formatDuration, sanitizeAccountType, sanitizeTradingType, sanitizeMarketType, sanitizePurchaseType, sanitizeAmount, sanitizeTradingMode, sanitizeString } from '@/common/utils/snippets';
+import { TradeData } from "../deriv/TradingDataClass";
+
+const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
+const {
+    DERIV_APP_ENDPOINT_DOMAIN,
+    DERIV_APP_ENDPOINT_APP_ID,
+    DERIV_APP_ENDPOINT_LANG,
+} = env;
 
 const logger = pino({ name: "DerivTradingBot" });
 /**
  * Main Deriv trading bot class implementing core trading functionality
  */
 export class DerivTradingBot {
+
     // Configuration and state properties
-    private tradeManager: TradeManager;
-    private tradingType: TradingType;
-    private defaultMarket: MarketType;
-    private isTrading: boolean;
-    private takeProfit: number;
-    private stopLoss: number;
-    private tradeStartedAt: number;
-    private tradeDuration: number;
-    private updateFrequency: number;
-    private currentPurchaseType: PurchaseType;
-    private originalPurchaseType: PurchaseType;
+    private tradeManager!: TradeManager;
+    private accountType!: AccountType;
+    private tradingType!: TradingType;
+    private defaultMarket!: MarketType;
+    private currentPurchaseType!: PurchaseType;
+    private originalPurchaseType!: PurchaseType;
+    private isTrading!: boolean;
+    private baseStake!: number;
+    private takeProfit!: number;
+    private stopLoss!: number;
+    private tradeStartedAt!: number;
+    private tradeDuration!: number;
+    private updateFrequency!: number;
+    private contractDurationUnits!: string;
+    private contractDurationValue!: number;
+    private tradingMode!: string;
     private cachedSession: any;
     private tradeDurationTimeoutId: NodeJS.Timeout | null = null;
     private updateFrequencyIntervalId: NodeJS.Timeout | null = null;
     private consecutiveLosses: number = 0;
-    private maxConsecutiveLosses: number = env.MAX_RECOVERY_TRADES_X2 || 5;
+    private maxConsecutiveLosses: number = env.MAX_CONSECUTIVE_LOSSES || 5;
     private totalProfit: number = 0;
-    private totalTrades: number = 0;
+    private totalLost: number = 0;
+    private totalGained: number = 0;
+    private totalStake: number = 0;
+    private totalPayout: number = 0;
+    private totalNumberOfRuns: number = 0;
     private winningTrades: number = 0;
     private losingTrades: number = 0;
-    private userAccountToken: string;
+    private userAccountToken!: string;
+    private previousTradeResultData: any;
+
+    private botConfig: BotConfig;
 
     /**
      * Constructs a new DerivTradingBot instance
      * @param {BotConfig} config - Configuration object for the trading bot
      */
+
     constructor(config: BotConfig = {}) {
+        // Save the config for future use
+        this.botConfig = config;
+
+        // Call the resetState function to initialize all properties
+        this.resetState();
+
+    }
+
+    /**
+     * Constructs a new DerivTradingBot instance
+     * @param {BotConfig} config - Configuration object for the trading bot
+     */
+    resetState(config: BotConfig = {}) {
+
+        const mergedConfig: BotConfig = { ...this.botConfig, ...config };
+
         this.tradeManager = new TradeManager(config);
-        this.tradingType = config.tradingType || "Derivatives 📊";
-        this.defaultMarket = config.defaultMarket || "R_100";
+        this.tradingType = mergedConfig.tradingType || TradingTypeEnum.Derivatives;
+        this.defaultMarket = mergedConfig.defaultMarket || MarketTypeEnum.R_100;
+        this.currentPurchaseType = PurchaseTypeEnum.Call;
+        this.originalPurchaseType = PurchaseTypeEnum.Call;
         this.isTrading = false;
-        this.takeProfit = config.takeProfit || 10;
-        this.stopLoss = config.stopLoss || 5;
+        this.baseStake = 1;
+        this.takeProfit = mergedConfig.takeProfit || 10;
+        this.stopLoss = mergedConfig.stopLoss || 5;
         this.tradeStartedAt = 0;
         this.tradeDuration = 0;
         this.updateFrequency = 0;
-        this.currentPurchaseType = "CALL";
-        this.originalPurchaseType = "CALL";
+        this.contractDurationUnits = mergedConfig.contractDurationUnits || TradeDurationUnitsOptimizedEnum.Ticks;
+        this.contractDurationValue = mergedConfig.contractDurationValue || 1;
+        this.tradingMode = mergedConfig.tradingMode || TradingModeTypeEnum.Manual;
         this.cachedSession = null;
         this.userAccountToken = "";
+        this.consecutiveLosses = 0;
+        this.maxConsecutiveLosses = env.MAX_CONSECUTIVE_LOSSES || 5;
+        this.totalProfit = 0;
+        this.totalLost = 0;
+        this.totalNumberOfRuns = 0;
+        this.winningTrades = 0;
+        this.losingTrades = 0;
+
+        // Clear any remaining intervals or timeouts
+        if (this.tradeDurationTimeoutId) {
+            clearTimeout(this.tradeDurationTimeoutId);
+            this.tradeDurationTimeoutId = null;
+        }
+        if (this.updateFrequencyIntervalId) {
+            clearInterval(this.updateFrequencyIntervalId);
+            this.updateFrequencyIntervalId = null;
+        }
+
     }
 
     /**
@@ -67,21 +129,19 @@ export class DerivTradingBot {
      * @throws {Error} If invalid parameters are provided or trading cannot start
      */
     async startTrading(
-        session: {
-            market: MarketType;
-            purchaseType: PurchaseType;
-            stake: number;
-            takeProfit: number;
-            stopLoss: number;
-            tradeDuration: string;
-            updateFrequency: string;
-        },
+        session: BotSessionDataType,
         retryAfterError: boolean = false,
         userAccountToken: string = ""
     ): Promise<void> {
+
         try {
+
             // Validate input parameters
-            this.validateSessionParameters(session);
+            const validParams: boolean = this.validateSessionParameters(session);
+
+            if (!validParams) {
+                return;
+            }
 
             // Use cached session if retrying after error
             if (retryAfterError) {
@@ -94,13 +154,38 @@ export class DerivTradingBot {
             }
 
             // Initialize trading session
-            await this.initializeTradingSession(session, userAccountToken);
+            const sessionData: TradingSessionDataType = await this.initializeTradingSession(session, userAccountToken);
 
-            // Start the main trading loop
-            this.isTrading = true;
-            await this.executeTradingLoop(session.purchaseType);
+            if (sessionData) {
 
-        } catch (error:any) {
+                parentPort?.postMessage({ action: "sendTelegramMessage", text: "🟡 Establishing connection to Deriv server...", meta: {} });
+
+                const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
+
+                const ping = await api.basic.ping();
+
+                console.log("PING_CONNECT", ping);
+
+                logger.info("Connection established via DerivAPI endpoint.");
+
+                if (ping) {
+
+                    parentPort?.postMessage({ action: "sendTelegramMessage", text: "🟢 Connection to Deriv server established!", meta: {} });
+
+                    // Start the main trading loop
+                    this.isTrading = true;
+                    await this.executeTradeSequence();
+
+                } else {
+
+                    parentPort?.postMessage({ action: "sendTelegramMessage", text: "🔴 Connection to Deriv server failed!", meta: {} });
+
+                }
+
+            }
+
+        } catch (error: any) {
+            console.log("ERROR : startTrading", error);
             logger.error('Failed to start trading', error);
             await this.handleTradingError(error, session);
             throw error;
@@ -112,22 +197,100 @@ export class DerivTradingBot {
      * @param {object} session - Trading session configuration
      * @throws {Error} If any parameter is invalid
      */
-    private validateSessionParameters(session: {
-        market: MarketType;
-        purchaseType: PurchaseType;
-        stake: number;
-        takeProfit: number;
-        stopLoss: number;
-        tradeDuration: string;
-        updateFrequency: string;
-    }): void {
-        if (!session.market) throw new Error("Market must be specified");
-        if (!session.purchaseType) throw new Error("Purchase type must be specified");
-        if (session.stake <= 0) throw new Error("Stake must be positive");
-        if (session.takeProfit <= 0) throw new Error("Take profit must be positive");
-        if (session.stopLoss <= 0) throw new Error("Stop loss must be positive");
-        if (!session.tradeDuration) throw new Error("Trade duration must be specified");
-        if (!session.updateFrequency) throw new Error("Update frequency must be specified");
+    private validateSessionParameters(session: BotSessionDataType): boolean {
+
+        // Destructure session parameters for easier access
+        const { step, accountType, tradingType, market, purchaseType, stake, takeProfit, stopLoss, tradeDuration, updateFrequency, contractDurationUnits, contractDurationValue, tradingMode } = session;
+
+        // Validate session parameters
+        const errorObject = {
+            name: "INVALID_PARAMETERS",
+            message: "Invalid Parameters",
+            code: 500
+        };
+
+        if (!step) {
+            errorObject.message = "Session Step cannot be empty.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (!accountType) {
+            errorObject.message = "Account Type cannot be empty.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (!tradingType) {
+            errorObject.message = "Trading Type cannot be empty.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (!market) {
+            errorObject.message = "Market cannot be empty.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (!purchaseType) {
+            errorObject.message = "Purchase Type cannot be empty.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (parseFloat(String(stake)) <= 0) {
+            errorObject.message = "Stake must be a positive number.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (parseFloat(String(takeProfit)) <= 0) {
+            errorObject.message = "Take Profit must be a positive number.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (parseFloat(String(stopLoss)) <= 0) {
+            errorObject.message = "Stop Loss must be a positive number.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (!tradeDuration) {
+            errorObject.message = "Trade duration must be set.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (!updateFrequency) {
+            errorObject.message = "Update frequency must be set.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        if (!contractDurationUnits) {
+            errorObject.message = "Contract Duration Units must be set.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+
+        if (!contractDurationValue) {
+            errorObject.message = "Contract Duration must be set.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+
+        if (!tradingMode) {
+            errorObject.message = "Trading Mode must be set.";
+            this.handleErrorExemption(errorObject, session);
+            return false;
+        }
+
+        return true;
+
     }
 
     /**
@@ -136,111 +299,236 @@ export class DerivTradingBot {
      * @param {string} userAccountToken - User account token
      */
     private async initializeTradingSession(
-        session: {
-            market: MarketType;
-            purchaseType: PurchaseType;
-            stake: number;
-            takeProfit: number;
-            stopLoss: number;
-            tradeDuration: string;
-            updateFrequency: string;
-        },
+        session: BotSessionDataType,
         userAccountToken: string
-    ): Promise<void> {
+    ): Promise<TradingSessionDataType> {
 
-        this.userAccountToken = userAccountToken;
+        console.log("SESSION RAW", session);
+
+        const sessionData: TradingSessionDataType = {
+            step: session.step as Step,
+            accountType: sanitizeAccountType(session.accountType),
+            tradingType: sanitizeTradingType(session.tradingType),
+            market: sanitizeMarketType(session.market),
+            purchaseType: sanitizePurchaseType(session.purchaseType),
+            stake: sanitizeAmount(session.stake, { mode: "currency" }) as number,
+            takeProfit: sanitizeAmount(session.takeProfit, { mode: "currency" }) as number,
+            stopLoss: sanitizeAmount(session.stopLoss, { mode: "currency" }) as number,
+            tradeDuration: convertTimeStringToSeconds(session.tradeDuration),
+            updateFrequency: convertTimeStringToSeconds(session.updateFrequency),
+            contractDurationUnits: sanitizeString(session.contractDurationUnits, { replaceWith: "" }),
+            contractDurationValue: convertTimeStringToSeconds(session.contractDurationValue),
+            tradingMode: sanitizeTradingMode(session.tradingMode),
+        }
+
+        console.log("SESSION CLN", sessionData);
 
         // Set initial configuration
-        this.defaultMarket = session.market;
-        this.originalPurchaseType = session.purchaseType;
-        this.currentPurchaseType = session.purchaseType;
-        this.takeProfit = session.takeProfit;
-        this.stopLoss = session.stopLoss;
+        this.accountType = sessionData.accountType;
+        this.tradingType = sessionData.tradingType;
+        this.defaultMarket = sessionData.market;
+        this.originalPurchaseType = sessionData.purchaseType;
+        this.currentPurchaseType = sessionData.purchaseType;
+        this.baseStake = sessionData.stake;
+        this.takeProfit = sessionData.takeProfit;
+        this.stopLoss = sessionData.stopLoss;
         this.tradeStartedAt = Date.now() / 1000;
 
         // Parse duration strings to seconds
-        this.tradeDuration = this.parseDurationToSeconds(session.tradeDuration);
-        this.updateFrequency = this.parseDurationToSeconds(session.updateFrequency);
+        this.tradeDuration = sessionData.tradeDuration;
+        this.updateFrequency = sessionData.updateFrequency;
+
+        // Contract duration
+        this.contractDurationUnits = sessionData.contractDurationUnits;
+        this.contractDurationValue = sessionData.contractDurationValue;
 
         // Setup trade duration timeout
         this.tradeDurationTimeoutId = setTimeout(() => {
             this.stopTrading(`Trade duration limit reached: ${session.tradeDuration}`);
-        }, this.tradeDuration * 1000);
+        }, this.tradeDuration);
 
         // Setup telemetry updates
         this.updateFrequencyIntervalId = setInterval(() => {
             this.generateTelemetry();
-        }, this.updateFrequency * 1000);
+        }, this.updateFrequency);
+
+        this.tradingMode = sessionData.tradingMode;
+
+        this.userAccountToken = userAccountToken;
+
+        const config:BotConfig = {
+            accountType : this.accountType,
+            tradingType : this.tradingType,
+            market : this.defaultMarket,    
+            defaultMarket : this.defaultMarket,
+            purchaseType : this.originalPurchaseType,    
+            baseStake : this.baseStake,
+            stake : this.baseStake,
+            takeProfit : this.takeProfit,
+            stopLoss : this.stopLoss,
+            tradeDuration : this.tradeDuration,
+            updateFrequency : this.updateFrequency,
+            contractDurationUnits : this.contractDurationUnits,
+            contractDurationValue : this.contractDurationValue,
+            tradingMode : this.tradingMode,
+            userAccountToken : this.userAccountToken,
+            maxStake : 0.35,
+            minStake : 5000,
+            maxRecoveryTrades : 4,
+        };
+
+        this.tradeManager = new TradeManager(config);
+
+        this.previousTradeResultData = {
+            baseStake: this.baseStake,
+            buy: this.baseStake,
+            bid: this.baseStake,
+            sell: this.baseStake,
+            status: 'won',
+            profitSign: 1,
+            profit: 0,
+            resultIsWin: true,
+            tradeResult: {},
+            userAccountToken: this.userAccountToken,
+            market: this.defaultMarket, 
+            purchaseType: this.originalPurchaseType,   
+            currency:"USD", // TODO
+            contractDuration: this.contractDurationValue,
+            contractDurationUnit: this.contractDurationUnits,
+        }
 
         // Notify start of trading
         parentPort?.postMessage({
             action: "sendTelegramMessage",
             text: "🟢 Trading session started successfully",
-            meta: { session }
+            meta: { sessionData }
         });
+
+        return sessionData;
+
     }
 
     /**
-     * Executes the main trading loop with intelligent trade execution
-     * @param {PurchaseType} purchaseType - Type of trade to execute
-     */
-    private async executeTradingLoop(purchaseType: PurchaseType): Promise<void> {
-        while (this.isTrading) {
-            try {
+ * Calculates the delay before next trade attempt with intelligent backoff
+ */
+    private calculateNextTradeDelay(resultIsWin: boolean): number {
 
-                // Execute trade with current strategy
-                const tradeResult = await this.tradeManager.executeTrade(purchaseType, this.userAccountToken);
-                this.totalTrades++;
+        let delay = 1000;
 
-                // Process trade result
-                await this.processTradeResult(tradeResult);
+        if (resultIsWin) {
 
-                // Check for stop conditions
-                if (this.shouldStopTrading(tradeResult)) {
-                    await this.stopTrading(this.getStopReason(tradeResult));
-                    break;
+            return delay;
+
+        } else {
+
+            // Base delay with jitter (3s ± 2s)
+            delay = delay * 3 + Math.ceil(Math.random() * 2000);
+
+            // Exponential backoff for consecutive losses
+            if (this.consecutiveLosses > 0) {
+
+                delay *= Math.pow(1.5, this.consecutiveLosses);
+
+                if (delay > 10000) {
+                    delay = Math.min(delay * (this.consecutiveLosses + 1), 10000); // Up to 10 seconds max
                 }
 
-                // Intelligent delay between trades based on market conditions
-                await this.adjustTradeDelay(tradeResult);
-
-            } catch (error) {
-                console.log(error);
-                logger.error('Error in trading loop', error);
-                this.consecutiveLosses++;
-
-                // Stop trading if too many consecutive errors
-                if (this.consecutiveLosses >= this.maxConsecutiveLosses) {
-                    await this.stopTrading("Maximum consecutive errors reached");
-                    break;
-                }
-
-                // Exponential backoff for error recovery
-                const delay = Math.min(1000 * Math.pow(2, this.consecutiveLosses), 30000);
-                await new Promise(resolve => setTimeout(resolve, delay));
             }
+
+            // Cap maximum delay at 15 seconds
+            return Math.min(delay, 15000);
+
         }
+
     }
+
+    private nextTradeTimer: NodeJS.Timeout | null = null;
+
+    /**
+     * Main trade execution flow without while loops
+     */
+    private async executeTradeSequence(): Promise<void> {
+
+        if (!this.isTrading) return;
+
+        try {
+
+            const response: ITradeData = await this.tradeManager.executeTrade(this.previousTradeResultData);
+
+            const tradeResult: TradeData = TradeData.parseTradeData(response);
+
+            const resultIsWin: boolean = await this.processTradeResult(tradeResult);
+
+            if (this.shouldStopTrading(tradeResult)) {
+                await this.stopTrading(this.getStopReason(tradeResult));
+                return;
+            }
+
+            // Schedule next trade
+            await this.scheduleNextTrade(resultIsWin);
+
+        } catch (error) {
+
+            logger.error('Trade execution failed', error);
+
+            console.log(error);
+
+        }
+
+    }
+
+    /**
+     * Schedules the next trade with calculated delay
+     */
+    private async scheduleNextTrade(resultIsWin: boolean): Promise<void> {
+
+        if (!this.isTrading) return;
+
+        const delay = this.calculateNextTradeDelay(resultIsWin);
+
+        await this.sleep(delay);
+
+        this.executeTradeSequence();
+
+    }
+
+    // Sleep function (private)
+    private async sleep(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
 
     /**
      * Processes trade results and updates statistics
-     * @param {ITradeData} tradeResult - Result of the completed trade
+     * @param {TradeData} tradeResult - Result of the completed trade
      */
-    private async processTradeResult(tradeResult: ITradeData): Promise<void> {
-        const profit = tradeResult.profit_value * tradeResult.profit_sign;
-        this.totalProfit += profit;
+    private async processTradeResult(tradeResult: TradeData): Promise<boolean> {
 
-        if (tradeResult.profit_is_win) {
+        this.totalNumberOfRuns++;
+
+        const resultIsWin: boolean = tradeResult.profit_is_win;
+
+        const investment: number = tradeResult.buy_price_value;
+        
+        const profit: number = tradeResult.profit_value * tradeResult.profit_sign;
+
+        const profitAfterSale: number = resultIsWin ? profit : -investment;
+
+        const tradeValid: boolean = profit === profitAfterSale;
+        
+        this.totalProfit += profit;
+        this.totalStake  += tradeResult.buy_price_value;
+        this.totalPayout += tradeResult.sell_price_value;
+
+        if (resultIsWin) {
             this.winningTrades++;
             this.consecutiveLosses = 0;
+            this.totalGained += profit;
         } else {
             this.losingTrades++;
             this.consecutiveLosses++;
+            this.totalLost += investment;
         }
-
-        // Log trade details
-        logger.info(`Trade completed - ${tradeResult.profit_is_win ? 'WIN' : 'LOSS'}`);
-        logger.debug('Trade details:', tradeResult);
 
         console.log(tradeResult)
 
@@ -320,20 +608,37 @@ export class DerivTradingBot {
         logger.info(`BUY : ${tradeResult.buy_price_currency} ${tradeResult.buy_price_value}`);
         logger.info(`BID : ${tradeResult.bid_price_currency} ${tradeResult.bid_price_value}`);
         logger.info(`SELL: ${tradeResult.sell_price_currency} ${tradeResult.sell_price_value} :: Status : ${tradeResult.status}`);
-        //logger.info(`${resultIsWin ? 'WON' : 'LOST'} : ${tradeResult.profit_currency} ${tradeResult.profit_value * tradeResult.profit_sign} :: IS_WIN : ${resultIsWin}`);
-        //logger.info(`VALIDITY: ${tradeValid} :*: PROFIT: ${[profit]} :*: IS_WIN : ${[resultIsWin]}`);
+        logger.info(`${resultIsWin ? 'WON' : 'LOST'} : ${tradeResult.profit_currency} ${tradeResult.profit_value * tradeResult.profit_sign} :: IS_WIN : ${resultIsWin}`);
+        logger.info(`VALIDITY: ${tradeValid} :*: PROFIT: ${[profit]} :*: IS_WIN : ${[resultIsWin]}`);
         logger.warn("*******************************************************************************************");
 
+        const previousTradeResultData: any = {
+                baseStake: this.baseStake,
+                buy: tradeResult.buy_price_value,
+                bid: tradeResult.bid_price_value,
+                sell: tradeResult.sell_price_value,
+                status: tradeResult.status,
+                profitSign: tradeResult.profit_sign,
+                profit: tradeResult.profit_value,
+                resultIsWin: resultIsWin,
+                tradeResult: tradeResult
+            };
+
         // Update strategy based on results
-        this.tradeManager.updateStrategy(tradeResult.profit_is_win);
+        this.tradeManager.updateStrategy(previousTradeResultData);
+
+        this.previousTradeResultData = previousTradeResultData;
+
+        return resultIsWin;
+
     }
 
     /**
      * Determines if trading should stop based on current conditions
-     * @param {ITradeData} tradeResult - Latest trade result
+     * @param {TradeData} tradeResult - Latest trade result
      * @returns {boolean} True if trading should stop
      */
-    private shouldStopTrading(tradeResult: ITradeData): boolean {
+    private shouldStopTrading(tradeResult: TradeData): boolean {
         // Check take profit
         if (this.totalProfit >= this.takeProfit) return true;
 
@@ -348,10 +653,10 @@ export class DerivTradingBot {
 
     /**
      * Gets the reason for stopping trading
-     * @param {ITradeData} tradeResult - Latest trade result
+     * @param {TradeData} tradeResult - Latest trade result
      * @returns {string} Reason for stopping
      */
-    private getStopReason(tradeResult: ITradeData): string {
+    private getStopReason(tradeResult: TradeData): string {
         if (this.totalProfit >= this.takeProfit) {
             return `Take profit reached (${this.totalProfit.toFixed(2)})`;
         }
@@ -365,42 +670,19 @@ export class DerivTradingBot {
     }
 
     /**
-     * Adjusts delay between trades based on market conditions
-     * @param {ITradeData} tradeResult - Latest trade result
-     */
-    private async adjustTradeDelay(tradeResult: ITradeData): Promise<void> {
-        // Base delay
-        let delay = 3000; // 3 seconds default
-
-        // Increase delay after losses
-        if (!tradeResult.profit_is_win) {
-            delay = Math.min(delay * (this.consecutiveLosses + 1), 10000); // Up to 10 seconds max
-        }
-
-        // Additional random variance to avoid patterns
-        delay += Math.random() * 2000; // Add up to 2 seconds random delay
-
-        await new Promise(resolve => setTimeout(resolve, delay));
-    }
-
-    /**
      * Stops the trading process and cleans up resources
      * @param {string} message - Reason for stopping
      * @param {boolean} generateStatistics - Whether to generate final statistics
      */
     async stopTrading(message: string, generateStatistics: boolean = true): Promise<void> {
         try {
-            // Set trading flag to false
-            this.isTrading = false;
 
-            // Clear timers
-            if (this.tradeDurationTimeoutId) clearTimeout(this.tradeDurationTimeoutId);
-            if (this.updateFrequencyIntervalId) clearInterval(this.updateFrequencyIntervalId);
+            this.isTrading = false;
 
             // Generate final statistics if requested
             if (generateStatistics) {
-                this.generateTelemetry();
-                this.generateTradingSummary();
+                await this.generateTelemetry();
+                await this.generateTradingSummary();
             }
 
             // Notify stop
@@ -414,7 +696,7 @@ export class DerivTradingBot {
             });
 
             // Clean up resources
-            await this.cleanupResources();
+            this.resetState();
 
         } catch (error) {
             logger.error('Error stopping trading', error);
@@ -425,16 +707,16 @@ export class DerivTradingBot {
     /**
      * Generates comprehensive telemetry data about the trading session
      */
-    private generateTelemetry(): void {
+    private async generateTelemetry(): Promise<void> {
         const currentTime = Date.now() / 1000;
         const duration = currentTime - this.tradeStartedAt;
-        const winRate = this.totalTrades > 0 ? (this.winningTrades / this.totalTrades) * 100 : 0;
-        const avgProfitPerTrade = this.totalTrades > 0 ? this.totalProfit / this.totalTrades : 0;
+        const winRate = this.totalNumberOfRuns > 0 ? (this.winningTrades / this.totalNumberOfRuns) * 100 : 0;
+        const avgProfitPerTrade = this.totalNumberOfRuns > 0 ? this.totalProfit / this.totalNumberOfRuns : 0;
 
         const telemetryData = {
             timestamp: new Date().toISOString(),
-            duration: this.formatDuration(duration),
-            totalTrades: this.totalTrades,
+            duration: formatDuration(duration),
+            totalNumberOfRuns: this.totalNumberOfRuns,
             winningTrades: this.winningTrades,
             losingTrades: this.losingTrades,
             consecutiveLosses: this.consecutiveLosses,
@@ -460,23 +742,23 @@ export class DerivTradingBot {
     /**
      * Generates a final trading summary report
      */
-    private generateTradingSummary(): void {
+    private async generateTradingSummary(): Promise<void> {
         const duration = (Date.now() / 1000 - this.tradeStartedAt);
-        const winRate = this.totalTrades > 0 ? (this.winningTrades / this.totalTrades) * 100 : 0;
+        const winRate = this.totalNumberOfRuns > 0 ? (this.winningTrades / this.totalNumberOfRuns) * 100 : 0;
         const profitPerHour = duration > 0 ? (this.totalProfit / (duration / 3600)) : 0;
 
         const summary = `
       ======================
       TRADING SESSION SUMMARY
       ======================
-      Duration:        ${this.formatDuration(duration)}
-      Total Trades:    ${this.totalTrades}
+      Duration:        ${formatDuration(duration)}
+      Total Trades:    ${this.totalNumberOfRuns}
       Winning Trades:  ${this.winningTrades} (${winRate.toFixed(2)}%)
       Losing Trades:   ${this.losingTrades}
       Max Consecutive Losses: ${this.consecutiveLosses}
       ----------------------
       Total Profit:    ${this.totalProfit.toFixed(2)}
-      Avg Profit/Trade: ${(this.totalTrades > 0 ? (this.totalProfit / this.totalTrades).toFixed(2) : 0)}
+      Avg Profit/Trade: ${(this.totalNumberOfRuns > 0 ? (this.totalProfit / this.totalNumberOfRuns).toFixed(2) : 0)}
       Profit/Hour:     ${profitPerHour.toFixed(2)}
       ======================
     `;
@@ -489,31 +771,12 @@ export class DerivTradingBot {
     }
 
     /**
-     * Cleans up resources and resets state
-     */
-    private async cleanupResources(): Promise<void> {
-        // Clear any remaining intervals or timeouts
-        if (this.tradeDurationTimeoutId) {
-            clearTimeout(this.tradeDurationTimeoutId);
-            this.tradeDurationTimeoutId = null;
-        }
-        if (this.updateFrequencyIntervalId) {
-            clearInterval(this.updateFrequencyIntervalId);
-            this.updateFrequencyIntervalId = null;
-        }
-
-        // Reset trading state
-        this.isTrading = false;
-        this.consecutiveLosses = 0;
-        this.cachedSession = null;
-    }
-
-    /**
      * Handles trading errors with appropriate recovery or shutdown
      * @param {Error} error - The error that occurred
      * @param {object} session - Current trading session
      */
-    private async handleTradingError(error: Error, session: any): Promise<void> {
+    private async handleTradingError(error: any, session: any): Promise<void> {
+
         logger.error('Trading error occurred:', error);
 
         // Classify error type
@@ -532,12 +795,42 @@ export class DerivTradingBot {
             await new Promise(resolve => setTimeout(resolve, backoffTime));
 
             // Retry with cached session
-            await this.startTrading(session, true);
+            await this.startTrading(session, true, this.userAccountToken);
+
         } else {
             // Non-recoverable error - stop trading
             await this.stopTrading(`Fatal error: ${error.message}`, false);
+
+            parentPort?.postMessage({
+                action: "sendTelegramMessage",
+                text: `⚠️ Non-recoverable error: ${error.message}. Stopping trades...`,
+                meta: { error: error.message }
+            });
+
         }
     }
+
+
+    handleErrorExemption(error: any, session: any): void {
+
+        console.log("HANDLE_PURCHASE_ERROR", error);
+
+        try {
+
+            const code: string = error.code;
+            const message: string = error.message;
+            const name: string = error.name;
+
+            this.handleTradingError({ name, code, message }, session)
+
+        } catch (error) {
+
+            console.log("UN_HANDLE_PURCHASE_ERROR !!!!!!", error);
+
+        }
+
+    }
+
 
     /**
      * Determines if an error is recoverable
@@ -565,25 +858,4 @@ export class DerivTradingBot {
         return Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
     }
 
-    /**
-     * Parses duration string to seconds
-     * @param {string} duration - Duration string (e.g., "1h30m")
-     * @returns {number} Duration in seconds
-     */
-    private parseDurationToSeconds(duration: string): number {
-        // Implementation would parse strings like "1h30m" to seconds
-        return 3600; // Placeholder - actual implementation would parse the string
-    }
-
-    /**
-     * Formats duration in seconds to human-readable string
-     * @param {number} seconds - Duration in seconds
-     * @returns {string} Formatted duration string
-     */
-    private formatDuration(seconds: number): string {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${hours}h ${minutes}m ${secs}s`;
-    }
 }

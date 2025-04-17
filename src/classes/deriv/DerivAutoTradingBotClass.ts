@@ -21,12 +21,13 @@ const parentPort = {
 
 global.WebSocket = require("ws");
 const { find } = require("rxjs/operators");
-const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
+
 
 const jsan = require("jsan");
 
 const logger = pino({ name: "DerivTradingBot" });
 
+const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const {
   CONNECTION_PING_TIMEOUT,
   CONNECTION_CONTRACT_CREATION_TIMEOUT,
@@ -2165,7 +2166,7 @@ class DerivAutoTradingBotClass {
       // Calculate the next trading amount based on the result of the previous trade
       this.currentStake = this.getTradingAmount(resultIsWin, profitAfterSale);
 
-      this.sleep(3000)
+      this.sleep(1000)
 
       // Schedule the next trade after a short delay
       this.executeTrade(purchaseType);

@@ -1,6 +1,8 @@
 import { env } from '@/common/utils/envConfig';
 import { Encryption } from '@/classes/cryptography/EncryptionClass';
 import { CONSTANTS } from './constants';
+import { PurchaseType, MarketType, TradingType, PurchaseTypeEnum, MarketTypeEnum, AccountType, TradingModeType, TradingModeTypeEnum, TradingTypeEnum } from '../../classes/trader/types';
+import { VolatilityIndicesEnum, TradingTypesEnum, DerivativeDigitsEnum, TradeModeEnum } from '@/classes/trader/types';
 
 const uap = require('ua-parser-js');
 
@@ -123,15 +125,20 @@ export const replaceStringVariables = (str: string, variables: any): string => {
   });
 }
 
-export const calculateExpiry = (timeString: string | number): number => {
+export const convertTimeStringToSeconds = (timeString: string | number | undefined): number => {
+
   const now = Date.now(); // Current epoch time in milliseconds
+
+  if(!timeString) return now * 1000;
+
+  timeString = sanitizeTimeString(String(timeString));
 
   if (typeof timeString === "number") {
     return now + timeString * 1000;
   }
 
   // Regular expression to extract the numeric value and unit from the input string
-  const match = timeString.match(/^(\d+)\s*(sec|second|min|minute|hr|hour|day|week|month|year)s?$/i);
+  const match = timeString.match(/^(\d+)\s*(s|sec|second|m|min|minute|h|hr|hour|d|day|w|wk|week|mon|month|y|yr|year)s?$/i);
 
   if (!match) {
     throw new Error(`Invalid time string: ${timeString}`);
@@ -142,15 +149,24 @@ export const calculateExpiry = (timeString: string | number): number => {
 
   // Map units to their corresponding durations in milliseconds
   const durations: { [key: string]: number } = {
+    s: 1000,
     sec: 1000,
     second: 1000,
+    m: 60 * 1000,
     min: 60 * 1000,
     minute: 60 * 1000,
+    h: 60 * 60 * 1000,
     hr: 60 * 60 * 1000,
     hour: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
     day: 24 * 60 * 60 * 1000,
+    w: 7 * 24 * 60 * 60 * 1000,
+    wk: 7 * 24 * 60 * 60 * 1000,
     week: 7 * 24 * 60 * 60 * 1000,
+    mon: 30 * 24 * 60 * 60 * 1000, // Approximate, as months vary in length
     month: 30 * 24 * 60 * 60 * 1000, // Approximate, as months vary in length
+    y: 365 * 24 * 60 * 60 * 1000, // Approximate, ignoring leap years
+    yr: 365 * 24 * 60 * 60 * 1000, // Approximate, ignoring leap years
     year: 365 * 24 * 60 * 60 * 1000, // Approximate, ignoring leap years
   };
 
@@ -166,6 +182,28 @@ export const calculateExpiry = (timeString: string | number): number => {
   return expiryTime;
 }
 
+export const sanitizeTimeString = (input: string): string => {
+  // First remove all emojis and special characters
+  let cleaned = input.replace(/[^\w\s]/g, '').trim();
+  
+  // Handle "Tick(s)" cases - convert to "sec"
+  cleaned = cleaned.replace(/^(\d+)\s*ticks?$/i, '$1sec');
+  
+  // Standardize units (remove plural 's' and normalize whitespace)
+  cleaned = cleaned.replace(/\s+/g, ' ') // normalize spaces
+                   .replace(/mins?/i, 'min')
+                   .replace(/hrs?/i, 'hr')
+                   .replace(/secs?/i, 'sec');
+  
+  return cleaned.toLowerCase();
+}
+
+export const formatDuration = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${hours}h ${minutes}m ${secs}s`;
+}
 
 export const getDerivAccountFromURLParams = (queryParams: any) => {
 
@@ -335,17 +373,17 @@ export const getEncryptedUserAgent = (ua: string | undefined) => {
     encuaKey = Encryption.md5(userAgentString);
 
     encuaData = userAgent;  //Encryption.encryptAES(userAgentString, APP_CRYPTOGRAPHIC_KEY);
-    
+
   }
 
-  return { ua: ua, userAgent, userAgentString, encuaKey, encuaData};
+  return { ua: ua, userAgent, userAgentString, encuaKey, encuaData };
 
 }
 
 // Helper function to serialize cookie options
-export const serializeCookieOptions = (cookieName: string, cookieValue: string, options:any) => {
-  const cookieOptions:string = Object.entries(options)
-    .map(([key, value]:any) => {
+export const serializeCookieOptions = (cookieName: string, cookieValue: string, options: any) => {
+  const cookieOptions: string = Object.entries(options)
+    .map(([key, value]: any) => {
       if (value === true) return `${key}`; // Flags like "HttpOnly"
       if (value === false) return '';      // Skip false flags
       if (key === 'Expires') return `Expires=${new Date(value).toUTCString()}`;
@@ -356,7 +394,7 @@ export const serializeCookieOptions = (cookieName: string, cookieValue: string, 
   return `${cookieName}=${cookieValue}; ${cookieOptions}`;
 }
 
-export const getCookieValue = (cookieHeader:string, name:string) => {
+export const getCookieValue = (cookieHeader: string, name: string) => {
   if (!cookieHeader) return null;
 
   const cookies = cookieHeader.split(';');
@@ -369,26 +407,338 @@ export const getCookieValue = (cookieHeader:string, name:string) => {
   return null;
 }
 
-export const parsePurchaseType = (purchaseType: string) => {
-  let resolvedPurchaseType: string = "CALL";
-  switch (purchaseType) {
-    case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][0]: {
-      resolvedPurchaseType = "CALL";
-      break;
-    }
-    case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][1]: {
-      resolvedPurchaseType = "CALL";
-      break;
-    }
+export const sanitizeAccountType = (accountType: string | undefined): AccountType => {
+  return accountType as unknown as AccountType;
+}
 
-    case CONSTANTS.PURCHASE_TYPES.DERIVATIVES[0][0]: {
-      resolvedPurchaseType = "PUT";
+export const sanitizeTradingType = (tradingType: string | undefined): TradingType => {
+  if(!tradingType) return TradingTypeEnum.Default;
+  let resolvedTradingType: unknown = null;
+  switch (tradingType) {
+    case TradingTypesEnum.FOREX: {
+      resolvedTradingType = TradingTypeEnum.Forex;
+      break;
+    }
+    case TradingTypesEnum.COMMODITIES: {
+      resolvedTradingType = TradingTypeEnum.Commodities;
+      break;
+    }
+    case TradingTypesEnum.CRYPTO: {
+      resolvedTradingType = TradingTypeEnum.Crypto;
+      break;
+    }
+    case TradingTypesEnum.DERIVATIVES: {
+      resolvedTradingType = TradingTypeEnum.Derivatives;
       break;
     }
     default: {
       break;
     }
   }
-  return resolvedPurchaseType;
-  // ["Auto ⬆️⬇️", "Rise ⬆️", "Fall ⬇️"],
+  return resolvedTradingType as TradingType;
+}
+
+export const sanitizeMarketType = (marketType: string | undefined): MarketType => {
+  if(!marketType) return MarketTypeEnum.Default;
+  let resolvedMarketType: unknown = null;
+  switch (marketType) {
+    case VolatilityIndicesEnum.Volatility10: {
+      resolvedMarketType = MarketTypeEnum.R_10;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility10_1s: {
+      resolvedMarketType = MarketTypeEnum.R_10_1s;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility25: {
+      resolvedMarketType = MarketTypeEnum.R_25;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility25_1s: {
+      resolvedMarketType = MarketTypeEnum.R_25_1s;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility50: {
+      resolvedMarketType = MarketTypeEnum.R_50;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility50_1s: {
+      resolvedMarketType = MarketTypeEnum.R_50_1s;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility75: {
+      resolvedMarketType = MarketTypeEnum.R_75;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility75_1s: {
+      resolvedMarketType = MarketTypeEnum.R_75_1s;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility100: {
+      resolvedMarketType = MarketTypeEnum.R_100;
+      break;
+    }
+
+    case VolatilityIndicesEnum.Volatility100_1s: {
+      resolvedMarketType = MarketTypeEnum.R_100_1s;
+      break;
+    }
+    default: {
+      resolvedMarketType = MarketTypeEnum.Default
+      break;
+    }
+  }
+  return resolvedMarketType as MarketType;
+}
+
+export const sanitizePurchaseType = (purchaseType: string | undefined): PurchaseType => {
+  if(!purchaseType) return PurchaseTypeEnum.Default;
+  let resolvedPurchaseType: unknown = null;
+  switch (purchaseType) {
+    case DerivativeDigitsEnum.Auto: {
+      resolvedPurchaseType = PurchaseTypeEnum.Call;
+      break;
+    }
+    
+    case DerivativeDigitsEnum.Auto: {
+      resolvedPurchaseType = PurchaseTypeEnum.Call;
+      break;
+    }
+
+    case DerivativeDigitsEnum.Rise: {
+      resolvedPurchaseType = PurchaseTypeEnum.Call;
+      break;
+    }
+
+    case DerivativeDigitsEnum.Fall: {
+      resolvedPurchaseType = PurchaseTypeEnum.Put;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsAuto: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitAutoEvenOdd;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsEvens: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitEven;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsOdds: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitOdd;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsUnder9: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitUnder9;
+
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsUnder8: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitUnder8;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsUnder7: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitUnder7;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsUnder6: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitUnder6;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsOver0: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitOver0;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsOver1: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitOver1;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsOver2: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitOver2;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitsOver3: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitOver3;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitNotLast: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitDiff;
+      break;
+    }
+
+    case DerivativeDigitsEnum.DigitNotRandom: {
+      resolvedPurchaseType = PurchaseTypeEnum.DigitDiff;
+      break;
+    }
+
+    default: {
+      resolvedPurchaseType = PurchaseTypeEnum.Default;
+      break;
+    }
+  }
+  return resolvedPurchaseType as PurchaseType;
+}
+
+export const sanitizeTradingMode = (tradingMode: string | undefined): TradingModeType => {
+  if(!tradingMode) return TradingModeTypeEnum.Default;
+  let resolvedTradingMode: unknown = null;
+  switch (tradingMode) {
+    case TradeModeEnum.MANUAL: {
+      resolvedTradingMode = TradingModeTypeEnum.Manual;
+      break;
+    }
+    case TradeModeEnum.AUTO: {
+      resolvedTradingMode = TradingModeTypeEnum.Auto;
+      break;
+    }
+    default: {
+      resolvedTradingMode = TradingModeTypeEnum.Default;
+      break;
+    }
+  }
+  return resolvedTradingMode as TradingModeType;
+}
+
+/**
+ * Sanitizes a string to only contain alphanumeric characters (A-Z, a-z, 0-9) and underscores
+ * @param input The string to sanitize
+ * @param options Optional configuration
+ * @param options.replaceWith Character to replace invalid characters with (default: '_')
+ * @param options.lowercase Convert output to lowercase (default: false)
+ * @param options.uppercase Convert output to uppercase (default: false)
+ * @returns Sanitized string
+ */
+export const sanitizeString = (
+  input: string | undefined,
+  options: {
+    replaceWith?: string;
+    lowercase?: boolean;
+    uppercase?: boolean;
+  } = {}
+): string => {
+
+  if(!input) return "";
+
+  const { replaceWith = '_', lowercase = false, uppercase = false } = options;
+
+  // First, replace any non-alphanumeric characters with the replacement character
+  let sanitized = input.replace(/[^A-Za-z0-9_]/g, replaceWith);
+
+  // Handle case conversion
+  if (lowercase) {
+    sanitized = sanitized.toLowerCase();
+  } else if (uppercase) {
+    sanitized = sanitized.toUpperCase();
+  }
+
+  return sanitized;
+}
+
+/**
+ * Unified amount sanitization with multiple output formats
+ * @param input The input value (string, number, etc.)
+ * @param options Configuration options
+ * @param options.mode 'number'|'currency'|'string' - output format
+ * @param options.strict Whether to throw errors (default: true)
+ * @returns Sanitized amount in requested format
+ * @throws Error when strict=true and input is invalid
+ */
+export const sanitizeAmount = (
+  input: number | string | undefined,
+  options: {
+    mode?: 'number' | 'currency' | 'string';
+    strict?: boolean;
+  } = {}
+): number | string => {
+
+  if(!input) return 1;
+
+  const { mode = 'number', strict = true } = options;
+
+  // Internal conversion function
+  const convert = (value: unknown): number => {
+    let num: number;
+    
+    // Handle currency mode
+    if (mode === 'currency' && typeof value === 'string') {
+      const cleaned = value.replace(/[^\d.-]/g, '');
+      num = parseFloat(cleaned);
+      if (isNaN(num) && strict) {
+        throw new Error('Invalid currency amount');
+      }
+    } 
+    // Standard number conversion
+    else {
+      num = Number(value);
+      if (isNaN(num) && strict) {
+        throw new Error('Invalid numeric amount');
+      }
+    }
+
+    return Math.round(num * 100) / 100;
+  };
+
+  try {
+    const result = convert(input);
+    
+    // Return based on output mode
+    switch (mode) {
+      case 'string':
+        return result.toFixed(2);
+      case 'currency':
+      case 'number':
+      default:
+        return result;
+    }
+  } catch (error) {
+    if (strict) throw error;
+    return mode === 'string' ? '0.00' : 0;
+  }
+
+
+/*
+// Example usage:
+console.log('=== Number Mode (default) ===');
+console.log(sanitizeAmount("123.456"));          // 123.46
+console.log(sanitizeAmount(123.4));              // 123.4
+console.log(sanitizeAmount("123"));              // 123
+
+console.log('\n=== Currency Mode ===');
+console.log(sanitizeAmount("$1,234.56", { mode: 'currency' }));  // 1234.56
+console.log(sanitizeAmount("€1.234,56", { mode: 'currency' }));   // 1234.56
+console.log(sanitizeAmount("1.234,56", { mode: 'currency' }));    // 1234.56
+
+console.log('\n=== String Mode ===');
+console.log(sanitizeAmount(123, { mode: 'string' }));            // "123.00"
+console.log(sanitizeAmount("123.4", { mode: 'string' }));        // "123.40"
+
+console.log('\n=== Error Handling ===');
+try {
+  console.log(sanitizeAmount("abc"));  // Throws error
+} catch (e) {
+  console.log('Error:', e.message);    // "Invalid numeric amount"
+}
+
+console.log(sanitizeAmount("abc", { strict: false }));           // 0
+console.log(sanitizeAmount("abc", { mode: 'string', strict: false })); // "0.00"
+*/
+
 }
