@@ -78,15 +78,7 @@ export class TradeManager {
             // Select appropriate strategy
             this.selectStrategy(previousTradeResultData.purchaseType);
 
-            this.currentStrategy.updateParams(
-                previousTradeResultData.market,
-                previousTradeResultData.purchaseType,
-                previousTradeResultData.currency,
-                previousTradeResultData.contractDuration,
-                previousTradeResultData.contractDurationUnit,
-                previousTradeResultData.userAccountToken,
-                previousTradeResultData,
-            );
+            this.currentStrategy.updateParams(previousTradeResultData);
 
             // Execute the trade using current strategy
             const response = await this.currentStrategy.execute();
@@ -96,6 +88,7 @@ export class TradeManager {
 
         } catch (error: any) {
             logger.error('Trade execution failed', error);
+            console.log(error)
             throw new Error(`Trade execution failed: ${error.message}`);
         }
     }

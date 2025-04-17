@@ -54,17 +54,17 @@ export abstract class TradeStrategy {
 
     /**
      * Gets the strategy type
-     * @returns {PurchaseType} The strategy type identifier
      */
-    updateParams(market: any, strategyType: any, currency: any, contractDuration: any, contractDurationUnit: any, previousTradeResultData:any, userAccountToken:string): void {
+    updateParams(previousTradeResultData: any): void {
 
-        this.market = market;
-        this.strategyType = strategyType;
-        this.currency = currency;
-        this.contractDuration = contractDuration;
-        this.contractDurationUnit = contractDurationUnit;
         this.previousTradeResultData = previousTradeResultData;
-        this.userAccountToken = userAccountToken;
+
+        this.market = this.previousTradeResultData.market;
+        this.strategyType = this.previousTradeResultData.purchaseType;
+        this.currency = this.previousTradeResultData.currency;
+        this.contractDuration = this.previousTradeResultData.contractDuration;
+        this.contractDurationUnit = this.previousTradeResultData.contractDurationUnit;
+        this.userAccountToken = this.previousTradeResultData.userAccountToken;
 
     }
 
@@ -76,11 +76,11 @@ export abstract class TradeStrategy {
      * @throws {Error} If parameters are invalid
      */
     protected validateParameters(
-        params:any
+        params: any
     ): void {
 
         console.log("PARAMS", params);
-                     
+
         if (params.amount <= 0) throw new Error('Stake must be positive');
         if (!params.basis) throw new Error('Basis must be set');
         if (!params.currency) throw new Error('Currency must be specified');
@@ -111,30 +111,15 @@ export abstract class TradeStrategy {
     }
 
     protected getContractNextStake(): number {
-        
-        this.previousTradeResultData = {
-            baseStake: 1,
-            buy: 1,
-            bid: 1,
-            sell: 1,
-            status: 'won',
-            profitSign: 1,
-            profit: 0,
-            resultIsWin: true,
-            tradeResult: {}
-        };
 
         if (this.previousTradeResultData && this.previousTradeResultData.resultIswin) {
             return this.previousTradeResultData.baseStake; // Reset to base after win
         }
 
+        console.log(":: getContractNextStake ::", this.previousTradeResultData)
+
         // Martingale-like progression with limits
-        let nextStake = this.profitCalculator.getTradingAmount(
-            this.previousTradeResultData.resultIswin,
-            this.previousTradeResultData.profit,
-            this.previousTradeResultData.baseStake,
-            this.profitPercentage
-        );
+        let nextStake = this.profitCalculator.getTradingAmount(this.previousTradeResultData);
 
         // Apply stake limits
         return nextStake;
@@ -211,7 +196,7 @@ export class DigitEvenStrategy extends TradeStrategy {
         const stake: number = this.getContractNextStake();
 
         logger.warn('Executing EVEN strategy');
-        
+
         const params: ContractParams = this.getDefaultParams(this.strategyType, stake);
 
         this.validateParameters(params);
@@ -264,7 +249,7 @@ export class CallStrategy extends TradeStrategy {
 
         const stake: number = this.getContractNextStake();
 
-        logger.warn('Executing CALL strategy');
+        logger.warn('Executing CALL strategy : $'+stake);
 
         const params: ContractParams = this.getDefaultParams(this.strategyType, stake);
 

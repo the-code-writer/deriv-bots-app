@@ -12,6 +12,8 @@ import { env } from "@/common/utils/envConfig";
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const logger = pino({ name: "Trade Executor" });
 
+const jsan = require("jsan");
+
 const {
     CONNECTION_PING_TIMEOUT,
     CONNECTION_CONTRACT_CREATION_TIMEOUT,
@@ -59,7 +61,7 @@ export class TradeExecutor {
      * @returns {Promise<ITradeData>} Trade execution result
      */
     async purchaseContract(contractParameters: ContractParams, userAccountToken: string): Promise<ITradeData> {
-        
+
         if (!contractParameters) {
             throw new Error('TradeExecutor not initialized');
         }
@@ -175,11 +177,33 @@ export class TradeExecutor {
 
         const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
-        await api.account(userAccountToken);
+        const account = await api.account(userAccountToken);
+
+        let userAccount: any = {};
+
+        if (account) {
+
+            const user = jsan.parse(jsan.stringify(account));
+
+            userAccount = {
+                email: user._data.email,
+                country: user._data.country,
+                currency: user._data.currency,
+                loginid: user._data.loginid,
+                user_id: user._data.user_id,
+                fullname: user._data.fullname,
+            }
+            
+        }
+
+        console.log("::: ACCOUNT :::", userAccount)
+
         logger.info(`Attempt : A003 to purchase contract`);
+        
         const contractPromise = api.contract(params);
 
         return Promise.race([contractPromise, timeoutPromise]);
+
     }
 
     /**

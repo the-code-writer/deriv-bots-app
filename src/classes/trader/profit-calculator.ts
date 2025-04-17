@@ -144,27 +144,9 @@ export class ProfitCalculator {
      * @param {number} profitPercentage - The expected profit percentage
      * @returns {number} The calculated next stake amount
      */
-    getTradingAmount(
-        wasSuccessful: boolean,
-        profitAfterSale: number,
-        baseStake: number,
-        profitPercentage: number
-    ): number {
-        if (wasSuccessful) {
-            return baseStake; // Reset to base stake after win
-        }
-
-        // Calculate recovery stake using modified Martingale approach
-        const lossAmount = Math.abs(profitAfterSale);
-        const recoveryFactor = (100 + profitPercentage) / profitPercentage;
-        let nextStake = (lossAmount * recoveryFactor) + baseStake;
-
-        // Apply reasonable limits to the stake
-        nextStake = Math.min(nextStake, baseStake * Math.pow(this.recoveryMultiplier, this.maxRecoveryTrades));
-        nextStake = this.roundToValidStake(nextStake);
-
-        logger.debug(`Calculated next stake: ${nextStake} after loss of ${lossAmount}`);
-        return nextStake;
+    getTradingAmount(previousTradeResultData: any): number {
+        // TODO - calculate next stake
+        return previousTradeResultData.baseStake;
     }
 
     /**
