@@ -1,4 +1,4 @@
-const DerivAutoTradingBotClass = require("./DerivAutoTradingBotClass.ts");
+const {DerivTradingBot} = require("../trader/deriv-trading-bot");
 
 const { parentPort, workerData } = require("node:worker_threads");
 
@@ -8,9 +8,20 @@ if (!action) {
   throw new Error("Invalid worker data");
 }
 
-const derivInstance = new DerivAutoTradingBotClass();
+const botConfig = {
+  tradingType: "Derivatives 📊",
+  defaultMarket: "R_100",
+  baseStake: 1,
+  maxStake: 5,
+  minStake: 0.35,
+  maxRecoveryTrades: 5,
+  takeProfit: 10,
+  stopLoss: 5,
+  contractDuration: 1,
+  contractDurationUnit: "t",
+};
 
-
+const derivInstance = new DerivTradingBot(botConfig);
 
 const handleLoggedIn = (
   userAction,
@@ -43,7 +54,7 @@ const handleLoggedIn = (
 
     derivInstance.setAccount((userAccount) => {
       
-      console.log("LOGIN_DERIV_ACCOUNT_READY", userAccount);
+      console.log("###############LOGIN_DERIV_ACCOUNT_READY", userAccount);
 
       parentPort.postMessage({
         action: "LOGIN_DERIV_ACCOUNT_READY",

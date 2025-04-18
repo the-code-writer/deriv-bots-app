@@ -162,7 +162,7 @@ export class DerivTradingBot {
             // Initialize trading session
             const sessionData: TradingSessionDataType = await this.initializeTradingSession(session);
 
-            this.userAccountToken = userAccountToken; 
+            this.userAccountToken = userAccountToken;
 
             if (sessionData) {
 
@@ -190,7 +190,7 @@ export class DerivTradingBot {
 
                     this.userAccount = await DerivUserAccount.getUserAccount(api, userAccountToken);
 
-                    if(this.userAccount){
+                    if (this.userAccount) {
 
                         this.previousTradeResultData.currency = this.userAccount.currency;
                         this.previousTradeResultData.userAccount = this.userAccount;
@@ -223,6 +223,60 @@ export class DerivTradingBot {
             await this.handleTradingError(error, session);
             throw error;
         }
+    }
+
+    /**
+     * Starts the trading process with comprehensive error handling and validation
+     * @param {object} callbackFunction - Trading session configuration
+     * @param {string} userAccountToken - User account token for authentication
+     * @returns {Promise<void>} Promise that resolves when trading completes
+     * @throws {Error} If invalid parameters are provided or trading cannot start
+     */
+    async setAccount(
+        callbackFunction: any,
+        userAccountToken: string
+    ): Promise<void> {
+
+        try {
+
+            const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
+
+            const ping = await api.basic.ping();
+
+            if (ping) {
+
+                const account: any = await DerivUserAccount.getUserAccount(api, userAccountToken);
+
+                callbackFunction(account);
+
+            } else {
+
+                callbackFunction(null);
+
+            }
+        } catch (error: any) {
+
+            callbackFunction(null, error);
+
+        }
+
+    }
+
+    public getAccountToken(accounts: any, key: string, value: string) {
+
+        // Iterate through the object
+        for (const index in accounts) {
+
+            const entry = accounts[index];
+
+            // Check if the key is 'acct' or 'cur' and if the value matches
+            if ((key === "acct" && entry.acct === value) || (key === "cur" && entry.cur === value) || (key === "token" && entry.token === value)) {
+                return entry; // Return the matching entry
+            }
+        }
+
+        // Return null if no match is found
+        return null;
     }
 
     /**
@@ -345,8 +399,8 @@ export class DerivTradingBot {
             stake: sanitizeAmount(session.stake, { mode: "currency" }) as number,
             takeProfit: sanitizeAmount(session.takeProfit, { mode: "currency" }) as number,
             stopLoss: sanitizeAmount(session.stopLoss, { mode: "currency" }) as number,
-            tradeDuration:  convertTimeStringToSeconds(session.tradeDuration) - Date.now(),
-            updateFrequency:  convertTimeStringToSeconds(session.updateFrequency) - Date.now(),
+            tradeDuration: convertTimeStringToSeconds(session.tradeDuration) - Date.now(),
+            updateFrequency: convertTimeStringToSeconds(session.updateFrequency) - Date.now(),
             contractDurationUnits: sanitizeContractDurationUnit(session.contractDurationUnits),
             contractDurationValue: parseInt(sanitizeString(session.contractDurationValue)),
             tradingMode: sanitizeTradingMode(session.tradingMode),
@@ -668,12 +722,12 @@ export class DerivTradingBot {
         this.saveData(
             `run_${this.totalNumberOfRuns}`,
             {
-            run: this.totalNumberOfRuns,
-            stake: tradeResult.buy_price_value,
-            profit: tradeResult.profit_value * tradeResult.profit_sign
-        })
+                run: this.totalNumberOfRuns,
+                stake: tradeResult.buy_price_value,
+                profit: tradeResult.profit_value * tradeResult.profit_sign
+            })
 
-        this.previousTradeResultData = {...this.previousTradeResultData,...previousTradeResultData};
+        this.previousTradeResultData = { ...this.previousTradeResultData, ...previousTradeResultData };
 
         // Update strategy based on results
         this.tradeManager.updateStrategy(this.previousTradeResultData);
@@ -827,14 +881,14 @@ export class DerivTradingBot {
         // Log the telemetry table
         console.log(telemetryTable);
 
-        parentPort?.postMessage({ action: "generateTelemetry", text: telemetryTable, meta: { user: this.userAccount, audit: {}} });
+        parentPort?.postMessage({ action: "generateTelemetry", text: telemetryTable, meta: { user: this.userAccount, audit: {} } });
     }
 
     /**
      * Generates a final trading summary report
      */
     private async generateTradingSummary(): Promise<void> {
-        
+
         // Calculate total profit
         const totalProfit = this.auditTrail.reduce((sum: number, trade: any) => sum + trade.data.profit, 0);
 
