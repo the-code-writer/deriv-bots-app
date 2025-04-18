@@ -398,7 +398,7 @@ export type TradingSessionDataType = {
     stopLoss: number,
     tradeDuration: number,
     updateFrequency: number,
-    contractDurationUnits: string,
+    contractDurationUnits: "t" | "s" | "m" | "h" | "d",
     contractDurationValue: number,
     tradingMode: string
 };
@@ -818,4 +818,24 @@ export interface IDerivUserAccount {
     contracts: ContractParams[];
     open_contracts: ContractParams[];
     closed_contracts: ContractParams[];
+}
+
+export interface IPreviousTradeResult {
+    baseStake: number;
+    buy: number;
+    bid: number;
+    sell: number;
+    status: 'won' | 'lost' | 'draw' | 'pending';
+    profitSign: -1 | 0 | 1;
+    profit: number;
+    resultIsWin: boolean;
+    tradeResult: ITradeDetails;
+    userAccount: IUserAccount;
+    userAccountToken: string;
+    basis: "stake" | "payout" | "other";
+    market: string;
+    purchaseType: string;
+    currency: string;
+    contractDuration: number;
+    contractDurationUnit: 's' | 'm' | 'h' | 'd' | 't';
 }

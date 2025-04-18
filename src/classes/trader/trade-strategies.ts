@@ -4,7 +4,7 @@
  * @module TradeStrategies
  */
 import { pino } from "pino";
-import { ContractParams, ITradeData, PurchaseType } from './types';
+import { ContractParams, ITradeData, PurchaseType, IPreviousTradeResult } from './types';
 import { TradeExecutor } from './trade-executor';
 import { ProfitCalculator } from "./profit-calculator";
 const logger = pino({ name: "TradeStrategy" });
@@ -22,7 +22,7 @@ export abstract class TradeStrategy {
     protected contractDuration: number | string = 1;
     protected contractDurationUnit: string = "t";
     protected market: string = "R_100";
-    protected previousTradeResultData: any = {};
+    protected previousTradeResultData: IPreviousTradeResult = {} as IPreviousTradeResult;
     protected userAccountToken: string = "";
 
     constructor() {
@@ -38,6 +38,7 @@ export abstract class TradeStrategy {
             profit: 0,
             resultIsWin: true,
             tradeResult: {},
+            userAccount: {},
             userAccountToken: this.userAccountToken,
             basis: "stake",
             market: this.market,

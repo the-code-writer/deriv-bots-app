@@ -5,7 +5,7 @@
  */
 
 import { pino } from "pino";
-import { BotConfig, ITradeData, MarketType, PurchaseType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, PurchaseTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType } from './types';
+import { BotConfig, ITradeData, MarketType, PurchaseType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, PurchaseTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType, IPreviousTradeResult } from './types';
 import { TradeManager } from './trade-manager';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
@@ -43,7 +43,7 @@ export class DerivTradingBot {
     private tradeStartedAt!: number;
     private tradeDuration!: number;
     private updateFrequency!: number;
-    private contractDurationUnits!: string;
+    private contractDurationUnits!: "t" | "s" | "m" | "h" | "d";
     private contractDurationValue!: number;
     private tradingMode!: string;
     private cachedSession: any;
@@ -61,7 +61,9 @@ export class DerivTradingBot {
     private losingTrades: number = 0;
     private userAccountToken: string = "";
     private userAccount: any;
-    private previousTradeResultData: any;
+    private userBalance: number = 0;
+    private previousTradeResultData: IPreviousTradeResult = {} as IPreviousTradeResult;
+    private auditTrail: Array<any> = [];
 
     private botConfig: BotConfig;
 
@@ -99,7 +101,7 @@ export class DerivTradingBot {
         this.tradeStartedAt = 0;
         this.tradeDuration = 0;
         this.updateFrequency = 0;
-        this.contractDurationUnits = mergedConfig.contractDurationUnits || TradeDurationUnitsOptimizedEnum.Ticks;
+        this.contractDurationUnits = (mergedConfig.contractDurationUnits || TradeDurationUnitsOptimizedEnum.Ticks) as "t" | "s" | "m" | "h" | "d";
         this.contractDurationValue = mergedConfig.contractDurationValue || 1;
         this.tradingMode = mergedConfig.tradingMode || TradingModeTypeEnum.Manual;
         this.cachedSession = null;
@@ -180,22 +182,18 @@ export class DerivTradingBot {
 
                 if (ping) {
 
-
                     /*
                     const bal = new Balance(api);
 
                     bal.onUpdate().subscribe((balance: any) => console.log(balance))
                     */
 
-                    const subscriber1 = api.basic.subscribe({ ticks: 'R_100' }, console.log);
-
-
                     this.userAccount = await DerivUserAccount.getUserAccount(api, userAccountToken);
 
                     if(this.userAccount){
 
-                        this.previousTradeResultData.userAccount = this.userAccount;
                         this.previousTradeResultData.currency = this.userAccount.currency;
+                        this.previousTradeResultData.userAccount = this.userAccount;
                         this.previousTradeResultData.userAccountToken = userAccountToken;
 
                     }
@@ -347,8 +345,8 @@ export class DerivTradingBot {
             stake: sanitizeAmount(session.stake, { mode: "currency" }) as number,
             takeProfit: sanitizeAmount(session.takeProfit, { mode: "currency" }) as number,
             stopLoss: sanitizeAmount(session.stopLoss, { mode: "currency" }) as number,
-            tradeDuration: convertTimeStringToSeconds(session.tradeDuration),
-            updateFrequency: convertTimeStringToSeconds(session.updateFrequency),
+            tradeDuration:  convertTimeStringToSeconds(session.tradeDuration) - Date.now(),
+            updateFrequency:  convertTimeStringToSeconds(session.updateFrequency) - Date.now(),
             contractDurationUnits: sanitizeContractDurationUnit(session.contractDurationUnits),
             contractDurationValue: parseInt(sanitizeString(session.contractDurationValue)),
             tradingMode: sanitizeTradingMode(session.tradingMode),
@@ -420,6 +418,8 @@ export class DerivTradingBot {
             profit: 0,
             resultIsWin: true,
             tradeResult: {},
+            userAccount: {},
+            userAccountToken: this.userAccountToken,
             basis: "stake",
             market: this.defaultMarket,
             purchaseType: this.originalPurchaseType,
@@ -484,7 +484,7 @@ export class DerivTradingBot {
 
         try {
 
-            const response: ITradeData = await this.tradeManager.executeTrade(this.previousTradeResultData);
+            const response: ITradeData | undefined = await this.tradeManager.executeTrade(this.previousTradeResultData);
 
             const tradeResult: TradeData = TradeData.parseTradeData(response);
 
@@ -665,10 +665,18 @@ export class DerivTradingBot {
             tradeResult: tradeResult
         };
 
-        // Update strategy based on results
-        this.tradeManager.updateStrategy(previousTradeResultData);
+        this.saveData(
+            `run_${this.totalNumberOfRuns}`,
+            {
+            run: this.totalNumberOfRuns,
+            stake: tradeResult.buy_price_value,
+            profit: tradeResult.profit_value * tradeResult.profit_sign
+        })
 
         this.previousTradeResultData = {...this.previousTradeResultData,...previousTradeResultData};
+
+        // Update strategy based on results
+        this.tradeManager.updateStrategy(this.previousTradeResultData);
 
         return resultIsWin;
 
@@ -745,70 +753,122 @@ export class DerivTradingBot {
         }
     }
 
+
+    async saveData(key: string, data: any) {
+        this.auditTrail.push({
+            key: key,
+            data: data
+        })
+    }
+
+
     /**
      * Generates comprehensive telemetry data about the trading session
      */
     private async generateTelemetry(): Promise<void> {
-        const currentTime = Date.now() / 1000;
-        const duration = currentTime - this.tradeStartedAt;
-        const winRate = this.totalNumberOfRuns > 0 ? (this.winningTrades / this.totalNumberOfRuns) * 100 : 0;
-        const avgProfitPerTrade = this.totalNumberOfRuns > 0 ? this.totalProfit / this.totalNumberOfRuns : 0;
+        // Retrieve account and balance information
+        const accountId = this.userAccount.loginid || "N/A";
+        const currency = this.userAccount.currency || "USD";
+        const totalBalance = parseFloat(`${this.userBalance}`).toFixed(2);
 
-        const telemetryData = {
-            timestamp: new Date().toISOString(),
-            duration: formatDuration(duration),
-            totalNumberOfRuns: this.totalNumberOfRuns,
-            winningTrades: this.winningTrades,
-            losingTrades: this.losingTrades,
-            consecutiveLosses: this.consecutiveLosses,
-            winRate: winRate.toFixed(2) + '%',
-            totalProfit: this.totalProfit.toFixed(2),
-            avgProfitPerTrade: avgProfitPerTrade.toFixed(2),
-            currentStrategy: this.currentPurchaseType,
-            takeProfit: this.takeProfit,
-            stopLoss: this.stopLoss,
-            market: this.defaultMarket
-        };
+        // Calculate total profit, payout, and stake
+        const totalProfit = this.totalProfit;
+        const totalPayout = this.totalPayout;
+        const totalStake = this.totalStake;
 
-        // Log telemetry
-        logger.info('Telemetry update:', telemetryData);
+        // Calculate win rate and average profit per run
+        const winRate = (this.winningTrades / this.totalNumberOfRuns) * 100;
+        const averageProfitPerRun = totalProfit / this.totalNumberOfRuns;
 
-        // Send telemetry to parent process
-        parentPort?.postMessage({
-            action: "telemetryUpdate",
-            data: telemetryData
-        });
+        // Format start time, stop time, and duration
+        const startTime = new Date(this.tradeStartedAt * 1000);
+        const stopTime = new Date(); // Current time as stop time
+        const durationSeconds = Math.floor((Date.now() / 1000) - this.tradeStartedAt);
+        const duration = `${Math.floor(durationSeconds / 3600)}h ${Math.floor((durationSeconds % 3600) / 60)}m ${durationSeconds % 60}s`;
+
+        // Format start and stop times into two lines (date and time)
+        const startDate = startTime.toLocaleDateString();
+        const startTimeFormatted = startTime.toLocaleTimeString();
+        const stopDate = stopTime.toLocaleDateString();
+        const stopTimeFormatted = stopTime.toLocaleTimeString();
+
+        // Create the telemetry table
+        const telemetryTable = `
+
+    =========================
+    Trading Telemetry Summary
+    =========================
+
+    Account:        ${accountId.padEnd(20)} 
+    Currency:       ${currency.padEnd(20)} 
+
+    Wins:           ${this.winningTrades.toString().padEnd(20)} 
+    Losses:         ${this.losingTrades.toString().padEnd(20)} 
+    Runs:           ${this.totalNumberOfRuns.toString().padEnd(20)} 
+         
+    Total Payout:   $${totalPayout.toFixed(2).padEnd(20)} 
+    Total Stake:    $${totalStake.toFixed(2).padEnd(20)} 
+    Total Profit:   $${totalProfit.toFixed(2).padEnd(20)} 
+    Avg Profit/Run: $${averageProfitPerRun.toFixed(2).padEnd(20)} 
+    Total Balance:  $${totalBalance.padEnd(20)} 
+
+    Win Rate %:     ${winRate.toFixed(2)}%${" ".padEnd(17)} 
+
+    Start Date:     ${startDate.padEnd(20)} 
+    Start Time:     ${startTimeFormatted.padEnd(20)} 
+
+    Stop Date:      ${stopDate.padEnd(20)} 
+    Stop Time:      ${stopTimeFormatted.padEnd(20)} 
+
+    Duration:       ${duration.padEnd(20)} 
+
+  `;
+
+        // Log the telemetry table
+        console.log(telemetryTable);
+
+        parentPort?.postMessage({ action: "generateTelemetry", text: telemetryTable, meta: { user: this.userAccount, audit: {}} });
     }
 
     /**
      * Generates a final trading summary report
      */
     private async generateTradingSummary(): Promise<void> {
-        const duration = (Date.now() / 1000 - this.tradeStartedAt);
-        const winRate = this.totalNumberOfRuns > 0 ? (this.winningTrades / this.totalNumberOfRuns) * 100 : 0;
-        const profitPerHour = duration > 0 ? (this.totalProfit / (duration / 3600)) : 0;
+        
+        // Calculate total profit
+        const totalProfit = this.auditTrail.reduce((sum: number, trade: any) => sum + trade.data.profit, 0);
 
-        const summary = `
-      ======================
-      TRADING SESSION SUMMARY
-      ======================
-      Duration:        ${formatDuration(duration)}
-      Total Trades:    ${this.totalNumberOfRuns}
-      Winning Trades:  ${this.winningTrades} (${winRate.toFixed(2)}%)
-      Losing Trades:   ${this.losingTrades}
-      Max Consecutive Losses: ${this.consecutiveLosses}
-      ----------------------
-      Total Profit:    ${this.totalProfit.toFixed(2)}
-      Avg Profit/Trade: ${(this.totalNumberOfRuns > 0 ? (this.totalProfit / this.totalNumberOfRuns).toFixed(2) : 0)}
-      Profit/Hour:     ${profitPerHour.toFixed(2)}
-      ======================
-    `;
+        // Define the table headers
+        const header = `
++-----+---------+----------+
+| Run |  Stake  |  Profit  |
++-----+---------+----------+`;
 
-        logger.info(summary);
-        parentPort?.postMessage({
-            action: "tradingSummary",
-            summary: summary
-        });
+        // Define the table rows
+        const rows = this.auditTrail
+            .map((trade: any) => {
+                const run = String(trade.data.run).padStart(3); // Right-aligned, 3 characters
+                const stake = `$${trade.data.stake.toFixed(2)}`.padStart(7); // Right-aligned, 7 characters
+                const profit = `${trade.data.profit >= 0 ? "+" : "-"}${Math.abs(trade.data.profit).toFixed(2)}`.padStart(8); // Right-aligned, 8 characters
+                return `| ${run} | ${stake} | ${profit} |`;
+            })
+            .join("\n");
+
+        // Define the total profit row
+        const totalRow = `+-----+---------+----------+
+| TOTAL PROFIT  | ${totalProfit >= 0 ? "+" : "-"}${Math.abs(totalProfit).toFixed(2).padStart(7)} |
++-----+---------+----------+
+   `;
+
+        // Combine the table
+        const tradeSummary = `${header}\n${rows}\n${totalRow}`;
+
+        // Log the trade summary
+        console.log(tradeSummary);
+
+        //generateSummary
+        parentPort?.postMessage({ action: "generateTradingSummary", message: "Generating trading summary, please wait...", meta: { user: this.userAccount, audit: this.auditTrail } });
+
     }
 
     /**

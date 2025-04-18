@@ -5,7 +5,7 @@
  */
 
 import { pino } from "pino";
-import { BotConfig, ContractParams, ITradeData, PurchaseType } from './types';
+import { BotConfig, ContractParams, IPreviousTradeResult, ITradeData, PurchaseType } from './types';
 import { ContractParamsFactory } from './contract-factory';
 import { ProfitCalculator } from './profit-calculator';
 import { env } from "@/common/utils/envConfig";
@@ -95,14 +95,14 @@ export class TradeManager {
      * Updates trading strategy based on previous results
      * @param {boolean} wasSuccessful - Whether the previous trade was successful
      */
-    updateStrategy(tradeResult: any): void {
-        if (tradeResult.resultIsWin) {
+    updateStrategy(previousTradeResultData: IPreviousTradeResult): void {
+        if (previousTradeResultData.resultIsWin) {
             // Reset to original strategy after success
             this.currentStrategy.resetStrategyType();
             this.currentStake = this.baseStake; // Reset stake to base
         } else {
             // Implement intelligent strategy adaptation
-            this.adaptStrategyAfterLoss(tradeResult);
+            this.adaptStrategyAfterLoss(previousTradeResultData);
         }
 
         logger.debug(`Strategy updated to: ${this.currentStrategy.getStrategyType()}`);
@@ -186,7 +186,8 @@ export class TradeManager {
      * Adapts strategy after a losing trade
      * @private
      */
-    private adaptStrategyAfterLoss(tradeResult: any): void {
+    private adaptStrategyAfterLoss(previousTradeResultData: IPreviousTradeResult): void {
+        
         // Implement intelligent strategy rotation
         const strategies: PurchaseType[] = ['DIGITDIFF', 'EVEN', 'ODD', 'CALL', 'PUT'];
         const currentIndex = strategies.indexOf(this.currentStrategy.getStrategyType());
@@ -199,6 +200,7 @@ export class TradeManager {
             this.currentStrategy.getStrategyType(),
             this.currentStake
         );
+
     }
 
     /**

@@ -179,6 +179,7 @@ export class TradeExecutor {
         if (params.barrier !== undefined && isNaN(Number(params.barrier))) {
             throw new Error('Barrier must be a number');
         }
+        
     }
 
     /**

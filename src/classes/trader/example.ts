@@ -29,8 +29,8 @@ const tradingSession = {
     "stake": 10,
     "takeProfit": "USD5,000.34",
     "stopLoss": 10000,
-    "tradeDuration": "1min ⏱️",
-    "updateFrequency": "10sec ⏱️",
+    "tradeDuration": "10min ⏱️",
+    "updateFrequency": "5sec ⏱️",
     "contractDurationUnits": "Ticks ⏱️",
     "contractDurationValue": "1Tick ⏱️",
     "tradingMode": "📈 Manual Trading"

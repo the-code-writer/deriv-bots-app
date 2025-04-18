@@ -743,7 +743,7 @@ console.log(sanitizeAmount("abc", { mode: 'string', strict: false })); // "0.00"
 
 }
 
-export const sanitizeContractDurationUnit = (units: string | undefined) : string => {
+export const sanitizeContractDurationUnit = (units: string | undefined): "t" | "s" | "m" | "h" | "d" => {
 
   if(!units){
     return "t";
@@ -753,7 +753,11 @@ export const sanitizeContractDurationUnit = (units: string | undefined) : string
 
   cleanUnits = cleanUnits.split("")[0].toLowerCase();
 
-  return cleanUnits;
+  if (!cleanUnits) {
+    return "t";
+  }
+
+  return cleanUnits as "t" | "s" | "m" | "h" | "d";
 
 }
 
