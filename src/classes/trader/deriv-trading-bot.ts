@@ -12,8 +12,11 @@ import { env } from "@/common/utils/envConfig";
 import { convertTimeStringToSeconds } from '@/common/utils/snippets';
 import { formatDuration, sanitizeAccountType, sanitizeTradingType, sanitizeMarketType, sanitizePurchaseType, sanitizeAmount, sanitizeTradingMode, sanitizeString } from '@/common/utils/snippets';
 import { TradeData } from "../deriv/TradingDataClass";
+import { sanitizeContractDurationUnit } from '../../common/utils/snippets';
+import { DerivUserAccount } from "./deriv-user-account";
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
+
 const {
     DERIV_APP_ENDPOINT_DOMAIN,
     DERIV_APP_ENDPOINT_APP_ID,
@@ -56,7 +59,8 @@ export class DerivTradingBot {
     private totalNumberOfRuns: number = 0;
     private winningTrades: number = 0;
     private losingTrades: number = 0;
-    private userAccountToken!: string;
+    private userAccountToken: string = "";
+    private userAccount: any;
     private previousTradeResultData: any;
 
     private botConfig: BotConfig;
@@ -154,31 +158,62 @@ export class DerivTradingBot {
             }
 
             // Initialize trading session
-            const sessionData: TradingSessionDataType = await this.initializeTradingSession(session, userAccountToken);
+            const sessionData: TradingSessionDataType = await this.initializeTradingSession(session);
+
+            this.userAccountToken = userAccountToken; 
 
             if (sessionData) {
 
-                parentPort?.postMessage({ action: "sendTelegramMessage", text: "🟡 Establishing connection to Deriv server...", meta: {} });
+                const connectingText: string = "🟡 Establishing connection to Deriv server...";
+
+                logger.warn(connectingText);
+
+                const connectedText: string = "🟢 Connection to Deriv server established!";
+
+                const connectingFailedText: string = "🔴 Connection to Deriv server failed!";
+
+                parentPort?.postMessage({ action: "sendTelegramMessage", text: connectingText, meta: {} });
 
                 const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
                 const ping = await api.basic.ping();
 
-                console.log("PING_CONNECT", ping);
-
-                logger.info("Connection established via DerivAPI endpoint.");
-
                 if (ping) {
 
-                    parentPort?.postMessage({ action: "sendTelegramMessage", text: "🟢 Connection to Deriv server established!", meta: {} });
+
+                    /*
+                    const bal = new Balance(api);
+
+                    bal.onUpdate().subscribe((balance: any) => console.log(balance))
+                    */
+
+                    const subscriber1 = api.basic.subscribe({ ticks: 'R_100' }, console.log);
+
+
+                    this.userAccount = await DerivUserAccount.getUserAccount(api, userAccountToken);
+
+                    if(this.userAccount){
+
+                        this.previousTradeResultData.userAccount = this.userAccount;
+                        this.previousTradeResultData.currency = this.userAccount.currency;
+                        this.previousTradeResultData.userAccountToken = userAccountToken;
+
+                    }
+
+                    logger.info(connectedText);
+
+                    parentPort?.postMessage({ action: "sendTelegramMessage", text: connectedText, meta: {} });
 
                     // Start the main trading loop
                     this.isTrading = true;
+
                     await this.executeTradeSequence();
 
                 } else {
 
-                    parentPort?.postMessage({ action: "sendTelegramMessage", text: "🔴 Connection to Deriv server failed!", meta: {} });
+                    logger.error(connectingFailedText);
+
+                    parentPort?.postMessage({ action: "sendTelegramMessage", text: connectingFailedText, meta: {} });
 
                 }
 
@@ -296,11 +331,9 @@ export class DerivTradingBot {
     /**
      * Initializes the trading session with timers and configuration
      * @param {object} session - Trading session configuration
-     * @param {string} userAccountToken - User account token
      */
     private async initializeTradingSession(
-        session: BotSessionDataType,
-        userAccountToken: string
+        session: BotSessionDataType
     ): Promise<TradingSessionDataType> {
 
         console.log("SESSION RAW", session);
@@ -316,8 +349,8 @@ export class DerivTradingBot {
             stopLoss: sanitizeAmount(session.stopLoss, { mode: "currency" }) as number,
             tradeDuration: convertTimeStringToSeconds(session.tradeDuration),
             updateFrequency: convertTimeStringToSeconds(session.updateFrequency),
-            contractDurationUnits: sanitizeString(session.contractDurationUnits, { replaceWith: "" }),
-            contractDurationValue: convertTimeStringToSeconds(session.contractDurationValue),
+            contractDurationUnits: sanitizeContractDurationUnit(session.contractDurationUnits),
+            contractDurationValue: parseInt(sanitizeString(session.contractDurationValue)),
             tradingMode: sanitizeTradingMode(session.tradingMode),
         }
 
@@ -354,27 +387,25 @@ export class DerivTradingBot {
 
         this.tradingMode = sessionData.tradingMode;
 
-        this.userAccountToken = userAccountToken;
-
-        const config:BotConfig = {
-            accountType : this.accountType,
-            tradingType : this.tradingType,
-            market : this.defaultMarket,    
-            defaultMarket : this.defaultMarket,
-            purchaseType : this.originalPurchaseType,    
-            baseStake : this.baseStake,
-            stake : this.baseStake,
-            takeProfit : this.takeProfit,
-            stopLoss : this.stopLoss,
-            tradeDuration : this.tradeDuration,
-            updateFrequency : this.updateFrequency,
-            contractDurationUnits : this.contractDurationUnits,
-            contractDurationValue : this.contractDurationValue,
-            tradingMode : this.tradingMode,
-            userAccountToken : this.userAccountToken,
-            maxStake : 0.35,
-            minStake : 5000,
-            maxRecoveryTrades : 4,
+        const config: BotConfig = {
+            accountType: this.accountType,
+            tradingType: this.tradingType,
+            market: this.defaultMarket,
+            defaultMarket: this.defaultMarket,
+            purchaseType: this.originalPurchaseType,
+            baseStake: this.baseStake,
+            stake: this.baseStake,
+            takeProfit: this.takeProfit,
+            stopLoss: this.stopLoss,
+            tradeDuration: this.tradeDuration,
+            updateFrequency: this.updateFrequency,
+            contractDurationUnits: this.contractDurationUnits,
+            contractDurationValue: this.contractDurationValue,
+            tradingMode: this.tradingMode,
+            userAccountToken: this.userAccountToken,
+            maxStake: 0.35,
+            minStake: 5000,
+            maxRecoveryTrades: 4,
         };
 
         this.tradeManager = new TradeManager(config);
@@ -389,10 +420,10 @@ export class DerivTradingBot {
             profit: 0,
             resultIsWin: true,
             tradeResult: {},
-            userAccountToken: this.userAccountToken,
-            market: this.defaultMarket, 
-            purchaseType: this.originalPurchaseType,   
-            currency:"USD", // TODO
+            basis: "stake",
+            market: this.defaultMarket,
+            purchaseType: this.originalPurchaseType,
+            currency: "USD", // TODO
             contractDuration: this.contractDurationValue,
             contractDurationUnit: this.contractDurationUnits,
         }
@@ -509,15 +540,15 @@ export class DerivTradingBot {
         const resultIsWin: boolean = tradeResult.profit_is_win;
 
         const investment: number = tradeResult.buy_price_value;
-        
+
         const profit: number = tradeResult.profit_value * tradeResult.profit_sign;
 
         const profitAfterSale: number = resultIsWin ? profit : -investment;
 
         const tradeValid: boolean = profit === profitAfterSale;
-        
+
         this.totalProfit += profit;
-        this.totalStake  += tradeResult.buy_price_value;
+        this.totalStake += tradeResult.buy_price_value;
         this.totalPayout += tradeResult.sell_price_value;
 
         if (resultIsWin) {
@@ -530,75 +561,85 @@ export class DerivTradingBot {
             this.totalLost += investment;
         }
 
-        console.log(tradeResult)
-
         /*
 
-        {
-  symbol_short: '',
-  symbol_full: '',
-  start_time: 1744400407,
-  expiry_time: 1744400410,
-  purchase_time: 0,
-  entry_spot_value: 1672.3,
-  entry_spot_time: 1744400408,
-  exit_spot_value: 1671.6,
-  exit_spot_time: 1744400412.381,
-  ask_price_currency: '',
-  ask_price_value: 0,
-  buy_price_currency: '',
-  buy_price_value: 0,
-  buy_transaction: 554821900608,
-  bid_price_currency: 'USD',
-  bid_price_value: 0,
-  sell_price_currency: 'USD',
-  sell_price_value: 0,
-  sell_spot: 1671.6,
-  sell_spot_time: 1744400410,
-  sell_transaction: 554821907808,
-  payout: 1.88,
-  payout_currency: 'USD',
-  profit_value: 1,
-  profit_currency: 'USD',
-  profit_percentage: -100,
-  profit_is_win: false,
-  profit_sign: -1,
-  status: 'lost',
-  longcode: '',
-  proposal_id: undefined,
-  balance_currency: '',
-  balance_value: '',
-  audit_details: [
-    { epoch: 1744400404, tick: 1671.91, tick_display_value: '1671.91' },
-    { epoch: 1744400406, tick: 1672.29, tick_display_value: '1672.29' },
-    { epoch: 1744400407, flag: 'highlight_time', name: 'Start Time' },
-    {
-      epoch: 1744400408,
-      flag: 'highlight_tick',
-      name: 'Entry Spot',
-      tick: 1672.3,
-      tick_display_value: '1672.30'
-    },
-    {
-      epoch: 1744400410,
-      flag: 'highlight_tick',
-      name: 'End Time and Exit Spot',
-      tick: 1671.6,
-      tick_display_value: '1671.60'
-    },
-    { epoch: 1744400412, tick: 1671.69, tick_display_value: '1671.69' }
-  ],
-  ticks: t {
-    raw: { epoch: 1744400408, quote: 1672.3 },
-    time: t { _data: [Object] },
-    quote: t { pip: 0.01, _data: [Object] },
-    ask: t { pip: 0.01, _data: [Object] },
-    bid: t { pip: 0.01, _data: [Object] },
-    _data: {}
-  }
-}
+            TradeData {
+            _symbol_short: 'R_50',
+            _symbol_full: 'Volatility 50 Index',
+            _start_time: 1744987811,
+            _expiry_time: 1744987814,
+            _purchase_time: 1744987811,
+            _entry_spot_value: 163.1496,
+            _entry_spot_time: 1744987812,
+            _exit_spot_value: 163.1425,
+            _exit_spot_time: 1744987816.209,
+            _ask_price_currency: 'USD',
+            _ask_price_value: 10,
+            _buy_price_currency: 'USD',
+            _buy_price_value: 10,
+            _buy_transaction: 556109537128,
+            _bid_price_currency: 'USD',
+            _bid_price_value: 0,
+            _sell_price_currency: 'USD',
+            _sell_price_value: 0,
+            _sell_spot: 163.1425,
+            _sell_spot_time: 1744987814,
+            _sell_transaction: 556109545748,
+            _payout: 18.8,
+            _payout_currency: 'USD',
+            _profit_value: 10,
+            _profit_currency: 'USD',
+            _profit_percentage: -100,
+            _profit_is_win: false,
+            _profit_sign: -1,
+            _status: 'lost',
+            _longcode: 'Win payout if Volatility 50 Index after 1 tick is strictly higher than entry spot.',
+            _proposal_id: 'e25311d8-a515-2374-2317-a1172aea3b89',
+            _balance_currency: 'USD',
+            _balance_value: '0',
+            _audit_details: [
+                {
+                epoch: 1744987808,
+                tick: 163.188,
+                tick_display_value: '163.1880'
+                },
+                {
+                epoch: 1744987810,
+                tick: 163.184,
+                tick_display_value: '163.1840'
+                },
+                { epoch: 1744987811, flag: 'highlight_time', name: 'Start Time' },
+                {
+                epoch: 1744987812,
+                flag: 'highlight_tick',
+                name: 'Entry Spot',
+                tick: 163.1496,
+                tick_display_value: '163.1496'
+                },
+                {
+                epoch: 1744987814,
+                flag: 'highlight_tick',
+                name: 'End Time and Exit Spot',
+                tick: 163.1425,
+                tick_display_value: '163.1425'
+                },
+                {
+                epoch: 1744987816,
+                tick: 163.1762,
+                tick_display_value: '163.1762'
+                }
+            ],
+            _ticks: t {
+                raw: { epoch: 1744987812, quote: 163.1496 },
+                time: t { _data: [Object] },
+                quote: t { pip: 0.0001, _data: [Object] },
+                ask: t { pip: 0.0001, _data: [Object] },
+                bid: t { pip: 0.0001, _data: [Object] },
+                _data: {}
+            }
+            }
 
-*/
+        */
 
 
         // Log trade details
@@ -613,21 +654,21 @@ export class DerivTradingBot {
         logger.warn("*******************************************************************************************");
 
         const previousTradeResultData: any = {
-                baseStake: this.baseStake,
-                buy: tradeResult.buy_price_value,
-                bid: tradeResult.bid_price_value,
-                sell: tradeResult.sell_price_value,
-                status: tradeResult.status,
-                profitSign: tradeResult.profit_sign,
-                profit: tradeResult.profit_value,
-                resultIsWin: resultIsWin,
-                tradeResult: tradeResult
-            };
+            baseStake: this.baseStake,
+            buy: tradeResult.buy_price_value,
+            bid: tradeResult.bid_price_value,
+            sell: tradeResult.sell_price_value,
+            status: tradeResult.status,
+            profitSign: tradeResult.profit_sign,
+            profit: tradeResult.profit_value,
+            resultIsWin: resultIsWin,
+            tradeResult: tradeResult
+        };
 
         // Update strategy based on results
         this.tradeManager.updateStrategy(previousTradeResultData);
 
-        this.previousTradeResultData = previousTradeResultData;
+        this.previousTradeResultData = {...this.previousTradeResultData,...previousTradeResultData};
 
         return resultIsWin;
 

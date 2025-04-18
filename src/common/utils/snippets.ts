@@ -713,7 +713,7 @@ export const sanitizeAmount = (
     return mode === 'string' ? '0.00' : 0;
   }
 
-
+  
 /*
 // Example usage:
 console.log('=== Number Mode (default) ===');
@@ -742,3 +742,19 @@ console.log(sanitizeAmount("abc", { mode: 'string', strict: false })); // "0.00"
 */
 
 }
+
+export const sanitizeContractDurationUnit = (units: string | undefined) : string => {
+
+  if(!units){
+    return "t";
+  }
+
+  let cleanUnits = sanitizeString(units);
+
+  cleanUnits = cleanUnits.split("")[0].toLowerCase();
+
+  return cleanUnits;
+
+}
+
+

@@ -8,11 +8,14 @@ import { pino } from "pino";
 import { ContractParams, ContractResponse, ITradeData } from './types';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
+import { DerivUserAccount } from "./deriv-user-account";
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const logger = pino({ name: "Trade Executor" });
 
 const jsan = require("jsan");
+
+const { find } = require("rxjs/operators");
 
 const {
     CONNECTION_PING_TIMEOUT,
@@ -72,38 +75,60 @@ export class TradeExecutor {
         let lastError: Error | null = null;
 
         while (attempt < this.maxRetryAttempts) {
+
             try {
+
                 attempt++;
-                logger.info(`Attempt 00 : ${attempt} to purchase contract`);
+                
+                let contract = await this.createContract(contractParameters, userAccountToken);
 
-                const contract = await this.createContract(contractParameters, userAccountToken);
+                // Subscribe to contract updates to monitor its status in real-time
+                const onUpdateSubscription = contract.onUpdate(({ status, payout, bid_price }: any) => {
+                    switch (status) {
+                        case "proposal":
+                            logger.info(`Proposal received. Payout : ${payout.currency} ${payout.display}`);
+                            break;
+                        case "open":
+                            logger.info(`Contract opened. Bid Price: ${bid_price.currency} ${bid_price.display}`);
+                            break;
+                        default:
+                            logger.info(`Contract status updated: ${status}`);
+                            break;
+                    }
+                });
 
-                logger.info(`Attempt 01 : ${attempt} to purchase contract`);
 
-                this.setupContractUpdates(contract);
+                await contract.buy();
 
-                logger.info(`Attempt 02 : ${attempt} to purchase contract`);
+                // Wait for the contract to be sold (i.e., the trade is completed)
+                await contract.onUpdate()
+                    .pipe(find(({ is_sold }: any) => is_sold))
+                    .toPromise();
 
-                await this.buyContract(contract);
-                const tradeData = await this.waitForContractCompletion(contract);
+                logger.info('Contract purchased successfully'); 
 
-                logger.info('Contract purchased successfully');
-                return this.transformContractToTradeData(tradeData);
+                // Unsubscribe from contract updates to clean up resources
+                onUpdateSubscription.unsubscribe();
+
+                return this.transformContractToTradeData(contract);
 
             } catch (error:any) {
                 lastError = error;
                 console.log(error)
-                logger.warn(`Attempt ${attempt} failed:::: ${error.message}`);
+                logger.warn(`Attempt ${attempt} of ${this.maxRetryAttempts} failed:::: ${error.message}`);
 
                 if (attempt < this.maxRetryAttempts) {
                     const delay = this.calculateRetryDelay(attempt);
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
+
             }
         }
 
         logger.error('All purchase attempts failed');
+
         throw lastError || new Error('Unknown error during contract purchase');
+
     }
 
 
@@ -165,7 +190,6 @@ export class TradeExecutor {
     private async createContract(params: ContractParams, userAccountToken: string): Promise<ContractResponse> {
         if (!params) throw new Error('API not initialized');
         if (!userAccountToken) throw new Error('Invalid token');
-        logger.info(`Attempt : A001 to purchase contract`);
         const timeoutPromise = new Promise<never>((_, reject) =>
             setTimeout(
                 () => reject(new Error('Contract creation timed out')),
@@ -173,106 +197,16 @@ export class TradeExecutor {
             )
         );
 
-        logger.info(`Attempt : A002 to purchase contract`);
-
         const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
-        const account = await api.account(userAccountToken);
+        await DerivUserAccount.getUserAccount(api, userAccountToken);
 
-        let userAccount: any = {};
-
-        if (account) {
-
-            const user = jsan.parse(jsan.stringify(account));
-
-            userAccount = {
-                email: user._data.email,
-                country: user._data.country,
-                currency: user._data.currency,
-                loginid: user._data.loginid,
-                user_id: user._data.user_id,
-                fullname: user._data.fullname,
-            }
-            
-        }
-
-        console.log("::: ACCOUNT :::", userAccount)
-
-        logger.info(`Attempt : A003 to purchase contract`);
-        
         const contractPromise = api.contract(params);
 
-        return Promise.race([contractPromise, timeoutPromise]);
+        const contractPromiseResult: ContractResponse = await Promise.race([contractPromise, timeoutPromise]);
 
-    }
+        return contractPromiseResult;
 
-    /**
-     * Sets up contract update listeners
-     * @param {ContractResponse} contract - Contract to monitor
-     * @private
-     */
-    private setupContractUpdates(contract: ContractResponse): void {
-        contract.onUpdate(({ status, payout, bid_price }: any) => {
-            switch (status) {
-                case 'proposal':
-                    logger.debug(`Proposal received. Payout: ${payout.currency} ${payout.display}`);
-                    break;
-                case 'open':
-                    logger.debug(`Contract opened. Bid Price: ${bid_price.currency} ${bid_price.display}`);
-                    break;
-                case 'sold':
-                    logger.debug('Contract sold');
-                    break;
-                default:
-                    logger.debug(`Contract status: ${status}`);
-            }
-        });
-    }
-
-    /**
-     * Executes the contract purchase
-     * @param {ContractResponse} contract - Contract to purchase
-     * @returns {Promise<void>}
-     * @private
-     */
-    private async buyContract(contract: ContractResponse): Promise<void> {
-        const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(
-                () => reject(new Error('Contract purchase timed out')),
-                this.connectionTimeout
-            )
-        );
-
-        await Promise.race([contract.buy(), timeoutPromise]);
-    }
-
-    /**
-     * Waits for contract completion
-     * @param {ContractResponse} contract - Contract to wait for
-     * @returns {Promise<any>} Completed contract data
-     * @private
-     */
-    private async waitForContractCompletion(contract: ContractResponse): Promise<any> {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Contract completion timed out'));
-            }, this.connectionTimeout);
-
-            contract.onUpdate()
-                .pipe()
-                .subscribe({
-                    next: (update: any) => {
-                        if (update.is_sold) {
-                            clearTimeout(timeout);
-                            resolve(update);
-                        }
-                    },
-                    error: (err: Error) => {
-                        clearTimeout(timeout);
-                        reject(err);
-                    }
-                });
-        });
     }
 
     /**
@@ -282,43 +216,72 @@ export class TradeExecutor {
      * @private
      */
     private transformContractToTradeData(contract: any): ITradeData {
-        return {
-            symbol_short: contract.symbol?.short || '',
-            symbol_full: contract.symbol?.full || '',
-            start_time: contract.start_time?._data?.internal?.$d?.getTime() / 1000 || 0,
-            expiry_time: contract.expiry_time?._data?.internal?.$d?.getTime() / 1000 || 0,
-            purchase_time: contract.purchase_time?._data?.internal?.$d?.getTime() / 1000 || 0,
-            entry_spot_value: contract.entry_spot?._data?.value || 0,
-            entry_spot_time: contract.entry_spot?._data?.time?._data?.internal?.$d?.getTime() / 1000 || 0,
-            exit_spot_value: contract.exit_spot?._data?.value || contract.sell_spot?._data?.value || 0,
-            exit_spot_time: contract.exit_spot?._data?.time?._data?.internal?.$d?.getTime() / 1000 || 0,
-            ask_price_currency: contract.ask_price?._data?.currency || '',
-            ask_price_value: contract.ask_price?._data?.value || 0,
-            buy_price_currency: contract.buy_price?._data?.currency || '',
-            buy_price_value: contract.buy_price?._data?.value || 0,
-            buy_transaction: contract.buy_transaction,
-            bid_price_currency: contract.bid_price?._data?.currency || '',
-            bid_price_value: contract.bid_price?._data?.value || 0,
-            sell_price_currency: contract.sell_price?._data?.currency || '',
-            sell_price_value: contract.sell_price?._data?.value || 0,
-            sell_spot: contract.sell_spot?._data?.value || 0,
-            sell_spot_time: contract.sell_spot?._data?.time?._data?.internal?.$d?.getTime() / 1000 || 0,
-            sell_transaction: contract.sell_transaction,
-            payout: contract.payout?.value || 0,
-            payout_currency: contract.payout?.currency || '',
-            profit_value: contract.profit?._data?.value || 0,
-            profit_currency: contract.payout?.currency || '',
-            profit_percentage: contract.profit?._data?.percentage || 0,
-            profit_is_win: contract.profit?._data?.is_win || false,
-            profit_sign: contract.profit?._data?.sign || 0,
-            status: contract.status || '',
-            longcode: contract.longcode || '',
-            proposal_id: contract.proposal_id,
-            balance_currency: '', // Will be populated by caller
-            balance_value: '', // Will be populated by caller
-            audit_details: contract.audit_details?.all_ticks,
-            ticks: contract.ticks?.[0]
+
+        // Extract relevant data from the contract for the trade audit
+        const {
+            symbol,
+            start_time,
+            expiry_time,
+            purchase_time,
+            entry_spot,
+            exit_spot,
+            ask_price,
+            buy_price,
+            buy_transaction,
+            bid_price,
+            sell_price,
+            sell_spot,
+            sell_transaction,
+            payout,
+            profit,
+            status,
+            longcode,
+            proposal_id,
+            audit_details,
+            ticks
+        } = contract;
+
+        // Populate the trade data object with the extracted contract details
+        let tradeData: ITradeData = {
+            symbol_short: symbol.short, 
+            symbol_full: symbol.full,
+            start_time: start_time._data.internal.$d.getTime() / 1000,
+            expiry_time: expiry_time._data.internal.$d.getTime() / 1000,
+            purchase_time: purchase_time._data.internal.$d.getTime() / 1000,
+            entry_spot_value: entry_spot._data.value,
+            entry_spot_time: entry_spot._data.time._data.internal.$d.getTime() / 1000,
+            exit_spot_value: exit_spot._data.value || sell_spot._data.value,
+            exit_spot_time: exit_spot._data.time._data.internal.$d.getTime() / 1000,
+            ask_price_currency: ask_price._data.currency,
+            ask_price_value: ask_price._data.value,
+            buy_price_currency: buy_price._data.currency,
+            buy_price_value: buy_price._data.value,
+            buy_transaction: buy_transaction,
+            bid_price_currency: bid_price._data.currency,
+            bid_price_value: bid_price._data.value,
+            sell_price_currency: sell_price._data.currency,
+            sell_price_value: sell_price._data.value,
+            sell_spot: sell_spot._data.value,
+            sell_spot_time: sell_spot._data.time._data.internal.$d.getTime() / 1000,
+            sell_transaction: sell_transaction,
+            payout: payout.value,
+            payout_currency: payout.currency,
+            profit_value: profit._data.value,
+            profit_currency: payout.currency,
+            profit_percentage: profit._data.percentage,
+            profit_is_win: profit._data.is_win,
+            profit_sign: profit._data.sign,
+            status: status,
+            longcode: longcode,
+            proposal_id: proposal_id,
+            balance_currency: 'USD',
+            balance_value: '0',
+            audit_details: audit_details.all_ticks,
+            ticks: ticks[0]
         };
+
+        return tradeData;
+
     }
 
     /**

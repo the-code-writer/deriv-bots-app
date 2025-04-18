@@ -17,6 +17,7 @@ export abstract class TradeStrategy {
     private profitCalculator: ProfitCalculator;
     protected executor: TradeExecutor;
     protected strategyType: PurchaseType = "CALL";
+    protected baseStake:number = 1;
     protected currency: string = "USD";
     protected contractDuration: number | string = 1;
     protected contractDurationUnit: string = "t";
@@ -27,7 +28,24 @@ export abstract class TradeStrategy {
     constructor() {
         this.profitCalculator = new ProfitCalculator();
         this.executor = new TradeExecutor();
-        this.previousTradeResultData = {};
+        this.previousTradeResultData = {
+            baseStake: this.baseStake,
+            buy: this.baseStake,
+            bid: this.baseStake,
+            sell: this.baseStake,
+            status: 'won', 
+            profitSign: 1,
+            profit: 0,
+            resultIsWin: true,
+            tradeResult: {},
+            userAccountToken: this.userAccountToken,
+            basis: "stake",
+            market: this.market,
+            purchaseType: this.strategyType,
+            currency: this.currency,
+            contractDuration: this.contractDuration,
+            contractDurationUnit: this.contractDurationUnit,
+        };
     }
 
     /**
@@ -79,8 +97,6 @@ export abstract class TradeStrategy {
         params: any
     ): void {
 
-        console.log("PARAMS", params);
-
         if (params.amount <= 0) throw new Error('Stake must be positive');
         if (!params.basis) throw new Error('Basis must be set');
         if (!params.currency) throw new Error('Currency must be specified');
@@ -115,8 +131,6 @@ export abstract class TradeStrategy {
         if (this.previousTradeResultData && this.previousTradeResultData.resultIswin) {
             return this.previousTradeResultData.baseStake; // Reset to base after win
         }
-
-        console.log(":: getContractNextStake ::", this.previousTradeResultData)
 
         // Martingale-like progression with limits
         let nextStake = this.profitCalculator.getTradingAmount(this.previousTradeResultData);

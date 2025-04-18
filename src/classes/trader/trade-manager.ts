@@ -65,18 +65,16 @@ export class TradeManager {
      * @param {PurchaseType} purchaseType - Type of trade to execute
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async executeTrade(previousTradeResultData: any): Promise<ITradeData> {
-
+    async executeTrade(previousTradeResultData: any): Promise<ITradeData | undefined> {
+ 
         if (!previousTradeResultData) {
             throw new Error('TradeManager not initialized : Missing previousTradeResultData');
         }
 
         try {
 
-            console.log(":: previousTradeResultData ::", previousTradeResultData);
-
             // Select appropriate strategy
-            this.selectStrategy(previousTradeResultData.purchaseType);
+            this.selectStrategy(previousTradeResultData);
 
             this.currentStrategy.updateParams(previousTradeResultData);
 
@@ -88,8 +86,8 @@ export class TradeManager {
 
         } catch (error: any) {
             logger.error('Trade execution failed', error);
-            console.log(error)
-            throw new Error(`Trade execution failed: ${error.message}`);
+            console.log("#EEE#", error)
+            //throw new Error(`Trade execution failed: ${error.message}`);
         }
     }
 
@@ -145,15 +143,15 @@ export class TradeManager {
 
     /**
      * Selects the appropriate trading strategy
-     * @param {PurchaseType} purchaseType - Type of trade strategy
+     * @param {any} previousTradeResultData - Type of trade strategy
      * @private
      */
-    private selectStrategy(purchaseType: PurchaseType): void {
+    private selectStrategy(previousTradeResultData: any): void {
 
-        this.currentStrategy = this.createStrategy(purchaseType);
+        this.currentStrategy = this.createStrategy(previousTradeResultData);
 
         this.profitPercentage = this.profitCalculator.calculateProfitPercentage(
-            purchaseType,
+            previousTradeResultData.purchaseType,
             this.currentStake
         );
 
@@ -161,25 +159,25 @@ export class TradeManager {
 
     /**
      * Creates a strategy instance based on type
-     * @param {PurchaseType} strategyType - Type of strategy to create
+     * @param {any} previousTradeResultData - Type of strategy to create
      * @returns {TradeStrategy} Strategy instance
      * @private
      */
-    private createStrategy(strategyType: PurchaseType): TradeStrategy {
+    private createStrategy(previousTradeResultData: any): TradeStrategy {
 
-        switch (strategyType) {
+        switch (previousTradeResultData.purchaseType) {
             case 'DIGITDIFF':
-                return new DigitDiffStrategy(this.getRandomDigit());
+                return new DigitDiffStrategy(previousTradeResultData);
             case 'EVEN':
-                return new DigitEvenStrategy();
+                return new DigitEvenStrategy(previousTradeResultData);
             case 'ODD':
-                return new DigitOddStrategy();
+                return new DigitOddStrategy(previousTradeResultData);
             case 'CALL':
-                return new CallStrategy();
+                return new CallStrategy(previousTradeResultData);
             case 'PUT':
-                return new PutStrategy();
+                return new PutStrategy(previousTradeResultData);
             default:
-                logger.warn(`Unknown strategy type: ${strategyType}, using DIGITDIFF as fallback`);
+                logger.warn(`Unknown strategy type: ${previousTradeResultData.purchaseType}, using DIGITDIFF as fallback`);
                 return new DigitDiffStrategy(this.getRandomDigit());
         }
     }
