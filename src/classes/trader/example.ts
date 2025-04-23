@@ -1,13 +1,12 @@
 import { DerivTradingBot } from "./deriv-trading-bot";
 import { pino } from "pino";
-import { BotConfig } from './types';
-import { parseContractType } from "@/common/utils/snippets";
+import { BotConfig } from './types'; 
 
 const logger = pino({ name: "DerivTradingBot" });
 // Usage example
 const botConfig: BotConfig = {
-    tradingType: "Derivatives 📊",
-    defaultMarket: "R_100",
+    tradingType: "DERIVATIVES",
+    market: "R_100",
     baseStake: 1,
     maxStake: 5,
     minStake: 0.35,
