@@ -1,0 +1,29 @@
+{
+    "strategies": [
+        {
+            "strategyName": "Generic001",
+            "strategySteps": [
+                {
+                    "amount": 1,
+                    "symbol": "R_100",
+                    "contractType": "DIGIT_UNDER_9",
+                    "contractDurationValue": 1,
+                    "contractDurationUnits": "t"
+                }
+            ],
+            "maxSequence": 3,
+            "profitPercentage": 80,
+            "lossRecoveryPercentage": 100,
+            "anticipatedProfitPercentage": 80,
+            "maxConsecutiveLosses": 5,
+            "maxRiskExposure": 15
+        }
+    ],
+    "title": "Nduta.X Generic Strategy Collection",
+    "description": "Lorem ipsum",
+    "version": "1.0.0",
+    "publisher": "@ndutax",
+    "timestamp": 14785653311221,
+    "signature": "hash",
+    "id": "hash"
+}
