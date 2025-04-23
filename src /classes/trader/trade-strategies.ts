@@ -24,6 +24,7 @@ import { TradeExecutor } from './trade-executor';
 import { VolatilityRiskManager } from './trade-risk-manager';
 import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
+import { IDerivUserAccount } from "./deriv-user-account";
 
 const logger = pino({
     name: "TradeStrategy",
@@ -49,6 +50,7 @@ interface IStrategyConfig {
     }[];
     maxSequence?: number;
     profitPercentage?: number;
+    anticipatedProfitPercentage?: number;
     lossRecoveryPercentage?: number;
     maxConsecutiveLosses?: number;
     maxRiskExposure?: number;
@@ -104,6 +106,17 @@ export abstract class TradeStrategy {
 
         const parsedStrategies: any = this.parseStrategies(this.strategies);
 
+        // When initializing your risk manager:
+        const circuitBreakerConfig = {
+            maxAbsoluteLoss: 1000, // $1000 max loss
+            maxDailyLoss: 500,     // $500 daily loss
+            maxConsecutiveLosses: 5,
+            maxBalancePercentageLoss: 0.2, // 20% of balance
+            rapidLossTimeWindow: 300000,   // 5 minute window
+            rapidLossThreshold: 3,         // 3 losses in 5 minutes
+            cooldownPeriod: 1800000        // 30 minute cooldown
+        };
+
         this.volatilityRiskManager = new VolatilityRiskManager(
             this.baseStake, // baseStake ($1)
             this.market, // market V75
@@ -112,6 +125,7 @@ export abstract class TradeStrategy {
             this.contractDurationValue, // contractDurationValue
             this.contractDurationUnits, // contractDurationUnits (ticks)
             parsedStrategies, // Custom recovery strategies
+            circuitBreakerConfig
         );
 
     }
@@ -124,36 +138,420 @@ export abstract class TradeStrategy {
      */
     private parseStrategies(strategies: IStrategyConfig[]): IStrategyConfig[] {
         if (!strategies || strategies.length === 0) {
-            return this.getDefaultStrategy();
+            return this.createDefaultStrategies();
         }
 
-        return strategies.map(strategy => {
-            if (!strategy.strategyName) {
-                throw new Error('Strategy name is required');
+        return strategies.map(strategy => this.processStrategy(strategy));
+    }
+
+    /**
+     * Creates default strategies with both conservative and aggressive options
+     */
+    private createDefaultStrategies(): IStrategyConfig[] {
+        const baseAmount = 1;
+        const market = MarketTypeEnum.R_75;
+        const contractType = ContractTypeEnum.DigitDiff;
+        const durationValue = 1;
+        const durationUnits = ContractDurationUnitTypeEnum.Default;
+        const rewardStructure = this.tradeRewardStructures.getRewardStructure(contractType);
+
+        return [
+            // Conservative recovery strategy
+            this.createStrategyConfig(
+                "RhinoStrategy",
+                baseAmount,
+                market,
+                contractType,
+                durationValue,
+                durationUnits,
+                rewardStructure,
+                4, // steps
+                false // not aggressive
+            ),
+            // Aggressive recovery strategy
+            this.createStrategyConfig(
+                "RhinoAggressiveStrategy",
+                baseAmount,
+                market,
+                contractType,
+                durationValue,
+                durationUnits,
+                rewardStructure,
+                4, // steps
+                true // aggressive
+            )
+        ];
+    }
+
+    /**
+     * Processes individual strategy configuration
+     */
+    private processStrategy(strategy: IStrategyConfig): IStrategyConfig {
+        const firstStep = strategy.strategySteps[0];
+        const rewardStructure = this.tradeRewardStructures.getRewardStructure(firstStep.contractType);
+        const isAggressive = strategy.strategyName?.toLowerCase().includes('aggressive');
+
+        return {
+            ...strategy,
+            strategySteps: this.generateRecoverySteps(
+                firstStep.amount,
+                firstStep.symbol,
+                firstStep.contractType,
+                firstStep.contractDurationValue,
+                firstStep.contractDurationUnits,
+                rewardStructure,
+                strategy.strategySteps.length,
+                isAggressive
+            ),
+            profitPercentage: strategy.profitPercentage || this.calculateOptimalProfitPercentage(rewardStructure, isAggressive),
+            anticipatedProfitPercentage: strategy.anticipatedProfitPercentage ||
+                this.calculateOptimalProfitPercentage(rewardStructure, isAggressive)
+        };
+    }
+
+    /**
+     * Generates recovery steps with loss and profit accounting
+     */
+    private generateRecoverySteps(
+        baseAmount: number,
+        market: MarketType,
+        contractType: ContractType,
+        durationValue: number,
+        durationUnits: ContractDurationUnitType,
+        rewardStructure: any[],
+        stepCount: number = 4,
+        isAggressive: boolean = false
+    ): any[] {
+        const steps: any[] = [];
+        let currentAmount = baseAmount;
+        const rewardPercentage = this.getBaseRewardPercentage(rewardStructure, baseAmount);
+
+        // Calculate base multiplier based on recovery mode
+        const baseMultiplier = isAggressive
+            ? this.calculateAggressiveMultiplier(rewardPercentage)
+            : this.calculateConservativeMultiplier(rewardPercentage);
+
+        for (let i = 0; i < stepCount; i++) {
+            // Calculate amount needed to recover previous losses plus target profit
+            if (i > 0) {
+                const totalLoss = steps.slice(0, i).reduce((sum, step) => sum + step.amount, 0);
+                const targetProfit = totalLoss * (1 + (rewardPercentage / 100));
+                currentAmount = targetProfit / (rewardPercentage / 100);
+
+                // Apply multiplier adjustment
+                currentAmount = currentAmount * baseMultiplier;
             }
 
-            if (!strategy.strategySteps || strategy.strategySteps.length === 0) {
-                throw new Error('Strategy steps are required');
-            }
+            // Ensure amount stays within reward tiers
+            currentAmount = this.adjustAmountToTier(currentAmount, rewardStructure);
 
+            steps.push({
+                amount: currentAmount,
+                symbol: market,
+                contractType: contractType,
+                contractDurationValue: durationValue,
+                contractDurationUnits: durationUnits,
+                // Dynamic function for amount calculation in risk manager
+                amountFn: (totalLoss: number) => {
+                    const neededToRecover = totalLoss * (1 + (rewardPercentage / 100));
+                    return this.adjustAmountToTier(neededToRecover / (rewardPercentage / 100), rewardStructure);
+                }
+            });
+        }
+
+        return steps;
+    }
+
+    /**
+     * Calculates multipliers based on strategy type
+     */
+    private calculateAggressiveMultiplier(rewardPercentage: number): number {
+        // More aggressive compounding for low reward percentages
+        return rewardPercentage < 10 ? 4.0 : 2.5;
+    }
+
+    private calculateConservativeMultiplier(rewardPercentage: number): number {
+        // Less aggressive compounding
+        return rewardPercentage < 10 ? 2.0 : 1.5;
+    }
+
+    /**
+     * Adjusts amount to fit within reward tiers
+     */
+    private adjustAmountToTier(amount: number, rewardStructure: any[]): number {
+        const tier = rewardStructure.find(t => amount >= t.minStake && amount <= t.maxStake);
+        if (tier) return amount;
+
+        // If amount is below minimum, use minimum
+        if (amount < rewardStructure[0].minStake) {
+            return rewardStructure[0].minStake;
+        }
+
+        // If amount is above maximum, use maximum
+        return rewardStructure[rewardStructure.length - 1].maxStake;
+    }
+
+    /**
+     * Gets base reward percentage for a given amount
+     */
+    private getBaseRewardPercentage(rewardStructure: any[], amount: number): number {
+        const tier = rewardStructure.find(t => amount >= t.minStake && amount <= t.maxStake);
+        return tier?.rewardPercentage || rewardStructure[rewardStructure.length - 1].rewardPercentage;
+    }
+
+    /**
+     * Calculates optimal profit percentage based on strategy type
+     */
+    private calculateOptimalProfitPercentage(rewardStructure: any[], isAggressive: boolean): number {
+        const average = rewardStructure.reduce((sum, t) => sum + t.rewardPercentage, 0) / rewardStructure.length;
+        return isAggressive ? average * 0.8 : average; // Aggressive strategies aim for slightly less profit
+    }
+
+    protected handleTradeResult(params:any, result:any) {
+        
+        // Update risk manager with trade result
+        if (this.volatilityRiskManager) {
+            this.volatilityRiskManager.processTradeResult({
+                ...this.previousTradeResultData,
+                resultIsWin: result.status === StatusTypeEnum.Won
+            });
+        }
+
+        if (result.status === StatusTypeEnum.Blocked) {
+            // Handle blocked trade
+            console.log(`Trade blocked due to: ${result.message}`);
+            // Check cooldown timer
+            if (result.metadata?.cooldownRemaining > 0) {
+                console.log(`Wait ${result.metadata.cooldownRemaining}ms before retrying`);
+            }
+        }
+
+        // Handle loss results
+        if (result.status === StatusTypeEnum.Lost) {
+
+            // The recordAndCheckLoss() call inside execute() will:
+            // 1. Record the loss amount
+            // 2. Check for rapid loss pattern
+            // 3. Enter safety mode if threshold reached
+            this.recordAndCheckLoss(params.amount);
+
+            // Check if we should continue after rapid loss detection
+            const rapidLossState = this.volatilityRiskManager?.getRapidLossState();
+            if (rapidLossState?.lastDetectedTime) {
+                const cooldownRemaining = rapidLossState.lastDetectedTime +
+                    (this.volatilityRiskManager.getRapidLossConfig().coolDownMs || 0) - Date.now();
+
+                if (cooldownRemaining > 0) {
+                    logger.info(`In rapid loss cooldown: ${cooldownRemaining}ms remaining`);
+                    return this.getSafetyExitResult();
+                }
+            }
+        } 
+
+        // Check rapid loss status before executing trades
+        if (this.volatilityRiskManager) {
+            const rapidLossState = this.volatilityRiskManager?.getRapidLossState();
+
+            if (rapidLossState.eventCount > 0) {
+                logger.warn(`Rapid loss detected ${rapidLossState.eventCount} times today`);
+
+                // Implement additional protective measures
+                if (rapidLossState.eventCount > 3) {
+                    strategy.reduceBaseStake(0.5); // Cut stake by 50%
+                }
+            }
+        }
+
+    }
+
+    /**
+     * Gets safety exit parameters
+     * @private
+     */
+    private getSafetyExitResult(reason?: string): any {
+        const state = this.volatilityRiskManager?.getCircuitBreakerState();
+        return {
+            status: 'blocked',
+            message: `Trade blocked: ${reason}`,
+            timestamp: Date.now(),
+            metadata: {
+                circuitBreakerState: state,
+                cooldownRemaining: state?.lastTriggered
+                    ? (state.lastTriggered + this.volatilityRiskManager!.getCircuitBreakerConfig().cooldownPeriod) - Date.now()
+                    : 0
+            }
+        };
+    }
+
+
+    /**
+         * Records a loss and checks rapid loss conditions
+         * @param amount - Loss amount
+         * @protected
+         */
+    protected recordAndCheckLoss(amount: number): void {
+        if (!this.volatilityRiskManager) {
+            logger.warn('VolatilityRiskManager not initialized - skipping loss recording');
+            return;
+        }
+
+        // Record the loss
+        this.volatilityRiskManager.recordLoss(amount);
+        this.volatilityRiskManager.recordRapidLoss(amount);
+
+        // Check rapid loss conditions
+        const rapidLossDetected = this.volatilityRiskManager.checkRapidLosses(amount);
+
+        if (rapidLossDetected) {
+            const state = this.volatilityRiskManager.getRapidLossState();
+            logger.warn({
+                event: 'RAPID_LOSS_DETECTED',
+                lossesCount: state.recentLossTimestamps.length,
+                totalAmount: state.recentLossAmounts.reduce((a, b) => a + b, 0),
+                message: 'Rapid loss threshold exceeded'
+            });
+
+            // Optional: Automatically enter safety mode
+            this.enterSafetyMode('rapid_loss_detected');
+        }
+    }
+
+    /**
+     * Enters safety mode with cooldown period
+     * @param reason - Reason for entering safety mode
+     * @protected
+     */
+    protected enterSafetyMode(reason: string): void {
+        if (this.volatilityRiskManager) {
+            this.volatilityRiskManager.enterSafetyMode(reason);
+        }
+        // Additional safety mode actions can be added here
+    }
+
+    /**
+    * Checks all circuit breakers before executing a trade
+    * @protected
+    */
+    protected checkCircuitBreakers(): { shouldBlock: boolean; reason?: string } {
+        if (!this.volatilityRiskManager) {
+            logger.debug('Risk manager not available - skipping circuit breaker check');
+            return { shouldBlock: false };
+        }
+
+        const account = this.getCurrentAccount();
+        const shouldBlock = this.volatilityRiskManager.checkCircuitBreakers(account);
+
+        if (shouldBlock) {
+            const state = this.volatilityRiskManager.getCircuitBreakerState();
             return {
-                strategyName: strategy.strategyName,
-                strategySteps: strategy.strategySteps.map(step => ({
-                    amount: step.amount > 0 ? step.amount : this.baseStake,
-                    symbol: step.symbol || this.market,
-                    contractType: step.contractType || this.contractType,
-                    contractDurationValue: step.contractDurationValue || this.contractDurationValue,
-                    contractDurationUnits: step.contractDurationUnits || this.contractDurationUnits,
-                    barrier: step.barrier,
-                    delay: step.delay
-                })),
-                maxSequence: strategy.maxSequence || strategy.strategySteps.length,
-                profitPercentage: strategy.profitPercentage || 80,
-                lossRecoveryPercentage: strategy.lossRecoveryPercentage || 100,
-                maxConsecutiveLosses: strategy.maxConsecutiveLosses || 5,
-                maxRiskExposure: strategy.maxRiskExposure || 10
+                shouldBlock: true,
+                reason: state.lastReason || 'circuit_breaker_triggered'
             };
-        });
+        }
+
+        return { shouldBlock: false };
+    }
+
+    /**
+    * Checks all circuit breakers before executing a trade
+    * @protected
+    */
+    protected checkCircuitBreakersOnFailure(): void {
+        // Handle errors and check circuit breakers again on failure
+        if (this.volatilityRiskManager) {
+            if (this.volatilityRiskManager.checkCircuitBreakers(this.getCurrentAccount())) {
+                this.enterSafetyMode('post_trade_circuit_breaker');
+            }
+        }
+    }
+
+    /**
+     * Gets current account state
+     * @private
+     */
+    private getCurrentAccount(): IDerivUserAccount {
+        return {
+            balance: 1000,
+            email: "",
+            country: "",
+            currency: "USD",
+            loginid: "",
+            user_id: "",
+            fullname: ""
+        };
+    }
+
+    /**
+     * Generates martingale-style steps based on reward structure
+     * @private
+     */
+    private generateMartingaleSteps(
+        baseAmount: number,
+        market: MarketType,
+        contractType: ContractType,
+        durationValue: number,
+        durationUnits: ContractDurationUnitType,
+        rewardStructure: { minStake: number; maxStake: number; rewardPercentage: number }[],
+        stepCount: number = 4 // Default to 4 steps
+    ): Array<{
+        amount: number;
+        symbol: MarketType;
+        contractType: ContractType;
+        contractDurationValue: number;
+        contractDurationUnits: ContractDurationUnitType;
+    }> {
+        const steps:any[] = [];
+        let currentAmount = baseAmount;
+
+        // Find the optimal stake range from reward structure
+        const optimalRange = rewardStructure.find(tier =>
+            currentAmount >= tier.minStake && currentAmount <= tier.maxStake
+        ) || rewardStructure[rewardStructure.length - 1];
+
+        // Calculate base multiplier based on reward percentage
+        // Higher reward % = less aggressive martingale (since win covers more losses)
+        const baseMultiplier = 2 - (optimalRange.rewardPercentage / 100);
+
+        for (let i = 0; i < stepCount; i++) {
+            // Adjust amount to stay within reward structure tiers
+            let adjustedAmount = currentAmount;
+            const matchingTier = rewardStructure.find(tier =>
+                adjustedAmount >= tier.minStake && adjustedAmount <= tier.maxStake
+            );
+
+            if (!matchingTier) {
+                // If amount exceeds all tiers, use the max tier's max stake
+                adjustedAmount = rewardStructure[rewardStructure.length - 1].maxStake;
+            }
+
+            steps.push({
+                amount: adjustedAmount,
+                symbol: market,
+                contractType: contractType,
+                contractDurationValue: durationValue,
+                contractDurationUnits: durationUnits
+            });
+
+            // Martingale progression - next amount is current * multiplier
+            currentAmount *= baseMultiplier;
+        }
+
+        return steps;
+    }
+
+    /**
+     * Calculates average profit percentage from reward structure
+     * @private
+     */
+    private calculateAverageProfitPercentage(
+        rewardStructure: { minStake: number; maxStake: number; rewardPercentage: number }[]
+    ): number {
+        if (!rewardStructure || rewardStructure.length === 0) {
+            return 80; // Default fallback
+        }
+
+        const total = rewardStructure.reduce((sum, tier) => sum + tier.rewardPercentage, 0);
+        return total / rewardStructure.length;
     }
 
     /**
@@ -210,6 +608,27 @@ export abstract class TradeStrategy {
 
         if (!params.symbol) {
             throw new Error('Market symbol must be specified');
+        }
+
+        // Proper Error handling
+
+        // Validate balance before execution
+        const validation = this.validateAccountBalance(Number(params.amount));
+
+        if (!validation.isValid) {
+            const errorMsg = `Balance validation failed: ${validation.reasons.join(', ')}`;
+            logger.error({
+                error: new Error(errorMsg),
+                validationMetrics: validation.metrics,
+                strategy: this.constructor.name
+            });
+            throw new Error(errorMsg);
+        }
+
+        if (this.volatilityRiskManager?.checkRapidLosses()) {
+            // TODO: properly handle this
+            this.getSafetyExitResult();
+            throw new Error('Many rapid losses');
         }
 
         // Additional validation based on purchase type
@@ -287,6 +706,42 @@ export abstract class TradeStrategy {
     }
 
     /**
+     * Validates account balance against proposed trade
+     * @param amount - Proposed trade amount
+     * @returns Validation result
+     */
+    protected validateAccountBalance(amount: number): any {
+        if (!this.volatilityRiskManager) {
+            logger.warn('VolatilityRiskManager not initialized - skipping balance validation');
+            return {
+                isValid: true,
+                reasons: [],
+                metrics: {
+                    balance: 0,
+                    proposedStake: amount,
+                    riskPercentage: 0,
+                    requiredMinimum: 0,
+                    availableAfterTrade: 0,
+                    bypassed: true
+                }
+            };
+        }
+
+        // Mock user account - replace with actual account data
+        const userAccount: IDerivUserAccount = {
+            balance: 1000, // Implement this method
+            currency: this.currency,
+            email: "",
+            country: "",
+            loginid: "",
+            user_id: "",
+            fullname: ""
+        };
+
+        return this.volatilityRiskManager.validateAccountBalance(amount, userAccount);
+    }
+
+    /**
      * Performs pre-contract purchase checks
      * @param {ContractType} contractType - The purchase type
      * @protected
@@ -297,7 +752,17 @@ export abstract class TradeStrategy {
             throw new Error('Cannot execute trade while in safety mode');
         }
 
-        // Additional checks can be added here
+        const circuitCheck = this.checkCircuitBreakers();
+        if (circuitCheck.shouldBlock) {
+            logger.warn({
+                event: 'TRADE_BLOCKED',
+                reason: circuitCheck.reason,
+                action: 'Entering safety mode'
+            });
+            this.enterSafetyMode(circuitCheck.reason!);
+            return this.getSafetyExitResult(circuitCheck.reason!);
+        }
+
     }
 
     /**
@@ -429,6 +894,8 @@ export class DigitDiffStrategy extends TradeStrategy {
 
             const result = await this.executor.purchaseContract(params, this.userAccountToken);
 
+            this.handleTradeResult(params, result);
+
             // Update risk manager with trade result
             if (this.volatilityRiskManager) {
                 this.volatilityRiskManager.processTradeResult({
@@ -444,6 +911,7 @@ export class DigitDiffStrategy extends TradeStrategy {
                 strategy: 'DIGITDIFF',
                 message: 'Error executing DIGITDIFF strategy'
             });
+            this.checkCircuitBreakersOnFailure();
             throw error;
         }
     }
@@ -485,6 +953,8 @@ export class DigitEvenStrategy extends TradeStrategy {
 
             const result = await this.executor.purchaseContract(params, this.userAccountToken);
 
+            this.handleTradeResult(params, result);
+
             // Update risk manager with trade result
             if (this.volatilityRiskManager) {
                 this.volatilityRiskManager.processTradeResult({
@@ -500,6 +970,7 @@ export class DigitEvenStrategy extends TradeStrategy {
                 strategy: 'EVEN',
                 message: 'Error executing EVEN strategy'
             });
+            this.checkCircuitBreakersOnFailure();
             throw error;
         }
     }
@@ -540,6 +1011,8 @@ export class DigitOddStrategy extends TradeStrategy {
 
             const result = await this.executor.purchaseContract(params, this.userAccountToken);
 
+            this.handleTradeResult(params, result);
+
             // Update risk manager with trade result
             if (this.volatilityRiskManager) {
                 this.volatilityRiskManager.processTradeResult({
@@ -555,6 +1028,7 @@ export class DigitOddStrategy extends TradeStrategy {
                 strategy: 'ODD',
                 message: 'Error executing ODD strategy'
             });
+            this.checkCircuitBreakersOnFailure();
             throw error;
         }
     }
@@ -595,6 +1069,8 @@ export class CallStrategy extends TradeStrategy {
 
             const result = await this.executor.purchaseContract(params, this.userAccountToken);
 
+            this.handleTradeResult(params, result);
+
             // Update risk manager with trade result
             if (this.volatilityRiskManager) {
                 this.volatilityRiskManager.processTradeResult({
@@ -610,6 +1086,7 @@ export class CallStrategy extends TradeStrategy {
                 strategy: 'CALL',
                 message: 'Error executing CALL strategy'
             });
+            this.checkCircuitBreakersOnFailure();
             throw error;
         }
     }
@@ -650,6 +1127,8 @@ export class PutStrategy extends TradeStrategy {
 
             const result = await this.executor.purchaseContract(params, this.userAccountToken);
 
+            this.handleTradeResult(params, result);
+
             // Update risk manager with trade result
             if (this.volatilityRiskManager) {
                 this.volatilityRiskManager.processTradeResult({
@@ -665,6 +1144,7 @@ export class PutStrategy extends TradeStrategy {
                 strategy: 'PUT',
                 message: 'Error executing PUT strategy'
             });
+            this.checkCircuitBreakersOnFailure();
             throw error;
         }
     }
@@ -714,6 +1194,8 @@ export class DigitUnderStrategy extends TradeStrategy {
 
             const result = await this.executor.purchaseContract(params, this.userAccountToken);
 
+            this.handleTradeResult(params, result);
+
             // Update risk manager with trade result
             if (this.volatilityRiskManager) {
                 this.volatilityRiskManager.processTradeResult({
@@ -729,6 +1211,7 @@ export class DigitUnderStrategy extends TradeStrategy {
                 strategy: 'DIGITUNDER',
                 message: 'Error executing DIGITUNDER strategy'
             });
+            this.checkCircuitBreakersOnFailure();
             throw error;
         }
     }
@@ -776,6 +1259,8 @@ export class DigitOverStrategy extends TradeStrategy {
 
             const result = await this.executor.purchaseContract(params, this.userAccountToken);
 
+            this.handleTradeResult(params, result);
+
             // Update risk manager with trade result
             if (this.volatilityRiskManager) {
                 this.volatilityRiskManager.processTradeResult({
@@ -791,6 +1276,7 @@ export class DigitOverStrategy extends TradeStrategy {
                 strategy: 'DIGITOVER',
                 message: 'Error executing DIGITOVER strategy'
             });
+            this.checkCircuitBreakersOnFailure();
             throw error;
         }
     }

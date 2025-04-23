@@ -145,4 +145,14 @@ export class TradeRewardStructures {
         return rewardTier.rewardPercentage;
     }
 
+    /**
+ * Gets the full reward structure for a purchase type
+ */
+    public getRewardStructure(contractType: ContractType): { minStake: number; maxStake: number; rewardPercentage: number }[] {
+        if (!this.rewardStructures[contractType]) {
+            throw new Error(`No reward structure for ${contractType}`);
+        }
+        return this.rewardStructures[contractType];
+    }
+
 }

@@ -841,7 +841,7 @@ export interface ITradeData {
 
 export type ContractDurationUnitType = 's' | 'm' | 'h' | 'd' | 't';
 export type BasisType = "stake" | "payout";
-export type StatusType = 'won' | 'lost';
+export type StatusType = 'won' | 'lost' | 'blocked';
 export type CurrencyType = "USD" | "USDT" | "USDC" | "EUR" | "BTC" | "ETH";
 
 export interface IStrategyParams {                // Parameters related to the trading strategy
@@ -896,6 +896,7 @@ export const StatusTypeEnum = {
     Default: "won" as StatusType,
     Won: "won" as StatusType,
     Lost: "lost" as StatusType,
+    Blocked: "blocked" as StatusType,
 } as const;
 
 export const CurrenciesEnum = {

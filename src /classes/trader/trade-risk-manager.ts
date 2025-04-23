@@ -1132,7 +1132,7 @@ export class VolatilityRiskManager {
     /**
    * Enters safety mode with cooldown period
    */
-    private enterSafetyMode(reason: string): Readonly<NextTradeParams> {
+    public enterSafetyMode(reason: string): Readonly<NextTradeParams> {
         this.inSafetyMode = true;
         this.safetyModeUntil = Date.now() + SAFETY_COOLDOWN_MS;
         logger.warn(`Entering safety mode due to: ${reason}`);
@@ -1245,7 +1245,8 @@ export class VolatilityRiskManager {
         // 2. Default fallback strategy
         // 3. First available strategy
         if (!strategy) {
-            const fallbackOptions = [];
+
+            const fallbackOptions: string[] = [];
 
             if (fallbackStrategy) {
                 fallbackOptions.push(`specified fallback (${fallbackStrategy})`);
@@ -2091,7 +2092,7 @@ export class VolatilityRiskManager {
      * 
      * Uses conservative defaults that can be overridden in constructor
      */
-    private checkCircuitBreakers(account: IDerivUserAccount): boolean {
+    public checkCircuitBreakers(account: IDerivUserAccount): boolean {
         // Initialize circuit breaker state if it doesn't exist
         if (!this.circuitBreakerState) {
             this.circuitBreakerState = {
@@ -2198,7 +2199,7 @@ export class VolatilityRiskManager {
  * - Automatically purges outdated entries
  * - Enforces minimum stake requirements
  */
-    private checkRapidLosses(currentStake?: number): boolean {
+    public checkRapidLosses(currentStake?: number): boolean {
         // Early exit if protection disabled
         if (!this.rapidLossConfig.enabled) return false;
 
