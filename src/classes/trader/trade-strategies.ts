@@ -48,6 +48,7 @@ interface IStrategyConfig {
         barrier?: number;
         delay?: number;
     }[];
+    isAggressive: boolean;
     maxSequence?: number;
     profitPercentage?: number;
     anticipatedProfitPercentage?: number;
@@ -79,7 +80,7 @@ export abstract class TradeStrategy {
 
     protected contractFactory: typeof ContractParamsFactory;
 
-    protected strategies: any = [];
+    protected strategyTemplate: any = [];
 
     protected predictedDigit: number = 0;
 
@@ -104,7 +105,11 @@ export abstract class TradeStrategy {
 
     public initializeVolatilityRiskManager(): void {
 
-        const parsedStrategies: any = this.parseStrategies(this.strategies);
+        console.log("STRATEGIES", this.strategyTemplate)
+
+        const parsedStrategies: any = this.parseStrategies(this.strategyTemplate.strategies);
+
+        console.log("STRATEGIES - PARSED", parsedStrategies[0].strategySteps);
 
         // When initializing your risk manager:
         const circuitBreakerConfig = {
@@ -189,7 +194,7 @@ export abstract class TradeStrategy {
     private processStrategy(strategy: IStrategyConfig): IStrategyConfig {
         const firstStep = strategy.strategySteps[0];
         const rewardStructure = this.tradeRewardStructures.getRewardStructure(firstStep.contractType);
-        const isAggressive = strategy.strategyName?.toLowerCase().includes('aggressive');
+        const isAggressive = strategy.isAggressive;
 
         return {
             ...strategy,
@@ -867,7 +872,7 @@ export class DigitDiffStrategy extends TradeStrategy {
         // Set the purchase type of the strategy
         this.contractType = ContractTypeEnum.DigitDiff;
 
-        this.strategies = contractStrategies;
+        this.strategyTemplate = contractStrategies;
 
         this.initializeVolatilityRiskManager();
 
@@ -929,7 +934,7 @@ export class DigitEvenStrategy extends TradeStrategy {
         // Set the purchase type of the strategy
         this.contractType = ContractTypeEnum.DigitEven;
 
-        this.strategies = contractStrategies;
+        this.strategyTemplate = contractStrategies;
 
         this.initializeVolatilityRiskManager();
 
@@ -987,7 +992,7 @@ export class DigitOddStrategy extends TradeStrategy {
         // Set the purchase type of the strategy
         this.contractType = ContractTypeEnum.DigitOdd;
 
-        this.strategies = contractStrategies;
+        this.strategyTemplate = contractStrategies;
 
         this.initializeVolatilityRiskManager();
 
@@ -1045,7 +1050,7 @@ export class CallStrategy extends TradeStrategy {
         // Set the purchase type of the strategy
         this.contractType = ContractTypeEnum.Call;
 
-        this.strategies = contractStrategies;
+        this.strategyTemplate = contractStrategies;
 
         this.initializeVolatilityRiskManager();
 
@@ -1103,7 +1108,7 @@ export class PutStrategy extends TradeStrategy {
         // Set the purchase type of the strategy
         this.contractType = ContractTypeEnum.Put;
 
-        this.strategies = contractStrategies;
+        this.strategyTemplate = contractStrategies;
 
         this.initializeVolatilityRiskManager();
 
@@ -1167,7 +1172,7 @@ export class DigitUnderStrategy extends TradeStrategy {
         // Set the purchase type of the strategy
         this.contractType = ContractTypeEnum.DigitUnder;
 
-        this.strategies = contractStrategies;
+        this.strategyTemplate = contractStrategies;
 
         this.initializeVolatilityRiskManager();
 
@@ -1232,7 +1237,7 @@ export class DigitOverStrategy extends TradeStrategy {
         // Set the purchase type of the strategy
         this.contractType = ContractTypeEnum.DigitOver;
 
-        this.strategies = contractStrategies;
+        this.strategyTemplate = contractStrategies;
 
         this.initializeVolatilityRiskManager();
 

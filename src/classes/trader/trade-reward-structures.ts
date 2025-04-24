@@ -2,6 +2,8 @@ import { StrategyRewards, ContractType } from './types';
 
 import { pino } from "pino";
 
+import { env } from '@/common/utils/envConfig';
+
 // Initialize logger for tracking events and errors
 // Enhanced logger with error tracking
 const logger = pino({
@@ -34,68 +36,230 @@ export class TradeRewardStructures {
     private initializeRewardStructures(): StrategyRewards {
         const structures: StrategyRewards = {
             DIGITDIFF: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
                 { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
                 { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 9.67 }
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
             ],
             EVEN: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 88.57 },
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 88.57 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 92.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 94.67 },
                 { minStake: 1.00, maxStake: 1.99, rewardPercentage: 95.00 },
                 { minStake: 2.00, maxStake: 2.99, rewardPercentage: 95.50 },
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 95.33 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 95.40 }
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 95.40 }
             ],
             ODD: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 88.57 },
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 88.57 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 92.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 94.67 },
                 { minStake: 1.00, maxStake: 1.99, rewardPercentage: 95.00 },
                 { minStake: 2.00, maxStake: 2.99, rewardPercentage: 95.50 },
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 95.33 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 95.40 }
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 95.40 }
             ],
             CALL: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 77.14 },
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 77.14 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 78.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 78.67 },
                 { minStake: 1.00, maxStake: 1.99, rewardPercentage: 79.00 },
                 { minStake: 2.00, maxStake: 2.99, rewardPercentage: 79.50 },
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 79.33 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 79.40 }
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 79.40 }
             ],
             PUT: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 77.14 },
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 77.14 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 78.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 78.67 },
                 { minStake: 1.00, maxStake: 1.99, rewardPercentage: 79.00 },
                 { minStake: 2.00, maxStake: 2.99, rewardPercentage: 79.50 },
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 79.33 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 79.40 }
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 79.40 }
             ],
             DIGITUNDER: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
                 { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
                 { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 9.67 }
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_9: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_8: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_7: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_6: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_5: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_4: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_3: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_2: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITUNDER_1: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
             ],
             DIGITOVER: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
                 { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
                 { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 9.67 }
-            ]
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_0: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_1: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_2: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_3: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_4: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_5: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_6: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_7: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
+            DIGITOVER_8: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
         };
 
 
@@ -106,7 +270,8 @@ export class TradeRewardStructures {
             }
 
             // Check for coverage from 0 to Infinity
-            if (tiers[0].minStake !== 0 || tiers[tiers.length - 1].maxStake !== Infinity) {
+            if (tiers[0].minStake < Number(env.MIN_STAKE) || tiers[tiers.length - 1].maxStake > Number(env.MAX_STAKE)) {
+                console.log("REWARD TIERS ", tiers[0].minStake, tiers[tiers.length - 1].maxStake)
                 throw new Error(`Reward structure for ${type} must cover full stake range`);
             }
         }

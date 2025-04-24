@@ -6,11 +6,12 @@
                 {
                     "amount": 1,
                     "symbol": "R_100",
-                    "contractType": "DIGIT_UNDER_9",
+                    "contractType": "DIGITUNDER_9",
                     "contractDurationValue": 1,
                     "contractDurationUnits": "t"
                 }
             ],
+            "isAggressive": false,
             "maxSequence": 3,
             "profitPercentage": 80,
             "lossRecoveryPercentage": 100,
