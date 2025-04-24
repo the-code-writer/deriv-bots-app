@@ -1,0 +1,42 @@
+{
+  "_id": "27affcab-7d08-43d6-8584-375108c9610e",
+  "maxAge": 1743693388095,
+  "cookie": {
+    "secure": false,
+    "httpOnly": true,
+    "sameSite": "strict",
+    "originalMaxAge": 1743693388095,
+    "maxAge": 1743693388095,
+    "expires": 1743693388095,
+    "path": "/",
+    "domain": null,
+    "priority": null,
+    "partitioned": null
+  },
+  "session": {
+    "sessionID": "27affcab-7d08-43d6-8584-375108c9610e",
+    "chatId": 7542095001,
+    "bot": {
+      "chatId": 7542095001,
+      "step": "login_account",
+      "timestamp": 1743088592013,
+      "accounts": {
+        "telegram": {
+          "id": 7542095001,
+          "is_bot": false,
+          "first_name": "CodeWriter",
+          "username": "the_code_writer",
+          "language_code": "en"
+        },
+        "deriv": {}
+      }
+    }
+  },
+  "createdAt": {
+    "$date": "2025-03-27T15:16:32.014Z"
+  },
+  "updatedAt": {
+    "$date": "2025-03-27T15:16:32.014Z"
+  },
+  "isActive": true
+}

@@ -1,9 +1,10 @@
-import express, { type Request, type Response, type Router } from "express";
+import express, { response, type Request, type Response, type Router } from "express";
 import swaggerUi from "swagger-ui-express";
 
 import { generateOpenAPIDocument } from "@/api-docs/openAPIDocumentGenerator";
 
 export const openAPIRouter: Router = express.Router();
+
 const openAPIDocument = generateOpenAPIDocument();
 
 openAPIRouter.get("/swagger.json", (_req: Request, res: Response) => {

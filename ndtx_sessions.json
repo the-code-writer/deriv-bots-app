@@ -1,0 +1,91 @@
+[{
+  "_id": "ce16d8dd-2a0f-413d-9037-b67459065e91",
+  "sessionID": "ce16d8dd-2a0f-413d-9037-b67459065e91",
+  "chatId": {
+    "$numberLong": "7542095001"
+  },
+  "maxAge": {
+    "$numberLong": "1744283449998"
+  },
+  "cookie": {
+    "secure": false,
+    "httpOnly": true,
+    "sameSite": "strict",
+    "maxAge": {
+      "$numberLong": "1744283449998"
+    },
+    "expires": {
+      "$date": "2025-04-10T11:10:49.998Z"
+    },
+    "path": "/",
+    "domain": "localhost",
+    "priority": "high",
+    "partitioned": null
+  },
+  "session": {
+    "sessionID": "ce16d8dd-2a0f-413d-9037-b67459065e91",
+    "chatId": {
+      "$numberLong": "7542095001"
+    },
+    "bot": {
+      "chatId": {
+        "$numberLong": "7542095001"
+      },
+      "timestamp": {
+        "$date": "2025-04-03T11:14:12.206Z"
+      },
+      "tradingOptions": {
+        "step": ""
+      },
+      "accounts": {
+        "telegram": {
+          "id": {
+            "$numberLong": "7542095001"
+          },
+          "is_bot": false,
+          "first_name": "CodeWriter",
+          "username": "the_code_writer",
+          "language_code": "en"
+        },
+        "deriv": {
+          "accountList": {},
+          "accountDetails": {}
+        }
+      }
+    },
+    "encid": "U2FsdGVkX18lA+hvCbMBk3RHqddJeQr8u5GD70UelJI=",
+    "encua": "86dbdff89a74f3ff423114d5ccbccda1",
+    "encuaData": {
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+      "browser": {
+        "name": "Chrome",
+        "version": "134.0.0.0",
+        "major": "134",
+        "type": null
+      },
+      "cpu": {
+        "architecture": null
+      },
+      "device": {
+        "type": null,
+        "model": "Macintosh",
+        "vendor": "Apple"
+      },
+      "engine": {
+        "name": "Blink",
+        "version": "134.0.0.0"
+      },
+      "os": {
+        "name": "macOS",
+        "version": "10.15.7"
+      }
+    }
+  },
+  "createdAt": {
+    "$date": "2025-04-03T11:14:12.206Z"
+  },
+  "updatedAt": {
+    "$date": "2025-04-03T11:14:21.174Z"
+  },
+  "isActive": true
+}]

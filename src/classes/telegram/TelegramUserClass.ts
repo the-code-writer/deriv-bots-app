@@ -136,6 +136,7 @@ export class TelegramUser implements ITelegramUser {
      * @param value - The new value for the field.
      */
     public updateField<K extends keyof UserInfo>(field: K, value: UserInfo[K]): void {
+        // @ts-ignore
         this[field] = value; // Update the specified field with the new value
     }
 }
