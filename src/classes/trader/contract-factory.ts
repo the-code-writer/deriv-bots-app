@@ -38,6 +38,39 @@ export class ContractParamsFactory {
     /**
      * Creates parameters for a DIGITDIFF contract
      */
+    static createParams(
+        amount: number,
+        basis: BasisType,
+        contractType: ContractType,
+        currency: CurrencyType,
+        duration: number,
+        durationUnit: ContractDurationUnitType,
+        market: MarketType,
+        barrier: string | number
+    ): ContractParams {
+
+        const params: ContractParams = {
+            amount: amount,
+            basis: basis,
+            contract_type: contractType,
+            currency: currency,
+            duration: duration,
+            duration_unit: durationUnit,
+            symbol: market,
+            barrier: getRandomDigit().toString()
+        };
+
+        if (barrier) {
+            params.barrier = barrier;
+        }
+
+        return params;
+
+    }
+
+    /**
+     * Creates parameters for a DIGITDIFF contract
+     */
     static createDigitDiffParams(options: ContractOptionsParams): ContractParams {
         return {
             amount: options.amount || this.amount,
