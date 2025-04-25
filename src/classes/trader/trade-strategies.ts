@@ -153,9 +153,10 @@ export abstract class TradeStrategy {
      * Creates default strategies with both conservative and aggressive options
      */
     private createDefaultStrategies(): IStrategyConfig[] {
+
         const baseAmount = 1;
-        const market = MarketTypeEnum.R_75;
-        const contractType = ContractTypeEnum.DigitDiff;
+        const market = MarketTypeEnum.Default;
+        const contractType = ContractTypeEnum.Default;
         const durationValue = 1;
         const durationUnits = ContractDurationUnitTypeEnum.Default;
         const rewardStructure = this.tradeRewardStructures.getRewardStructure(contractType);
@@ -312,8 +313,8 @@ export abstract class TradeStrategy {
         return isAggressive ? average * 0.8 : average; // Aggressive strategies aim for slightly less profit
     }
 
-    protected handleTradeResult(params:any, result:any) {
-        
+    protected handleTradeResult(params: any, result: any) {
+
         // Update risk manager with trade result
         if (this.volatilityRiskManager) {
             this.volatilityRiskManager.processTradeResult({
@@ -351,7 +352,7 @@ export abstract class TradeStrategy {
                     return this.getSafetyExitResult();
                 }
             }
-        } 
+        }
 
         // Check rapid loss status before executing trades
         if (this.volatilityRiskManager) {
@@ -505,7 +506,7 @@ export abstract class TradeStrategy {
         contractDurationValue: number;
         contractDurationUnits: ContractDurationUnitType;
     }> {
-        const steps:any[] = [];
+        const steps: any[] = [];
         let currentAmount = baseAmount;
 
         // Find the optimal stake range from reward structure
@@ -557,28 +558,6 @@ export abstract class TradeStrategy {
 
         const total = rewardStructure.reduce((sum, tier) => sum + tier.rewardPercentage, 0);
         return total / rewardStructure.length;
-    }
-
-    /**
-     * Gets default strategy configuration
-     * @returns {IStrategyConfig[]} Default strategy configuration
-     */
-    private getDefaultStrategy(): IStrategyConfig[] {
-        return [{
-            strategyName: "DefaultRecovery",
-            strategySteps: [{
-                amount: this.baseStake,
-                symbol: this.market,
-                contractType: this.contractType,
-                contractDurationValue: this.contractDurationValue,
-                contractDurationUnits: this.contractDurationUnits
-            }],
-            maxSequence: 1,
-            profitPercentage: 50,
-            lossRecoveryPercentage: 80,
-            maxConsecutiveLosses: 3,
-            maxRiskExposure: 5
-        }];
     }
 
     /**
@@ -780,7 +759,7 @@ export abstract class TradeStrategy {
         // Get parameters from risk manager if available
         if (this.volatilityRiskManager) {
             const nextParams = this.volatilityRiskManager.getNextTradeParams();
-            
+
             return this.createParamsFromFactory(
                 contractType,
                 nextParams.amount,
@@ -941,7 +920,7 @@ export class DigitEvenStrategy extends TradeStrategy {
     }
 
     /**
-     * Executes a EVEN trade
+     * Executes a DIGITEVEN trade
      * @returns {Promise<ITradeData>} Trade execution result
      */
     async execute(): Promise<ITradeData> {
@@ -950,7 +929,7 @@ export class DigitEvenStrategy extends TradeStrategy {
 
             logger.info({
                 action: 'executing_strategy',
-                strategy: 'EVEN'
+                strategy: 'DIGITEVEN'
             });
 
             const params = this.getNextContractParams(this.contractType);
@@ -972,8 +951,8 @@ export class DigitEvenStrategy extends TradeStrategy {
         } catch (error) {
             logger.error({
                 error,
-                strategy: 'EVEN',
-                message: 'Error executing EVEN strategy'
+                strategy: 'DIGITEVEN',
+                message: 'Error executing DIGITEVEN strategy'
             });
             this.checkCircuitBreakersOnFailure();
             throw error;
@@ -999,7 +978,7 @@ export class DigitOddStrategy extends TradeStrategy {
     }
 
     /**
-     * Executes a ODD trade
+     * Executes a DIGITODD trade
      * @returns {Promise<ITradeData>} Trade execution result
      */
     async execute(): Promise<ITradeData> {
@@ -1008,7 +987,7 @@ export class DigitOddStrategy extends TradeStrategy {
 
             logger.info({
                 action: 'executing_strategy',
-                strategy: 'ODD'
+                strategy: 'DIGITODD'
             });
 
             const params = this.getNextContractParams(this.contractType);
@@ -1030,8 +1009,8 @@ export class DigitOddStrategy extends TradeStrategy {
         } catch (error) {
             logger.error({
                 error,
-                strategy: 'ODD',
-                message: 'Error executing ODD strategy'
+                strategy: 'DIGITODD',
+                message: 'Error executing DIGITODD strategy'
             });
             this.checkCircuitBreakersOnFailure();
             throw error;
@@ -1057,7 +1036,7 @@ export class CallStrategy extends TradeStrategy {
     }
 
     /**
-     * Executes a CALL trade
+     * Executes a CALLE trade
      * @returns {Promise<ITradeData>} Trade execution result
      */
     async execute(): Promise<ITradeData> {
@@ -1066,7 +1045,7 @@ export class CallStrategy extends TradeStrategy {
 
             logger.info({
                 action: 'executing_strategy',
-                strategy: 'CALL'
+                strategy: 'CALLE'
             });
 
             const params = this.getNextContractParams(this.contractType);
@@ -1088,8 +1067,8 @@ export class CallStrategy extends TradeStrategy {
         } catch (error) {
             logger.error({
                 error,
-                strategy: 'CALL',
-                message: 'Error executing CALL strategy'
+                strategy: 'CALLE',
+                message: 'Error executing CALLE strategy'
             });
             this.checkCircuitBreakersOnFailure();
             throw error;
@@ -1115,7 +1094,7 @@ export class PutStrategy extends TradeStrategy {
     }
 
     /**
-     * Executes a PUT trade
+     * Executes a PUTE trade
      * @returns {Promise<ITradeData>} Trade execution result
      */
     async execute(): Promise<ITradeData> {
@@ -1124,7 +1103,7 @@ export class PutStrategy extends TradeStrategy {
 
             logger.info({
                 action: 'executing_strategy',
-                strategy: 'PUT'
+                strategy: 'PUTE'
             });
 
             const params = this.getNextContractParams(this.contractType);
@@ -1146,8 +1125,8 @@ export class PutStrategy extends TradeStrategy {
         } catch (error) {
             logger.error({
                 error,
-                strategy: 'PUT',
-                message: 'Error executing PUT strategy'
+                strategy: 'PUTE',
+                message: 'Error executing PUTE strategy'
             });
             this.checkCircuitBreakersOnFailure();
             throw error;

@@ -671,7 +671,7 @@ export class VolatilityRiskManager {
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
                 { minStake: 5.00, maxStake: Infinity, rewardPercentage: 9.67 }
             ],
-            EVEN: [
+            DIGITEVEN: [
                 { minStake: 0.35, maxStake: 0.49, rewardPercentage: 88.57 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 92.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 94.67 },
@@ -680,7 +680,7 @@ export class VolatilityRiskManager {
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 95.33 },
                 { minStake: 5.00, maxStake: Infinity, rewardPercentage: 95.40 }
             ],
-            ODD: [
+            DIGITODD: [
                 { minStake: 0.35, maxStake: 0.49, rewardPercentage: 88.57 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 92.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 94.67 },
@@ -689,7 +689,7 @@ export class VolatilityRiskManager {
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 95.33 },
                 { minStake: 5.00, maxStake: Infinity, rewardPercentage: 95.40 }
             ],
-            CALL: [
+            CALLE: [
                 { minStake: 0.35, maxStake: 0.49, rewardPercentage: 77.14 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 78.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 78.67 },
@@ -698,7 +698,7 @@ export class VolatilityRiskManager {
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 79.33 },
                 { minStake: 5.00, maxStake: Infinity, rewardPercentage: 79.40 }
             ],
-            PUT: [
+            PUTE: [
                 { minStake: 0.35, maxStake: 0.49, rewardPercentage: 77.14 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 78.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 78.67 },
@@ -1034,10 +1034,10 @@ export class VolatilityRiskManager {
                 return "";
 
             case ContractTypeEnum.DigitEven:
-                return "EVEN";
+                return "DIGITEVEN";
 
             case ContractTypeEnum.DigitOdd:
-                return "ODD";
+                return "DIGITODD";
 
             case ContractTypeEnum.DigitDiff:
                 return getRandomDigit();
@@ -1428,15 +1428,15 @@ export class VolatilityRiskManager {
             10, // baseStake
             "1HZ100V", // market
             "USD", // currency
-            ContractType.ODD, // contractType
+            ContractType.DIGITODD, // contractType
             5, // contractDurationValue
             "t", // contractDurationUnits
             [
                 {
                     strategyName: "AggressiveRecovery",
                     strategySteps: [
-                        { amount: 20, contractType: ContractType.ODD, contractDurationValue: 5 },
-                        { amount: 40, contractType: ContractType.ODD, contractDurationValue: 5 }
+                        { amount: 20, contractType: ContractType.DIGITODD, contractDurationValue: 5 },
+                        { amount: 40, contractType: ContractType.DIGITODD, contractDurationValue: 5 }
                     ],
                     profitPercentage: 90,
                     lossRecoveryPercentage: 110,
@@ -1446,7 +1446,7 @@ export class VolatilityRiskManager {
                 {
                     strategyName: "SafeRecovery",
                     strategySteps: [
-                        { amount: 15, contractType: ContractType.ODD, contractDurationValue: 5 }
+                        { amount: 15, contractType: ContractType.DIGITODD, contractDurationValue: 5 }
                     ],
                     profitPercentage: 60,
                     lossRecoveryPercentage: 80,
@@ -1708,7 +1708,7 @@ export class VolatilityRiskManager {
             10, // baseStake
             "1HZ100V", // market
             "USD", // currency
-            ContractType.ODD, // contractType
+            ContractType.DIGITODD, // contractType
             5, // contractDurationValue
             "t", // contractDurationUnits
             [], // strategies
@@ -1972,7 +1972,7 @@ export class VolatilityRiskManager {
             10, // baseStake
             "1HZ100V", // market
             "USD", // currency
-            ContractType.ODD, // contractType
+            ContractType.DIGITODD, // contractType
             5, // contractDurationValue
             "t", // contractDurationUnits
             [], // strategies
@@ -2371,7 +2371,7 @@ export class VolatilityRiskManager {
         10, // baseStake
         "1HZ100V", // market
         "USD", // currency
-        ContractType.ODD, // contractType
+        ContractType.DIGITODD, // contractType
         5, // contractDurationValue
         "t", // contractDurationUnits
         [], // strategies
@@ -2521,7 +2521,7 @@ export class VolatilityRiskManager {
         10, // baseStake
         "1HZ100V", // market
         "USD", // currency
-        ContractType.ODD, // contractType
+        ContractType.DIGITODD, // contractType
         5, // contractDurationValue
         "t", // contractDurationUnits
         [], // strategies (use defaults)

@@ -23,6 +23,7 @@ interface StrategyStepOutput {
     duration_unit: ContractDurationUnitType;
     symbol: MarketType;
     barrier?: string | number;
+    formula?: string;
 }
 
 interface StrategyConfig {

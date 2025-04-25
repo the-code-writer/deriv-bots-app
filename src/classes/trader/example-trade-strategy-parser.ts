@@ -12,9 +12,9 @@ allSteps.forEach((step, index) => {
     console.log(`- Duration: ${step.duration}${step.duration_unit}`);
     console.log(`- Barrier: ${step.barrier}`);
     console.log(`- Basis: ${step.basis}`);
+    console.log(`- Formular: ${step.formula}`);
 });
 
 console.log("\nStrategy Configuration:");
-console.log(`Details: `, allSteps);
 console.log(`Max Sequence: ${parser.getStrategyConfig().maxSequence}`);
 console.log(`Max Consecutive Losses: ${parser.getStrategyConfig().maxConsecutiveLosses}`);

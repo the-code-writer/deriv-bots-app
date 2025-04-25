@@ -66,11 +66,11 @@ export type ContractType =
     | "DIGITUNDER8_DIGITOVER_1"
     | "DIGITUNDER7_DIGITOVER_2"
     | "DIGITUNDER6_DIGITOVER_3"
-    | "EVEN_ODD"
-    | "EVEN"
-    | "ODD"
-    | "CALL"
-    | "PUT"
+    | "DIGITEVEN_DIGITODD"
+    | "DIGITEVEN"
+    | "DIGITODD"
+    | "CALLE"
+    | "PUTE"
     | "ACCU";
 
 export const ContractTypeEnum = {
@@ -100,11 +100,11 @@ export const ContractTypeEnum = {
     DigitOver1Under8: "DIGITUNDER8_DIGITOVER_1" as ContractType,
     DigitOver2Under7: "DIGITUNDER7_DIGITOVER_2" as ContractType,
     DigitOver3Under6: "DIGITUNDER6_DIGITOVER_3" as ContractType,
-    DigitAutoEvenOdd: "EVEN_ODD" as ContractType,
-    DigitEven: "EVEN" as ContractType,
-    DigitOdd: "ODD" as ContractType,
-    Call: "CALL" as ContractType,
-    Put: "PUT" as ContractType,
+    DigitAutoEvenOdd: "DIGITEVEN_DIGITODD" as ContractType,
+    DigitEven: "DIGITEVEN" as ContractType,
+    DigitOdd: "DIGITODD" as ContractType,
+    Call: "CALLE" as ContractType,
+    Put: "PUTE" as ContractType,
     Acc: "ACCU" as ContractType,
 } as const;
 
@@ -889,7 +889,7 @@ export interface IPreviousTradeResult {
     userAccountToken: string;        // Authentication token
     basis: BasisType;                // Type of trade (default/recovery)
     market: MarketType;              // Market identifier
-    contractType: ContractType;      // Type of purchase (EVEN/ODD/etc.)
+    contractType: ContractType;      // Type of purchase (DIGITEVEN/DIGITODD/etc.)
     currency: CurrencyType;          // Currency used
     contractDurationValue: number;   // Duration value of contract
     contractDurationUnits: ContractDurationUnitType;   // Units for duration (ticks/minutes/etc.)

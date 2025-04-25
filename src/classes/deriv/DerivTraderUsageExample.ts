@@ -47,7 +47,7 @@ apiService.connect(DERIV_APP_TOKEN)
 const status = apiService.getConnectionStatus();
 
 try {
-    const tradeData = await bot.purchaseNextContract(ContractType.CALL);
+    const tradeData = await bot.purchaseNextContract(ContractType.CALLE);
     console.log('Trade completed:', tradeData);
 } catch (error) {
     if (error instanceof InsufficientBalanceError) {

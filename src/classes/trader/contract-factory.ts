@@ -50,7 +50,7 @@ export class ContractParamsFactory {
     ): ContractParams {
 
         const params: ContractParams = {
-            amount: amount,
+            amount: Number(amount.toFixed(2)),
             basis: basis,
             contract_type: contractType,
             currency: currency,
@@ -117,7 +117,7 @@ export class ContractParamsFactory {
     }
 
     /**
-     * Creates parameters for a EVEN contract
+     * Creates parameters for a DIGITEVEN contract
      */
     static createDigitEvenParams(options: ContractOptionsParams): ContractParams {
         return {
@@ -133,7 +133,7 @@ export class ContractParamsFactory {
     }
 
     /**
-     * Creates parameters for a ODD contract
+     * Creates parameters for a DIGITODD contract
      */
     static createDigitOddParams(options: ContractOptionsParams): ContractParams {
         return {

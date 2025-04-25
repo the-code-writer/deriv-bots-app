@@ -49,10 +49,10 @@ type ContractType =
   | "DIGITUNDER9_DIGITOVER_0"
   | "DIGITUNDER8_DIGITOVER_1"
   | "DIGITUNDER7_DIGITOVER_2"
-  | "EVEN"
-  | "ODD"
-  | "CALL"
-  | "PUT"
+  | "DIGITEVEN"
+  | "DIGITODD"
+  | "CALLE"
+  | "PUTE"
   | "ACCU";
 
 const ContractTypeEnum = {
@@ -62,10 +62,10 @@ const ContractTypeEnum = {
   DigitOver0Under9: "DIGITUNDER9_DIGITOVER_0",
   DigitOver1Under8: "DIGITUNDER8_DIGITOVER_1",
   DigitOver2Under7: "DIGITUNDER7_DIGITOVER_2",
-  DigitEven: "EVEN",
-  DigitOdd: "ODD",
-  Call: "CALL",
-  Put: "PUT",
+  DigitEven: "DIGITEVEN",
+  DigitOdd: "DIGITODD",
+  Call: "CALLE",
+  Put: "PUTE",
   Acc: "ACCU",
 };
 
@@ -713,12 +713,12 @@ class ContractParamsFactory {
     return {
       amount: stake,
       basis: "stake",
-      contract_type: "EVEN",
+      contract_type: "DIGITEVEN",
       currency: currency,
       duration: duration,
       duration_unit: durationUnit,
       symbol: market,
-      barrier: "EVEN"
+      barrier: "DIGITEVEN"
     };
   }
 
@@ -732,12 +732,12 @@ class ContractParamsFactory {
     return {
       amount: stake,
       basis: "stake",
-      contract_type: "ODD",
+      contract_type: "DIGITODD",
       currency: currency,
       duration: duration,
       duration_unit: durationUnit,
       symbol: market,
-      barrier: "ODD"
+      barrier: "DIGITODD"
     };
   }
 
@@ -965,8 +965,8 @@ class DerivAutoTradingBotClass {
     this.stopLoss = mergedConfig.stopLoss || 0;
     this.consecutiveTrades = 0;
     this.profitPercentage = 0;
-    this.originalContractType = "CALL";
-    this.currentContractType = "CALL";
+    this.originalContractType = "CALLE";
+    this.currentContractType = "CALLE";
 
     // Loss and win tracking
     this.cumulativeLossAmount = 0;
@@ -1601,7 +1601,7 @@ class DerivAutoTradingBotClass {
     return this.purchaseContract(contractParameters);
   }
 
-  // Purchase PUT / CALL contract (private)
+  // Purchase PUTE / CALLE contract (private)
   private async purchaseAuto(): Promise<ITradeData> {
 
     console.log(333333)
@@ -1612,15 +1612,15 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "EVEN",
+      contract_type: "DIGITEVEN",
       currency: currency || "USD",
       duration: this.contractDurationValue,
       duration_unit: this.contractDurationUnits,
       symbol: this.parseDefaultMarket(),
-      barrier: "EVEN",
+      barrier: "DIGITEVEN",
     };
 
-    // Calculate profit percentage for DIGIT EVEN
+    // Calculate profit percentage for DIGIT DIGITEVEN
     this.profitPercentage = this.calculateProfitPercentage(
       ContractTypeEnum.DigitEven,
       this.currentStake
@@ -1629,7 +1629,7 @@ class DerivAutoTradingBotClass {
     return this.purchaseContract(contractParameters);
   }
 
-  // Purchase PUT / CALL contract (private)
+  // Purchase PUTE / CALLE contract (private)
   private async purchaseCall(): Promise<ITradeData> {
     const { currency } = this.userAccount;
 
@@ -1637,14 +1637,14 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "CALL",
+      contract_type: "CALLE",
       currency: currency || "USD",
       duration: this.contractDurationValue,
       duration_unit: this.contractDurationUnits,
       symbol: this.parseDefaultMarket(),
     };
 
-    // Calculate profit percentage for DIGIT EVEN
+    // Calculate profit percentage for DIGIT DIGITEVEN
     this.profitPercentage = this.calculateProfitPercentage(
       ContractTypeEnum.DigitEven,
       this.currentStake
@@ -1653,7 +1653,7 @@ class DerivAutoTradingBotClass {
     return this.purchaseContract(contractParameters);
   }
 
-  // Purchase PUT / CALL contract (private)
+  // Purchase PUTE / CALLE contract (private)
   private async purchasePut(): Promise<ITradeData> {
     const { currency } = this.userAccount;
 
@@ -1661,15 +1661,15 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "EVEN",
+      contract_type: "DIGITEVEN",
       currency: currency || "USD",
       duration: this.contractDurationValue,
       duration_unit: this.contractDurationUnits,
       symbol: this.parseDefaultMarket(),
-      barrier: "EVEN",
+      barrier: "DIGITEVEN",
     };
 
-    // Calculate profit percentage for DIGIT EVEN
+    // Calculate profit percentage for DIGIT DIGITEVEN
     this.profitPercentage = this.calculateProfitPercentage(
       ContractTypeEnum.DigitEven,
       this.currentStake
@@ -1678,7 +1678,7 @@ class DerivAutoTradingBotClass {
     return this.purchaseContract(contractParameters);
   }
 
-  // Purchase DIGIT EVEN / ODD contract (private)
+  // Purchase DIGIT DIGITEVDIGITODD/ DIGITODD contract (private)
   private async purchaseDigitAuto(): Promise<ITradeData> {
     const { currency } = this.userAccount;
 
@@ -1686,15 +1686,15 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "EVEN",
+      contract_type: "DIGITEVEN",
       currency: currency || "USD",
       duration: this.contractDurationValue,
       duration_unit: this.contractDurationUnits,
       symbol: this.parseDefaultMarket(),
-      barrier: "EVEN",
+      barrier: "DIGITEVEN",
     };
 
-    // Calculate profit percentage for DIGIT EVEN
+    // Calculate profit percentage for DIGIT DIGITEVEN
     this.profitPercentage = this.calculateProfitPercentage(
       ContractTypeEnum.DigitEven,
       this.currentStake
@@ -1703,7 +1703,7 @@ class DerivAutoTradingBotClass {
     return this.purchaseContract(contractParameters);
   }
 
-  // Purchase DIGIT EVEN contract (private)
+  // Purchase DIGIT DIGITEVEN contract (private)
   private async purchaseDigitEven(): Promise<ITradeData> {
     const { currency } = this.userAccount;
 
@@ -1711,15 +1711,15 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "EVEN",
+      contract_type: "DIGITEVEN",
       currency: currency || "USD",
       duration: this.contractDurationValue,
       duration_unit: this.contractDurationUnits,
       symbol: this.parseDefaultMarket(),
-      barrier: "EVEN",
+      barrier: "DIGITEVEN",
     };
 
-    // Calculate profit percentage for DIGIT EVEN
+    // Calculate profit percentage for DIGIT DIGITEVEN
     this.profitPercentage = this.calculateProfitPercentage(
       ContractTypeEnum.DigitEven,
       this.currentStake
@@ -1728,7 +1728,7 @@ class DerivAutoTradingBotClass {
     return this.purchaseContract(contractParameters);
   }
 
-  // Purchase DIGIT ODD contract (private)
+  // Purchase DIGIT DIGITODD contract (private)
   private async purchaseDigitOdd(): Promise<ITradeData> {
     const { currency } = this.userAccount;
 
@@ -1736,15 +1736,15 @@ class DerivAutoTradingBotClass {
       // proposal: 1,
       amount: this.currentStake,
       basis: "stake",
-      contract_type: "ODD",
+      contract_type: "DIGITODD",
       currency: currency || "USD",
       duration: this.contractDurationValue,
       duration_unit: this.contractDurationUnits,
       symbol: this.parseDefaultMarket(),
-      barrier: "ODD",
+      barrier: "DIGITODD",
     };
 
-    // Calculate profit percentage for DIGIT ODD
+    // Calculate profit percentage for DIGIT DIGITODD
     this.profitPercentage = this.calculateProfitPercentage(
       ContractTypeEnum.DigitOdd,
       this.currentStake
@@ -2082,7 +2082,7 @@ class DerivAutoTradingBotClass {
    * Executes a single trade and schedules the next trade if trading is still active.
    * This function is called recursively to avoid using a blocking `while` loop.
    * 
-   * @param {string} contractType - The type of contract to purchase (e.g., "CALL", "PUT").
+   * @param {string} contractType - The type of contract to purchase (e.g., "CALLE", "PUTE").
    * @returns {Promise<void>} - Resolves when the trade is completed and the next trade is scheduled.
    */
   private async executeTrade(contractType: string): Promise<void> {

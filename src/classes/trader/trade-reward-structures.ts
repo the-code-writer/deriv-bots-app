@@ -44,7 +44,7 @@ export class TradeRewardStructures {
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
                 { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
             ],
-            EVEN: [
+            DIGITEVEN: [
                 { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 88.57 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 92.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 94.67 },
@@ -53,7 +53,7 @@ export class TradeRewardStructures {
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 95.33 },
                 { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 95.40 }
             ],
-            ODD: [
+            DIGITODD: [
                 { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 88.57 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 92.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 94.67 },
@@ -62,7 +62,7 @@ export class TradeRewardStructures {
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 95.33 },
                 { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 95.40 }
             ],
-            CALL: [
+            CALLE: [
                 { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 77.14 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 78.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 78.67 },
@@ -71,7 +71,7 @@ export class TradeRewardStructures {
                 { minStake: 3.00, maxStake: 4.99, rewardPercentage: 79.33 },
                 { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 79.40 }
             ],
-            PUT: [
+            PUTE: [
                 { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 77.14 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 78.00 },
                 { minStake: 0.75, maxStake: 0.99, rewardPercentage: 78.67 },

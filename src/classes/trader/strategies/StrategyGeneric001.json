@@ -5,13 +5,13 @@
       "strategySteps": [
         {
           "symbol": "R_100",
-          "contractType": "EVEN",
+          "contractType": "DIGITEVEN",
           "contractDurationValue": 1,
           "contractDurationUnits": "t"
         },
         {
           "symbol": "R_75",
-          "contractType": "ODD",
+          "contractType": "DIGITODD",
           "contractDurationValue": 1,
           "contractDurationUnits": "t"
         },
