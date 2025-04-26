@@ -27,8 +27,8 @@ interface StrategyStepOutput {
     symbol: MarketType;
     barrier?: string | number;
     formula?: string;
-    profitPercentage?: Percentage;
-    anticipatedProfit?: NonNegativeNumber;
+    profitPercentage: Percentage;
+    anticipatedProfit: NonNegativeNumber;
     stepIndex?: number;
     stepNumber?: number;
 }
@@ -48,16 +48,7 @@ interface StrategyConfig {
     maxRiskExposure: number;
     basis: BasisType;
     currency: CurrencyType;
-    meta?: {
-        title?: string;
-        description?: string;
-        version?: string;
-        publisher?: string;
-        timestamp?: number;
-        signature?: string;
-        id?: string;
-        [key: string]: any;
-    };
+    meta?: StrategyMeta;
 }
 
 interface StrategyMeta {
@@ -72,12 +63,61 @@ interface StrategyMeta {
     recommendedBalance?: number;
 }
 
+interface StrategyMetrics {
+    totalRiskExposure: number;
+    maxSingleRisk: number;
+    rewardToRiskRatios: number[];
+    averageRewardToRiskRatio: number;
+    maxRewardToRiskRatio: number;
+    minRewardToRiskRatio: number;
+    winProbability: number;
+}
+
+interface StrategyVisualization {
+    chartData: Array<{
+        step: number;
+        amount: number;
+        potentialProfit: number;
+        riskPercentage: number;
+    }>;
+    summary: {
+        totalPotentialProfit: number;
+        maxDrawdown: number;
+    };
+}
+
+interface OptimizationPreset {
+    maxRisk: number;
+    riskMultiplier: number;
+}
+
+interface OptimizationAnalysis {
+    originalRisk: number;
+    optimizedRisk: number;
+    originalPotential: number;
+    optimizedPotential: number;
+    riskReduction: number;
+    potentialGain: number;
+}
+
+interface OptimizationCriteria {
+    maxRisk?: number;
+    targetProfit?: number;
+    maxConsecutiveLosses?: number;
+    riskMultiplier?: number;
+}
+
 export class StrategyParser {
     private rewardCalculator: TradeRewardStructures;
     private baseStake: number;
     private strategyConfig: StrategyConfig | StrategyConfig[];
     private computedSteps: StrategyStepOutput[] = [];
     private computedAllStrategies: Map<number, StrategyStepOutput[]> = new Map();
+
+    public OPTIMIZATION_PRESETS: {
+        conservative: OptimizationPreset;
+        aggressive: OptimizationPreset;
+    };
 
     constructor(strategyJson: any, strategyIndex: number | null = null, baseStake: number) {
         this.rewardCalculator = new TradeRewardStructures();
@@ -91,9 +131,85 @@ export class StrategyParser {
         } else {
             this.computeAllSteps();
         }
+
+        this.OPTIMIZATION_PRESETS = {
+            conservative: {
+                maxRisk: this.baseStake * 3,
+                riskMultiplier: 1.1
+            },
+            aggressive: {
+                maxRisk: this.baseStake * 10,
+                riskMultiplier: 1.5
+            }
+        };
+
     }
 
-    
+    public getStrategyMetrics(): StrategyMetrics {
+        if (this.computedSteps.length === 0) {
+            return {
+                totalRiskExposure: 0,
+                maxSingleRisk: 0,
+                rewardToRiskRatios: [],
+                averageRewardToRiskRatio: 0,
+                maxRewardToRiskRatio: 0,
+                minRewardToRiskRatio: 0,
+                winProbability: 0,
+                riskOfRuin: 0
+            };
+        }
+
+        // Initialize metrics in a single pass
+        let totalRiskExposure = 0;
+        let maxSingleRisk = 0;
+        let totalRewardToRisk = 0;
+        let maxRewardToRisk = -Infinity;
+        let minRewardToRisk = Infinity;
+        let positiveOutcomes = 0;
+        let totalLossExposure = 0;
+        const rewardToRiskRatios: number[] = [];
+
+        for (const step of this.computedSteps) {
+            const amount = step.amount;
+            const anticipatedProfit = step.anticipatedProfit || 0;
+            const ratio = anticipatedProfit / amount;
+
+            // Accumulate metrics
+            totalRiskExposure += amount;
+            if (amount > maxSingleRisk) maxSingleRisk = amount;
+
+            rewardToRiskRatios.push(ratio);
+            totalRewardToRisk += ratio;
+
+            if (ratio > maxRewardToRisk) maxRewardToRisk = ratio;
+            if (ratio < minRewardToRisk) minRewardToRisk = ratio;
+
+            if (anticipatedProfit > 0) positiveOutcomes++;
+            if (anticipatedProfit < 0) totalLossExposure += amount;
+        }
+
+        // Calculate derived metrics
+        const averageRewardToRiskRatio = totalRewardToRisk / this.computedSteps.length;
+        const winProbability = positiveOutcomes / this.computedSteps.length;
+        const riskOfRuin = totalLossExposure / totalRiskExposure;
+
+        return {
+            totalRiskExposure,
+            maxSingleRisk,
+            rewardToRiskRatios,
+            averageRewardToRiskRatio,
+            maxRewardToRiskRatio: maxRewardToRisk === -Infinity ? 0 : maxRewardToRisk,
+            minRewardToRiskRatio: minRewardToRisk === Infinity ? 0 : minRewardToRisk,
+            winProbability,
+            riskOfRuin
+        };
+    }
+
+    private adjustForDynamicRisk(currentAmount: number, consecutiveLosses: number): number {
+        const riskFactor = 1 + (consecutiveLosses * 0.1); // 10% increase per loss
+        const maxAllowed = this.baseStake * this.strategyConfig.maxRiskExposure;
+        return Math.min(currentAmount * riskFactor, maxAllowed);
+    }
 
     private validateAndCompleteStrategyJson(json: any, strategyIndex: number | null): StrategyConfig | StrategyConfig[] {
         if (!json.strategies || json.strategies.length === 0) {
@@ -188,7 +304,7 @@ export class StrategyParser {
                 // Apply risk management
                 if (!this.strategyConfig.isAggressive) {
                     const maxAllowed = this.baseStake * this.strategyConfig.maxRiskExposure;
-                    currentAmount = Math.min(currentAmount, maxAllowed);
+                    currentAmount = this.adjustForDynamicRisk(currentAmount, i);
                     anticipatedProfit = currentAmount * (profitPercentage / 100);
                     formula += ` (Capped at ${maxAllowed.toFixed(2)} due to risk management)`;
                 }
@@ -235,7 +351,7 @@ export class StrategyParser {
             profitPercentage: 0 as Percentage, // Will be set by computeAllSteps
             anticipatedProfit: 0 as NonNegativeNumber, // Will be set by computeAllSteps
             stepIndex: stepIndex,
-            stepNumber: stepIndex+1
+            stepNumber: stepIndex + 1
         };
     }
 
@@ -449,4 +565,165 @@ export class StrategyParser {
             }))
         };
     }
+
+    public generateVisualization(): StrategyVisualization {
+        return {
+            chartData: this.computedSteps.map((step, i) => ({
+                step: i + 1,
+                amount: step.amount,
+                potentialProfit: step.anticipatedProfit,
+                riskPercentage: (step.amount / this.baseStake) * 100
+            })),
+            summary: {
+                totalPotentialProfit: this.computedSteps.reduce((sum, step) => sum + step.anticipatedProfit, 0),
+                maxDrawdown: this.computedSteps.reduce((sum, step) => sum + step.amount, 0)
+            }
+        };
+    }
+
+
+    public serialize(): string {
+        return JSON.stringify({
+            config: this.strategyConfig,
+            computedSteps: this.computedSteps,
+            baseStake: this.baseStake
+        });
+    }
+
+    public static deserialize(json: string): StrategyParser {
+        const data = JSON.parse(json);
+        const parser = new StrategyParser(data.config, null, data.baseStake);
+        parser.computedSteps = data.computedSteps;
+        return parser;
+    }
+
+    public optimizeStrategy(
+        optimizationCriteria: {
+            maxRisk?: number;
+            targetProfit?: number;
+            maxConsecutiveLosses?: number;
+            riskMultiplier?: number;
+        }
+    ): StrategyStepOutput[] {
+        return this.computedSteps.map((step, index) => {
+            const currentStepInput = this.strategyConfig.strategySteps[
+                Math.min(index, this.strategyConfig.strategySteps.length - 1)
+            ];
+
+            // Clone the step to avoid mutating the original
+            const optimizedStep: StrategyStepOutput = { ...step };
+
+            // Apply max risk constraint
+            if (optimizationCriteria.maxRisk && step.amount > optimizationCriteria.maxRisk) {
+                optimizedStep.amount = optimizationCriteria.maxRisk as NonNegativeNumber;
+                optimizedStep.anticipatedProfit = (optimizationCriteria.maxRisk * (step.profitPercentage / 100)) as NonNegativeNumber;
+                optimizedStep.formula = `${step.formula} → Optimized to max risk ${optimizationCriteria.maxRisk}`;
+            }
+
+            // Apply target profit adjustment
+            if (optimizationCriteria.targetProfit && index > 0) {
+                const neededAmount = optimizationCriteria.targetProfit / (step.profitPercentage / 100) as NonNegativeNumber;
+                if (neededAmount < optimizedStep.amount) {
+                    optimizedStep.amount = neededAmount;
+                    optimizedStep.anticipatedProfit = optimizationCriteria.targetProfit as NonNegativeNumber;
+                    optimizedStep.formula = `${step.formula} → Optimized for target profit ${optimizationCriteria.targetProfit}`;
+                }
+            }
+
+            // Apply risk multiplier for recovery steps
+            if (optimizationCriteria.riskMultiplier && index > 0) {
+                const newAmount = step.amount * optimizationCriteria.riskMultiplier;
+                optimizedStep.amount = newAmount as NonNegativeNumber;
+                optimizedStep.anticipatedProfit = newAmount * (step.profitPercentage / 100) as NonNegativeNumber;
+                optimizedStep.formula = `${step.formula} → Risk multiplied by ${optimizationCriteria.riskMultiplier}x`;
+            }
+
+            // Ensure all StrategyStepOutput properties are properly set
+            return {
+                ...optimizedStep,
+                // These would normally be preserved from the spread, but we ensure they exist
+                contract_type: currentStepInput.contractType,
+                duration: currentStepInput.contractDurationValue,
+                duration_unit: currentStepInput.contractDurationUnits,
+                symbol: currentStepInput.symbol,
+                basis: currentStepInput.basis || this.strategyConfig.basis,
+                currency: currentStepInput.currency || this.strategyConfig.currency,
+                barrier: optimizedStep.barrier ?? this.getDefaultBarrier(currentStepInput.contractType),
+                // Recalculate formula if amounts changed
+                formula: optimizedStep.formula || step.formula,
+                // Recalculate profit percentage based on new amount if needed
+                profitPercentage: this.rewardCalculator.calculateProfitPercentage(
+                    currentStepInput.contractType,
+                    optimizedStep.amount
+                ),
+                // Recalculate anticipated profit
+                anticipatedProfit: optimizedStep.amount *
+                    (this.rewardCalculator.calculateProfitPercentage(
+                        currentStepInput.contractType,
+                        optimizedStep.amount
+                    ) / 100)
+            };
+        });
+    }
+
+    private validateOptimizationCriteria(criteria: any) {
+        if (criteria.maxRisk && criteria.maxRisk < this.baseStake) {
+            throw new Error("Max risk cannot be less than base stake");
+        }
+        if (criteria.riskMultiplier && criteria.riskMultiplier < 1) {
+            throw new Error("Risk multiplier must be >= 1");
+        }
+    }
+
+    public optimizeWithPreset(preset: keyof typeof this.OPTIMIZATION_PRESETS) {
+        return this.optimizeStrategy(this.OPTIMIZATION_PRESETS[preset]);
+    }
+
+    public analyzeOptimization(original: StrategyStepOutput[], optimized: StrategyStepOutput[]): OptimizationAnalysis {
+        const originalRisk = original.reduce((sum, step) => sum + step.amount, 0);
+        const optimizedRisk = optimized.reduce((sum, step) => sum + step.amount, 0);
+        const originalPotential = original.reduce((sum, step) => sum + step.anticipatedProfit, 0);
+        const optimizedPotential = optimized.reduce((sum, step) => sum + step.anticipatedProfit, 0);
+
+        return {
+            originalRisk,
+            optimizedRisk,
+            originalPotential,
+            optimizedPotential,
+            riskReduction: 1 - (optimizedRisk / originalRisk),
+            potentialGain: (optimizedPotential / originalPotential) - 1
+        };
+    }
+
+    /*
+
+    const optimized = parser.optimizeStrategy({
+        maxRisk: parser.baseStake * 5,  // 5x base stake
+        targetProfit: parser.baseStake * 2,  // Aim for 2x profit
+        riskMultiplier: 1.2  // 20% more aggressive on recovery
+    });
+
+    console.log("Optimized Steps:");
+    optimized.forEach(step => {
+        console.log(`Step ${step.stepNumber}:`);
+        console.log(`- Amount: ${step.amount}`);
+        console.log(`- Anticipated Profit: ${step.anticipatedProfit}`);
+        console.log(`- Formula: ${step.formula}`);
+    });
+
+    */
+
 }
+
+
+export class StrategyError extends Error {
+    constructor(
+        public readonly code: 'INVALID_STRATEGY' | 'RISK_LIMIT_EXCEEDED' | 'CALCULATION_ERROR',
+        message: string
+    ) {
+        super(message);
+        this.name = 'StrategyError';
+    }
+}
+
+//throw new StrategyError('RISK_LIMIT_EXCEEDED', `Amount ${amount} exceeds max risk exposure`);
