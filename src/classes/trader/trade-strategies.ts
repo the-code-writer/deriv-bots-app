@@ -114,13 +114,13 @@ export abstract class TradeStrategy {
         // Initialize strategy parser
         const strategyJson = require(`./strategies/NDTXStrategy${strategyName}.json`);
 
-        this.strategyParser = new StrategyParser(strategyJson, null, this.baseStake);
+        this.strategyParser = new StrategyParser(strategyJson, 0, this.baseStake);
 
 
         logger.info({
             action: 'initializeVolatilityRiskManager',
             strategyJson: strategyJson,
-            strategyParser: this.strategyParser.(0)
+            strategyParser: this.strategyParser.getFormattedOutput()
         });
 
 
