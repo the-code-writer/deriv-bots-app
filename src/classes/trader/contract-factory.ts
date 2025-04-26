@@ -46,7 +46,7 @@ export class ContractParamsFactory {
         duration: number,
         durationUnit: ContractDurationUnitType,
         market: MarketType,
-        barrier: string | number
+        barrier?: string | number
     ): ContractParams {
 
         const params: ContractParams = {

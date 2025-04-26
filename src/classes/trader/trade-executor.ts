@@ -300,15 +300,4 @@ export class TradeExecutor {
         );
     }
 
-    /**
-     * Sends telemetry data to parent process
-     * @param {string} event - Event type
-     * @param {any} data - Telemetry data
-     * @private
-     */
-    private sendTelemetry(event: string, data: any): void {
-        if (parentPort) {
-            parentPort.postMessage({ type: 'telemetry', event, data });
-        }
-    }
 }

@@ -3,9 +3,9 @@ import { IDerivUserAccount } from './deriv-user-account';
 import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult } from './types';
 import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
+import { StrategyConfig, StrategyStepOutput, StrategyMetrics, StrategyMeta, StrategyVisualization } from './trader-strategy-parser';
 
-// Initialize logger for tracking events and errors
-// Enhanced logger with error tracking
+// Initialize logger
 const logger = pino({
     name: "StrategyVolatilityRiskManager",
     level: process.env.LOG_LEVEL || "info",
@@ -14,551 +14,83 @@ const logger = pino({
     }
 });
 
-// Constants for safety limits
+// Constants
 const MAX_RECOVERY_ATTEMPTS = 5;
-const MAX_STAKE_MULTIPLIER = 20;
-const DEFAULT_TRADE_DELAY_MS = 1000;
 const SAFETY_COOLDOWN_MS = 5000;
+const RAPID_LOSS_THRESHOLD = 3;
+const RAPID_LOSS_TIME_WINDOW = 60000;
 
-const MAX_ABSOLUTE_LOSS = 1000; // Example value
-const RAPID_LOSS_THRESHOLD = 3; // Max losses in short period
-const RAPID_LOSS_TIME_WINDOW = 60000; // 1 minute
-
-
-enum ErrorCode {
-    INVALID_STRATEGY = "STRATEGY_001",
-    BALANCE_TOO_LOW = "ACCOUNT_001",
-    MAX_RISK_EXCEEDED = "RISK_001"
-}
-
-
-/**
- * Interface defining parameters for the next trade
- */
-interface NextTradeParams {
-    basis: BasisType;                // Trade basis type
-    symbol: string;                  // Market symbol
-    amount: number;                  // Stake amount
-    barrier: string | number;          // Barrier price (if applicable)
-    currency: string;                // Currency
-    contractType: ContractType;      // Contract type
-    contractDurationValue: number;   // Contract duration value
-    contractDurationUnits: string;   // Contract duration units
-    previousResultStatus: boolean;   // Result of previous trade
-    consecutiveLosses: number;       // Count of consecutive losses
-    totalAmountToRecover: number;    // Total amount needing recovery
-    winningTrades: number;           // Count of winning trades
-    losingTrades: number;            // Count of losing trades
-}
-
-/**
- * Performance metrics tracking system for recovery strategies
- */
-interface IPerformanceMetrics {
-    /**
-     * Overall recovery success rate (0-1)
-     * @description Tracks the percentage of successful recovery attempts
-     */
-    recoverySuccessRate: number;
-
-    /**
-     * Average time taken for successful recoveries (in milliseconds)
-     * @description Calculated as exponential moving average for responsiveness
-     */
-    avgRecoveryTime: number;
-
-    /**
-     * Effectiveness score per strategy (0-100)
-     * @description Composite score based on win rate, profitability, and speed
-     */
-    strategyEffectiveness: Map<string, number>;
-
-    /**
-     * Historical trade outcomes
-     * @description Stores complete history of trade attempts and outcomes
-     */
-    tradeHistory: Array<{
-        timestamp: number;
-        strategy: string;
-        stake: number;
-        outcome: 'win' | 'loss';
-        recoveryAmount: number;
-        duration: number;
-        marketConditions?: string;
-    }>;
-
-    /**
-     * Current streak counters
-     * @description Tracks consecutive wins/losses for trend analysis
-     */
-    streaks: {
-        currentWin: number;
-        currentLoss: number;
-        maxWin: number;
-        maxLoss: number;
-    };
-
-    /**
-     * Time-based metrics
-     * @description Tracks performance by time periods
-     */
-    timeMetrics: {
-        hourly: {
-            wins: number;
-            losses: number;
-            profit: number;
-        };
-        daily: {
-            wins: number;
-            losses: number;
-            profit: number;
-        };
-    };
-
-    calculated: {
-        hourlyWinRate?: number;
-        dailyWinRate?: number;
-        strategyRisk?: Map<string, { wins: number; losses: number; avgProfit: number }>;
-        filteredWinRate?: number;
-        filteredCount?: number;
-    };
-}
-
-
-/**
-* Circuit breaker configuration interface
-*/
-interface ICircuitBreakerConfig {
-    /**
-     * Maximum absolute loss before triggering circuit breaker
-     * @description Absolute loss limit across all trades
-     */
+interface CircuitBreakerConfig {
     maxAbsoluteLoss: number;
-
-    /**
-     * Maximum daily loss before triggering circuit breaker
-     * @description Resets at midnight local time
-     */
     maxDailyLoss: number;
-
-    /**
-     * Maximum consecutive losses before triggering
-     * @description Independent of monetary amount
-     */
     maxConsecutiveLosses: number;
-
-    /**
-     * Maximum loss percentage of account balance
-     * @description Percentage of current account balance (0-1)
-     */
     maxBalancePercentageLoss: number;
-
-    /**
-     * Time window for rapid loss detection (ms)
-     * @description Detects abnormal frequency of losses
-     */
     rapidLossTimeWindow: number;
-
-    /**
-     * Number of losses in time window to trigger
-     * @description Combined with rapidLossTimeWindow
-     */
     rapidLossThreshold: number;
-
-    /**
-     * Cooldown period after triggering (ms)
-     * @description How long to remain in safety mode
-     */
     cooldownPeriod: number;
 }
 
-/**
- * Circuit breaker state tracker
- */
-interface ICircuitBreakerState {
-    /**
-     * Timestamp of last triggered breaker
-     */
-    lastTriggered: number | null;
-
-    /**
-     * Reason for last trigger
-     */
-    lastReason: string | null;
-
-    /**
-     * Daily loss accumulator
-     */
-    dailyLoss: number;
-
-    /**
-     * Timestamp of last daily reset
-     */
-    lastDailyReset: number;
-
-    /**
-     * Timestamps of recent losses for rapid detection
-     */
+interface RapidLossState {
     recentLossTimestamps: number[];
-}
-
-/**
- * Rapid loss detection configuration interface
- */
-interface IRapidLossConfig {
-    /**
-     * Time window for rapid loss detection (milliseconds)
-     * @default 300000 (5 minutes)
-     * @description The sliding window period to monitor for abnormal loss frequency
-     */
-    timeWindowMs: number;
-
-    /**
-     * Threshold count of losses within time window to trigger
-     * @default 3
-     * @description Number of losses required within timeWindowMs to consider it rapid
-     */
-    threshold: number;
-
-    /**
-     * Minimum stake multiplier to consider for rapid losses
-     * @default 1.5
-     * @description Only losses above (baseStake * multiplier) are counted as significant
-     */
-    minStakeMultiplier: number;
-
-    /**
-     * Cool-down period after rapid loss detection (milliseconds)
-     * @default 900000 (15 minutes)
-     * @description How long to pause trading after rapid losses detected
-     */
-    coolDownMs: number;
-
-    /**
-     * Enable/disable rapid loss protection
-     * @default true
-     */
-    enabled: boolean;
-}
-
-/**
- * Rapid loss detection state tracker
- */
-interface IRapidLossState {
-    /**
-     * Timestamps of recent qualifying losses
-     * @description Stores timestamps of losses that meet minimum stake criteria
-     */
-    recentLossTimestamps: number[];
-
-    /**
-     * Amounts of recent qualifying losses
-     * @description Parallel array to track loss amounts for analysis
-     */
     recentLossAmounts: number[];
-
-    /**
-     * Time when rapid loss was last detected
-     * @description Used to enforce cool-down period
-     */
-    lastDetectedTime: number | null;
-
-    /**
-     * Count of rapid loss events in current session
-     * @description For monitoring overall system health
-     */
     eventCount: number;
+    lastDetectedTime: number;
 }
 
-/**
- * Account balance validation configuration
- */
-interface IBalanceValidationConfig {
-    /**
-     * Minimum account balance multiplier
-     * @default 3.0
-     * @description Minimum balance must be (currentStake * multiplier)
-     */
-    minBalanceMultiplier: number;
-
-    /**
-     * Absolute minimum account balance
-     * @default 50
-     * @description Minimum account balance in account currency
-     */
-    minAbsoluteBalance: number;
-
-    /**
-     * Risk percentage per trade
-     * @default 0.02 (2%)
-     * @description Max percentage of balance that can be risked per trade
-     */
-    maxRiskPercentage: number;
-
-    /**
-     * Enable balance validation
-     * @default true
-     */
-    enabled: boolean;
-
-    /**
-     * Safety buffer percentage
-     * @default 0.1 (10%)
-     * @description Additional buffer beyond minimum requirements
-     */
-    safetyBuffer: number;
+interface CircuitBreakerState {
+    triggered: boolean;
+    lastTriggered: number;
+    lastReason: string;
+    inSafetyMode: boolean;
+    safetyModeUntil: number;
 }
 
-
-/**
- * Validation result interface
- */
-interface ValidationResult {
-    /**
-     * Overall validation status
-     */
-    isValid: boolean;
-
-    /**
-     * Array of failure reasons if invalid
-     */
-    reasons: string[];
-
-    /**
-     * Detailed validation metrics
-     */
-    metrics: {
-        /**
-         * Current account balance
-         */
-        balance: number;
-
-        /**
-         * Proposed stake amount
-         */
-        proposedStake: number;
-
-        /**
-         * Percentage of balance being risked
-         */
-        riskPercentage: number;
-
-        /**
-         * Calculated minimum required balance
-         */
-        requiredMinimum: number;
-
-        /**
-         * Projected balance after trade
-         */
-        availableAfterTrade: number;
-
-        /**
-         * Indicates if validation was bypassed
-         */
-        bypassed?: boolean;
+interface NextTradeParams {
+    basis: BasisType;
+    symbol: string;
+    amount: number;
+    barrier: string | number;
+    currency: string;
+    contractType: ContractType;
+    contractDurationValue: number;
+    contractDurationUnits: string;
+    previousResultStatus: boolean;
+    consecutiveLosses: number;
+    totalAmountToRecover: number;
+    winningTrades: number;
+    losingTrades: number;
+    metadata?: {
+        safetyMode?: boolean;
+        reason?: string;
+        cooldownRemaining?: number;
     };
 }
 
-/**
- * Profit adjustment configuration interface
- */
-interface IProfitAdjustmentConfig {
-    /**
-     * Base profit percentage for the strategy
-     * @description Used as starting point before adjustments
-     */
-    basePercentage: number;
-
-    /**
-     * Maximum allowed adjustment (0-1)
-     * @default 0.3 (30%)
-     * @description Limits how much the percentage can vary from base
-     */
-    maxAdjustment: number;
-
-    /**
-     * Market volatility sensitivity (0-1)
-     * @default 0.5
-     * @description How strongly volatility affects profit targets
-     */
-    volatilitySensitivity: number;
-
-    /**
-     * Trend impact multiplier
-     * @default { up: 1.1, down: 0.9, neutral: 1.0 }
-     * @description Modifiers for different market trends
-     */
-    trendMultipliers: {
-        up: number;
-        down: number;
-        neutral: number;
-    };
-
-    /**
-     * Strategy performance weights
-     * @description How much different factors influence adjustment
-     */
-    weights: {
-        /**
-         * Historical win rate impact (0-1)
-         * @default 0.4
-         */
-        winRate: number;
-
-        /**
-         * Recent performance impact (0-1)
-         * @default 0.3
-         */
-        recentPerformance: number;
-
-        /**
-         * Market conditions impact (0-1)
-         * @default 0.3
-         */
-        marketConditions: number;
-    };
-
-    /**
-     * Minimum allowed profit percentage
-     * @description Absolute floor for adjusted percentage
-     */
-    minPercentage: number;
-
-    /**
-     * Enable dynamic profit adjustment
-     * @default true
-     */
-    enabled: boolean;
-}
-
-/**
- * Strategy performance data interface
- */
-interface IStrategyPerformance {
-    /**
-     * Historical win rate (0-1)
-     */
-    winRate: number;
-
-    /**
-     * Recent profitability score
-     * @description Normalized measure of recent performance (0-2 where 1 = neutral)
-     */
-    recentProfit: number;
-
-    /**
-     * Total trades using this strategy
-     */
-    totalTrades: number;
-}
-
-
-/**
- * Market conditions interface
- */
-interface MarketConditions {
-    /**
-     * Current volatility index (0-1)
-     */
-    volatility: number;
-
-    /**
-     * Market trend direction
-     */
-    trend: 'up' | 'down' | 'neutral';
-
-    /**
-     * Additional market indicators
-     */
-    indicators?: {
-        rsi?: number;
-        volume?: number;
-        sentiment?: number;
-    };
-}
-
-
-/**
- * Class managing risk for volatility indices trading
- */
 export class VolatilityRiskManager {
-    // Reward structures for different purchase types
-    private static rewardStructures: StrategyRewards;
-
-    // Basic trade parameters
-    private baseStake: number;               // Default stake amount
-    private market: string;                  // Market identifier
-    private currency: string;                // Currency used
-    private contractType: ContractType;      // Default contract type
-    private contractDurationValue: number;   // Contract duration value
-    private contractDurationUnits: string;   // Contract duration units
+    private strategyParser: StrategyParser;
+    private baseStake: number;
+    private market: string;
+    private currency: string;
+    private contractType: ContractType;
+    private contractDurationValue: number;
+    private contractDurationUnits: string;
+    private circuitBreakerConfig: CircuitBreakerConfig;
+    private rapidLossState: RapidLossState;
+    private circuitBreakerState: CircuitBreakerState;
 
     // Trade state tracking
-    private resultIsWin: boolean = false;    // Last trade result
-    private consecutiveLosses: number = 0;   // Current consecutive losses
-    private totalLossAmount: number = 0;     // Total amount to recover
-    private winningTrades: number = 0;       // Count of winning trades
-    private losingTrades: number = 0;        // Count of losing trades
-    private totalTrades: number = 0;         // Total trades executed
-
+    private resultIsWin: boolean = false;
+    private consecutiveLosses: number = 0;
+    private totalLossAmount: number = 0;
+    private winningTrades: number = 0;
+    private losingTrades: number = 0;
+    private totalTrades: number = 0;
     private recoveryAttempts: number = 0;
     private lastTradeTimestamp: number = 0;
     private inSafetyMode: boolean = false;
     private safetyModeUntil: number = 0;
+    private dailyLossAmount: number = 0;
 
-    // Recovery strategy management
-    private currentStrategyIndex: number = 0;        // Index of current strategy
-    private currentRecoveryStepIndex: number = 0;         // Current step in strategy
-    private activeStrategy: any | null;  // Currently active strategy
-
-    private lastLossTimestamps: number[] = [];
-
-    private historicalPerformance: {
-        strategyName: string;
-        winRate: number;
-        avgProfit: number;
-    }[] = [];
-
-
-    private circuitBreakers = {
-        totalLoss: 0,
-        dailyLoss: 0,
-        weeklyLoss: 0
-    };
-
-
-    private metrics: IPerformanceMetrics;
-
-    private maxHistoryItems = 1000;
-
-    private metricsRetentionDays = 7;
-
-    private strategyParser: StrategyParser;
-
-    private strategyCache = new Map<string, any>();
-
-    private strategyPerformanceData: Map<string, IStrategyPerformance> = new Map();
-
-    private computedSteps: StrategyStepOutput[] = [];
-
-    private balanceValidationConfig: IBalanceValidationConfig;
-    private profitAdjustmentConfig: IProfitAdjustmentConfig;
-    private circuitBreakerState: ICircuitBreakerState;
-    private circuitBreakerConfig: ICircuitBreakerConfig;
-    private rapidLossConfig: IRapidLossConfig;
-    private rapidLossState: IRapidLossState;
-
-    /**
-     * Constructor for VolatilityRiskManager
-     * @param baseStake - Default stake amount
-     * @param market - Market identifier
-     * @param currency - Currency used
-     * @param contractType - Default contract type
-     * @param contractDurationValue - Contract duration value
-     * @param contractDurationUnits - Contract duration units
-     * @param recoveryStrategies - Array of recovery strategies
-     */
     constructor(
         baseStake: number,
         market: string,
@@ -567,201 +99,88 @@ export class VolatilityRiskManager {
         contractDurationValue: number,
         contractDurationUnits: string,
         strategyParser: StrategyParser,
-        circuitBreakerConfigOverrides?: Partial<ICircuitBreakerConfig>,
-        rapidLossConfigOverrides?: Partial<IRapidLossConfig>,
-        balanceValidationConfigOverrides?: Partial<IBalanceValidationConfig>,
-        profitAdjustmentConfigOverrides?: Partial<IProfitAdjustmentConfig>
+        circuitBreakerConfig?: CircuitBreakerConfig
     ) {
-
-        if (baseStake <= 0) throw new Error("Base stake must be positive");
-        if (!market) throw new Error("Market must be specified");
-        if (!currency) throw new Error("Currency must be specified");
-        if (!Object.values(ContractTypeEnum).includes(contractType)) {
-            throw new Error("Invalid purchase type");
-        }
-
-        this.strategyParser = strategyParser;
-        this.activeStrategy = this.strategyParser.getStrategyConfig();
-        this.computedSteps = this.strategyParser.getAllSteps();
-
-        // Initialize basic parameters
         this.baseStake = baseStake;
         this.market = market;
         this.currency = currency;
         this.contractType = contractType;
         this.contractDurationValue = contractDurationValue;
         this.contractDurationUnits = contractDurationUnits;
+        this.strategyParser = strategyParser;
 
-        // Set active strategy from the parser
-        this.activeStrategy = this.strategyParser.getStrategyConfig();
-        this.computedSteps = this.strategyParser.getAllSteps();
-
-
-        // Initialize circuit breakers based on strategy
-        this.circuitBreakers = {
-            totalLoss: this.baseStake * (this.activeStrategy.maxRiskExposure || 20),
-            dailyLoss: this.baseStake * 100,
-            weeklyLoss: this.baseStake * 500
+        // Initialize circuit breakers with defaults or provided config
+        this.circuitBreakerConfig = circuitBreakerConfig || {
+            maxAbsoluteLoss: 1000,
+            maxDailyLoss: 500,
+            maxConsecutiveLosses: 5,
+            maxBalancePercentageLoss: 0.2,
+            rapidLossTimeWindow: 300000,
+            rapidLossThreshold: 3,
+            cooldownPeriod: 1800000
         };
 
-        this.metrics = this.initializeMetrics();
-
-
-        // Initialize balance validation config with potential overrides
-        this.balanceValidationConfig = this.initializeBalanceValidationConfig(balanceValidationConfigOverrides);
-
-        // Initialize profit adjustment config with potential overrides
-        this.profitAdjustmentConfig = this.initializeProfitAdjustmentConfig(profitAdjustmentConfigOverrides);
-
-        // Initialize circuit breaker config with potential overrides
-        this.circuitBreakerConfig = this.initializeCircuitBreakerConfig(circuitBreakerConfigOverrides);
-
-        // Initialize rapid loss config with potential overrides
-        this.rapidLossConfig = this.initializeRapidLossConfig(rapidLossConfigOverrides);
-
-        // Initialize state objects
-        this.circuitBreakerState = this.initializeCircuitBreakerState();
-        this.rapidLossState = this.initializeRapidLossState();
-
-    }
-
-    // Helper methods for initialization
-    private initializeCircuitBreakerState(): ICircuitBreakerState {
-        return {
-            lastTriggered: null,
-            lastReason: null,
-            dailyLoss: 0,
-            lastDailyReset: Date.now(),
-            recentLossTimestamps: []
-        };
-    }
-
-    private initializeRapidLossState(): IRapidLossState {
-        return {
+        this.rapidLossState = {
             recentLossTimestamps: [],
             recentLossAmounts: [],
-            lastDetectedTime: null,
-            eventCount: 0
+            eventCount: 0,
+            lastDetectedTime: 0
         };
-    }
 
-    private initializeMetrics(): IPerformanceMetrics {
-        return {
-            recoverySuccessRate: 0,
-            avgRecoveryTime: 0,
-            strategyEffectiveness: new Map<string, number>(),
-            tradeHistory: [],
-            streaks: {
-                currentWin: 0,
-                currentLoss: 0,
-                maxWin: 0,
-                maxLoss: 0
-            },
-            timeMetrics: {
-                hourly: { wins: 0, losses: 0, profit: 0 },
-                daily: { wins: 0, losses: 0, profit: 0 }
-            },
-            calculated: {}
+        this.circuitBreakerState = {
+            triggered: false,
+            lastTriggered: 0,
+            lastReason: '',
+            inSafetyMode: false,
+            safetyModeUntil: 0
         };
+
+        this.validateInitialization();
     }
 
-
-    /**
-     * Gets the current state of the risk manager with additional safety checks
-     * @returns Readonly object containing current trade parameters and state
-     */
-    public getCurrentState(): Readonly<{
-        basis: BasisType;
-        symbol: string;
-        amount: number;
-        barrier: number | null;
-        currency: string;
-        contractType: ContractType;
-        contractDurationValue: number;
-        contractDurationUnits: string;
-        previousResultStatus: boolean;
-        consecutiveLosses: number;
-        totalAmountToRecover: number;
-        winningTrades: number;
-        losingTrades: number;
-        inSafetyMode: boolean;
-        recoveryAttempts: number;
-    }> {
-        return Object.freeze({
-            basis: BasisTypeEnum.Default,
-            symbol: this.market,
-            amount: this.baseStake,
-            barrier: null,
-            currency: this.currency,
-            contractType: this.contractType,
-            contractDurationValue: this.contractDurationValue,
-            contractDurationUnits: this.contractDurationUnits,
-            previousResultStatus: this.resultIsWin,
-            consecutiveLosses: this.consecutiveLosses,
-            totalAmountToRecover: this.totalLossAmount,
-            winningTrades: this.winningTrades,
-            losingTrades: this.losingTrades,
-            inSafetyMode: this.inSafetyMode,
-            recoveryAttempts: this.recoveryAttempts
-        });
+    private validateInitialization(): void {
+        if (this.baseStake <= 0) throw new Error("Base stake must be positive");
+        if (!this.market) throw new Error("Market must be specified");
+        if (!this.currency) throw new Error("Currency must be specified");
+        if (!Object.values(ContractTypeEnum).includes(this.contractType)) {
+            throw new Error("Invalid contract type");
+        }
     }
 
-
-    /**
-   * Processes trade result with enhanced validation and safety checks
-   * @param previousTradeResultData - Validated trade result data
-   * @returns Parameters for next trade or safety exit if conditions are met
-   */
-    public processTradeResult(
-        tradeResultData: IPreviousTradeResult
-    ): Readonly<NextTradeParams> {
-        if (!this.validateTradeResult(tradeResultData)) {
+    public processTradeResult(tradeResult: IPreviousTradeResult): NextTradeParams {
+        if (!this.validateTradeResult(tradeResult)) {
             logger.warn("Invalid trade result received");
             return this.getSafetyExitResult("invalid_trade_data");
         }
 
         this.totalTrades++;
-        this.resultIsWin = tradeResultData.resultIsWin;
+        this.resultIsWin = tradeResult.resultIsWin;
         this.lastTradeTimestamp = Date.now();
 
         try {
-
-            // Check if we should enter safety mode
-            if (this.shouldEnterSafetyMode(tradeResultData)) {
-                return this.enterSafetyMode("excessive_losses");
+            if (this.shouldEnterSafetyMode(tradeResult)) {
+                this.enterSafetyMode("excessive_losses");
             }
 
-            if (this.resultIsWin) {
-                return this.handleWin();
-            } else {
-                return this.handleLoss();
-            }
-
+            return this.resultIsWin ? this.handleWin() : this.handleLoss();
         } catch (error) {
             logger.error(error, "Error processing trade result");
-            return this.enterSafetyMode("processing_error");
+            this.enterSafetyMode("processing_error");
         }
+
+        return this.getNextTradeParams();
+        
     }
 
-    /**
-     * Handles a winning trade scenario
-     * @returns Parameters for the next trade
-     */
     private handleWin(): NextTradeParams {
-        // Reset consecutive losses counter
         this.consecutiveLosses = 0;
-        // Increment winning trades count
         this.winningTrades++;
         this.recoveryAttempts = 0;
 
-        // Check if we were in recovery mode
         if (this.totalLossAmount > 0) {
-            // Calculate how much was recovered in this trade
             const recoveredAmount = this.calculateRecoveredAmount();
-            // Deduct recovered amount from total loss
             this.totalLossAmount = Math.max(0, this.totalLossAmount - recoveredAmount);
 
-            // If fully recovered, reset recovery state
             if (this.totalLossAmount === 0) {
                 logger.info("Full recovery achieved");
                 this.resetRecoveryState();
@@ -769,231 +188,59 @@ export class VolatilityRiskManager {
                 logger.info(`Partial recovery: ${recoveredAmount} recovered, ${this.totalLossAmount} remaining`);
             }
         } else {
-            // Normal win, reset recovery state
             this.resetRecoveryState();
         }
 
-        // Get parameters for next trade
         return this.getNextTradeParams();
-
     }
 
-    /**
-     * Handles a losing trade scenario
-     * @returns Parameters for the next trade
-     */
     private handleLoss(): NextTradeParams {
-        // Increment consecutive losses counter
         this.consecutiveLosses++;
-        // Increment losing trades count
         this.losingTrades++;
         this.recoveryAttempts++;
 
-        // Calculate total loss including this trade
         const lossAmount = this.calculateLossAmount();
-        // Add to total loss amount
         this.totalLossAmount += lossAmount;
 
         logger.warn(`Loss recorded. Total loss: ${this.totalLossAmount}, Consecutive: ${this.consecutiveLosses}`);
 
-        // Ensure we have fresh steps
-        this.refreshComputedSteps();
-
-        // Check for strategy switch or safety mode
-        if (this.activeStrategy) {
-            if (this.consecutiveLosses >= this.activeStrategy.maxConsecutiveLosses) {
-                if (this.currentStrategyIndex < this.recoveryStrategies.length - 1) {
-                    logger.info("Switching to next recovery strategy");
-                    this.nextany();
-                } else if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-                    return this.enterSafetyMode("max_recovery_attempts");
-                }
-            }
-
-            // Check if we're exceeding account balance safety limits
-            const nextStake = this.calculateNextStake();
-            if (nextStake > this.baseStake * MAX_STAKE_MULTIPLIER) {
-                return this.enterSafetyMode("stake_limit_exceeded");
-            }
+        if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+            this.enterSafetyMode("max_recovery_attempts");
         }
 
         return this.getNextTradeParams();
     }
 
-    /**
-     * Calculates the amount recovered in a winning trade
-     * @returns The recovered amount including original loss and profits
-     */
-    private calculateRecoveredAmount(): number {
-        // If no active strategy, return 0
-        if (!this.activeStrategy) return 0;
-
-        // Get current step in recovery strategy
-        const currentStep = this.activeStrategy.strategySteps[this.currentRecoveryStepIndex];
-        // Get stake amount for this step
-        const stake = currentStep.amount;
-
-        // Get profit percentage from strategy
-        const profitPercentage = this.activeStrategy.profitPercentage;
-        // Calculate total recovered amount (stake + profit)
-        const recoveryAmount = stake * (1 + profitPercentage / 100);
-
-        return recoveryAmount;
-    }
-
-    /**
-     * Calculates the total loss amount including anticipated profits
-     * @returns The total loss amount
-     */
-    private calculateLossAmount(): number {
-        // If no active strategy, return base stake as loss
-        if (!this.activeStrategy) return this.baseStake;
-
-        // Get current step in recovery strategy
-        const currentStep = this.activeStrategy.strategySteps[this.currentRecoveryStepIndex];
-        // Get stake amount for this step
-        const stake = currentStep.amount;
-
-        // Calculate anticipated profit that would have been earned
-        const anticipatedProfit = stake * (this.activeStrategy.anticipatedProfitPercentage / 100);
-
-        // Return total loss (stake + anticipated profit)
-        return stake + anticipatedProfit;
-    }
-
-    public getStepAmount(step: any): number {
-        return step.amount;
-    }
-
-    /**
-     * Gets parameters for the next trade
-     * @returns Parameters for the next trade
-     */
     public getNextTradeParams(): NextTradeParams {
-        // If no active strategy or no losses, return base trade parameters
-        if (!this.activeStrategy || (this.totalLossAmount <= 0 && this.consecutiveLosses <= 0)) {
+        try {
+            const strategyConfig = this.strategyParser.getStrategyConfig();
+            const steps = this.strategyParser.getAllSteps();
+
+            // Get the appropriate step based on consecutive losses
+            const stepIndex = Math.min(this.consecutiveLosses, steps.length - 1);
+            const step = steps[stepIndex];
+
+            return {
+                basis: step.basis || strategyConfig.basis,
+                symbol: step.symbol || this.market,
+                amount: step.amount,
+                barrier: step.barrier || this.getBarrier(step.contract_type),
+                currency: step.currency || strategyConfig.currency,
+                contractType: step.contract_type || this.contractType,
+                contractDurationValue: step.duration || this.contractDurationValue,
+                contractDurationUnits: step.duration_unit || this.contractDurationUnits,
+                previousResultStatus: this.resultIsWin,
+                consecutiveLosses: this.consecutiveLosses,
+                totalAmountToRecover: this.totalLossAmount,
+                winningTrades: this.winningTrades,
+                losingTrades: this.losingTrades
+            };
+        } catch (error) {
+            logger.error("Error getting next trade params, using fallback", error);
             return this.getBaseTradeParams();
         }
-
-        // Ensure we have computed steps
-        if (!this.computedSteps || this.computedSteps.length === 0) {
-            this.computedSteps = this.strategyParser.getAllSteps();
-        }
-
-        // Safely get the next step
-        const stepIndex = Math.min(this.consecutiveLosses, this.computedSteps.length - 1);
-        const step = this.computedSteps[stepIndex];
-
-        return {
-            basis: step.basis || BasisTypeEnum.Default,
-            symbol: step.symbol || this.market,
-            amount: step.amount,
-            barrier: step.barrier || this.getBarrier(step.contract_type || this.contractType),
-            currency: step.currency || this.currency,
-            contractType: step.contract_type || this.contractType,
-            contractDurationValue: step.duration || this.contractDurationValue,
-            contractDurationUnits: step.duration_unit || this.contractDurationUnits,
-            previousResultStatus: this.resultIsWin,
-            consecutiveLosses: this.consecutiveLosses,
-            totalAmountToRecover: this.totalLossAmount,
-            winningTrades: this.winningTrades,
-            losingTrades: this.losingTrades
-        };
-
     }
 
-    private refreshComputedSteps(): void {
-        if (this.strategyParser) {
-            this.computedSteps = this.strategyParser.getAllSteps();
-        }
-    }
-
-    getBarrier(contractType: ContractType): number | string {
-
-        switch (contractType) {
-
-            case ContractTypeEnum.Call:
-            case ContractTypeEnum.Put:
-                return "";
-
-            case ContractTypeEnum.DigitEven:
-                return "DIGITEVEN";
-
-            case ContractTypeEnum.DigitOdd:
-                return "DIGITODD";
-
-            case ContractTypeEnum.DigitDiff:
-                return getRandomDigit();
-
-            case ContractTypeEnum.DigitOver:
-                return 1;
-
-            case ContractTypeEnum.DigitOver0:
-                return 0;
-
-            case ContractTypeEnum.DigitOver1:
-                return 1;
-
-            case ContractTypeEnum.DigitOver2:
-                return 2;
-
-            case ContractTypeEnum.DigitOver3:
-                return 3;
-
-            case ContractTypeEnum.DigitOver4:
-                return 4;
-
-            case ContractTypeEnum.DigitOver5:
-                return 5;
-
-            case ContractTypeEnum.DigitOver6:
-                return 6;
-
-            case ContractTypeEnum.DigitOver7:
-                return 7;
-
-            case ContractTypeEnum.DigitOver8:
-                return 8;
-
-            case ContractTypeEnum.DigitUnder1:
-                return 1;
-
-            case ContractTypeEnum.DigitUnder2:
-                return 2;
-
-            case ContractTypeEnum.DigitUnder3:
-                return 3;
-
-            case ContractTypeEnum.DigitUnder4:
-                return 4;
-
-            case ContractTypeEnum.DigitUnder5:
-                return 5;
-
-            case ContractTypeEnum.DigitUnder6:
-                return 6;
-
-            case ContractTypeEnum.DigitUnder7:
-                return 7;
-
-            case ContractTypeEnum.DigitUnder8:
-                return 8;
-
-            case ContractTypeEnum.DigitUnder9:
-                return 9;
-
-            // ... other derivative contract types
-
-            default:
-                throw new Error(`Unsupported purchase type for derivatives: ${contractType}`);
-        }
-
-    }
-
-    /**
-     * Gets base trade parameters (non-recovery mode)
-     * @returns Base trade parameters
-     */
     private getBaseTradeParams(): NextTradeParams {
         return {
             basis: BasisTypeEnum.Default,
@@ -1012,1628 +259,83 @@ export class VolatilityRiskManager {
         };
     }
 
-    /**
-   * Enters safety mode with cooldown period
-   */
-    public enterSafetyMode(reason: string): Readonly<NextTradeParams> {
-        this.inSafetyMode = true;
-        this.safetyModeUntil = Date.now() + SAFETY_COOLDOWN_MS;
-        logger.warn(`Entering safety mode due to: ${reason}`);
-        return this.getSafetyExitResult(reason);
+    private getBarrier(contractType: ContractType): string | number {
+        switch (contractType) {
+            case ContractTypeEnum.DigitEven: return "DIGITEVEN";
+            case ContractTypeEnum.DigitOdd: return "DIGITODD";
+            case ContractTypeEnum.DigitDiff: return getRandomDigit();
+            case ContractTypeEnum.DigitUnder: return 5;
+            case ContractTypeEnum.DigitOver: return 5;
+            // Add other contract types as needed
+            default: return getRandomDigit();
+        }
     }
 
-    /**
-     * Gets safety exit parameters when an error occurs
-     * Enhanced safety exit with cooldown tracking
-     * @returns Safe trade parameters minimizing risk
-     */
-    private getSafetyExitResult(reason?: string): Readonly<NextTradeParams> {
+    private calculateRecoveredAmount(): number {
+        const strategyConfig = this.strategyParser.getStrategyConfig();
+        const currentStep = this.getCurrentStep();
+
+        const stake = currentStep.amount;
+        const profitPercentage = this.strategyParser.getStrategyMetrics().averageRewardToRiskRatio * 100;
+        return stake * (1 + profitPercentage / 100);
+    }
+
+    private calculateLossAmount(): number {
+        const currentStep = this.getCurrentStep();
+        const stake = currentStep.amount;
+        const profitPercentage = this.strategyParser.getStrategyMetrics().averageRewardToRiskRatio * 100;
+        return stake * (1 + profitPercentage / 100);
+    }
+
+    private getCurrentStep(): StrategyStepOutput {
+        const steps = this.strategyParser.getAllSteps();
+        const stepIndex = Math.min(this.consecutiveLosses, steps.length - 1);
+        return steps[stepIndex];
+    }
+
+    private shouldEnterSafetyMode(tradeResult: IPreviousTradeResult): boolean {
+        if (this.inSafetyMode && this.safetyModeUntil > Date.now()) {
+            return true;
+        }
+
+        const strategyConfig = this.strategyParser.getStrategyConfig();
+
+        if (this.consecutiveLosses >= strategyConfig.maxConsecutiveLosses * 2) {
+            return true;
+        }
+
+        if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+            return true;
+        }
+
+        if (tradeResult.userAccount.balance < this.baseStake * 3) {
+            return true;
+        }
+
+        if (this.totalLossAmount > this.baseStake * strategyConfig.maxRiskExposure) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private getSafetyExitResult(reason: string): NextTradeParams {
         const cooldownRemaining = this.safetyModeUntil > Date.now()
             ? this.safetyModeUntil - Date.now()
             : 0;
 
-        return Object.freeze({
+        return {
             ...this.getBaseTradeParams(),
             amount: this.baseStake,
             barrier: 5,
-            recoveryAttempt: this.recoveryAttempts,
             metadata: {
                 safetyMode: true,
                 reason,
                 cooldownRemaining
             }
-        });
-    }
-
-    /**
-   * Checks if safety mode should be entered based on multiple factors
-   */
-    private shouldEnterSafetyMode(tradeData: IPreviousTradeResult): boolean {
-        // Check if we're already in safety mode
-        if (this.inSafetyMode && this.safetyModeUntil > Date.now()) {
-            return true;
-        }
-
-        // Check consecutive losses
-        if (this.consecutiveLosses >= (this.activeStrategy?.maxConsecutiveLosses || 5) * 2) {
-            return true;
-        }
-
-        // Check recovery attempts
-        if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-            return true;
-        }
-
-        // Check account balance
-        if (tradeData.userAccount.balance < this.baseStake * 3) {
-            return true;
-        }
-
-        // Check if total losses exceed safe threshold
-        if (this.totalLossAmount > this.baseStake * 10) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /***
-     * 
-     * 
-     * USAGE EXAMPLE
-     * 
-     * 
-     * Initialize with multiple strategies
-        const riskManager = new VolatilityRiskManager(
-            10, // baseStake
-            "1HZ100V", // market
-            "USD", // currency
-            ContractType.DIGITODD, // contractType
-            5, // contractDurationValue
-            "t", // contractDurationUnits
-            [
-                {
-                    strategyName: "AggressiveRecovery",
-                    strategySteps: [
-                        { amount: 20, contractType: ContractType.DIGITODD, contractDurationValue: 5 },
-                        { amount: 40, contractType: ContractType.DIGITODD, contractDurationValue: 5 }
-                    ],
-                    profitPercentage: 90,
-                    lossRecoveryPercentage: 110,
-                    maxConsecutiveLosses: 4,
-                    maxRiskExposure: 10
-                },
-                {
-                    strategyName: "SafeRecovery",
-                    strategySteps: [
-                        { amount: 15, contractType: ContractType.DIGITODD, contractDurationValue: 5 }
-                    ],
-                    profitPercentage: 60,
-                    lossRecoveryPercentage: 80,
-                    maxConsecutiveLosses: 2,
-                    maxRiskExposure: 5
-                }
-            ]
-        );
-
-        // 1. Basic successful lookup
-        const aggressive = riskManager.getany("AggressiveRecovery");
-        console.log(aggressive?.strategyName); // "AggressiveRecovery"
-
-        // 2. Failed lookup with fallback
-        const safe = riskManager.getany("Nonexistent", {
-            fallbackStrategy: "SafeRecovery"
-        });
-        console.log(safe?.strategyName); // "SafeRecovery"
-
-        // 3. Failed lookup with error
-        try {
-            riskManager.getany("Nonexistent", {
-                throwOnNotFound: true
-            });
-        } catch (e) {
-            console.error(e.message); // "Recovery strategy "Nonexistent" not found..."
-        }
-
-        // 4. Invalid strategy detection
-        const invalidStrategy = {
-            strategyName: "Invalid",
-            strategySteps: [
-                { amount: -10, contractType: "INVALID", contractDurationValue: 0 }
-            ],
-            // Missing required parameters
-        };
-        riskManager.recoveryStrategies.push(invalidStrategy);
-
-        const result = riskManager.getany("Invalid", {
-            validate: true,
-            throwOnNotFound: false
-        });
-        console.log(result); // undefined (due to validation failure)
-
-        // 5. Get all strategy names
-        console.log(riskManager.getStrategyNames()); 
-        // ["AggressiveRecovery", "SafeRecovery", "Invalid"]
-     * 
-     */
-
-    /**
-     * Calculates delay before next trade based on current strategy
-     * @returns Delay in milliseconds
-     */
-    public calculateNextTradeDelay(): number {
-        // If no active strategy, return 0 delay
-        if (!this.activeStrategy) return 0;
-
-        // Get delay from current step (default to 0 if not specified)
-        const step = this.activeStrategy.strategySteps[this.currentRecoveryStepIndex];
-        return step.delay || 0;
-    }
-
-    /**
-     * Calculates the required stake for recovery
-     * @returns The calculated stake amount
-     */
-    public calculateRequiredStake(): number {
-        // If no active strategy or no losses, return base stake
-        if (!this.activeStrategy || this.totalLossAmount <= 0) {
-            return this.baseStake;
-        }
-
-        // Get recovery parameters from strategy
-        const recoveryPercentage = this.activeStrategy.lossRecoveryPercentage;
-        const profitPercentage = this.activeStrategy.profitPercentage;
-
-        // Calculate total amount needed to recover (losses + recovery percentage + profit)
-        const totalToRecover = this.totalLossAmount * (1 + recoveryPercentage / 100);
-        // Calculate required stake to achieve this recovery
-        const requiredStake = totalToRecover / (1 + profitPercentage / 100);
-
-        // Return stake adjusted for risk limits
-        return this.calculateRiskAdjustedStake(requiredStake);
-    }
-
-
-
-    /**
- * Validates account balance against proposed trade
- * @param {number} proposedStake - Amount to be staked
- * @param {IUserAccount} account - User account information
- * @returns {ValidationResult} Validation result object
- * 
- * @description
- * Performs multiple layers of balance validation:
- * 1. Absolute minimum balance check
- * 2. Stake-to-balance ratio validation
- * 3. Risk percentage validation
- * 4. Safety buffer verification
- * 
- * Returns detailed result object with:
- * - Validation status
- * - Failure reasons (if any)
- * - Metrics about the validation
- */
-    public validateAccountBalance(
-        proposedStake: number,
-        account: IDerivUserAccount
-    ): ValidationResult {
-        // Initialize default result object
-        const result: ValidationResult = {
-            isValid: true,
-            reasons: [],
-            metrics: {
-                balance: account.balance,
-                proposedStake,
-                riskPercentage: proposedStake / account.balance,
-                requiredMinimum: 0,
-                availableAfterTrade: 0
-            }
-        };
-
-        // Early exit if validation disabled
-        if (!this.balanceValidationConfig.enabled) {
-            result.metrics.bypassed = true;
-            return result;
-        }
-
-        // Calculate all minimum requirements
-        const stakeBasedMin = proposedStake * this.balanceValidationConfig.minBalanceMultiplier;
-        const absoluteMin = this.balanceValidationConfig.minAbsoluteBalance;
-        const riskBasedMax = account.balance * this.balanceValidationConfig.maxRiskPercentage;
-        const withSafetyBuffer = 1 + this.balanceValidationConfig.safetyBuffer;
-
-        // Determine the most restrictive minimum requirement
-        const requiredMinimum = Math.max(
-            stakeBasedMin,
-            absoluteMin
-        ) * withSafetyBuffer;
-
-        // Calculate available balance after trade
-        const availableAfterTrade = account.balance - proposedStake;
-
-        // Update metrics
-        result.metrics.requiredMinimum = requiredMinimum;
-        result.metrics.availableAfterTrade = availableAfterTrade;
-
-        // Perform validations
-        if (account.balance < absoluteMin) {
-            result.isValid = false;
-            result.reasons.push(`Balance ${account.balance} below absolute minimum ${absoluteMin}`);
-        }
-
-        if (availableAfterTrade < requiredMinimum) {
-            result.isValid = false;
-            result.reasons.push(
-                `Post-trade balance ${availableAfterTrade} would be below required minimum ${requiredMinimum} ` +
-                `(stake ${proposedStake} * ${this.balanceValidationConfig.minBalanceMultiplier} multiplier)`
-            );
-        }
-
-        if (proposedStake > riskBasedMax) {
-            result.isValid = false;
-            result.reasons.push(
-                `Stake ${proposedStake} exceeds ${this.balanceValidationConfig.maxRiskPercentage * 100}% ` +
-                `of account balance (max ${riskBasedMax})`
-            );
-        }
-
-        // Additional check for negative balance (should never happen)
-        if (availableAfterTrade < 0) {
-            result.isValid = false;
-            result.reasons.push(`Trade would result in negative balance`);
-        }
-
-        return result;
-    }
-
-
-    /**
-     * Initializes balance validation configuration
-     * @param {Partial<IBalanceValidationConfig>} [overrides] 
-     * @returns {IBalanceValidationConfig}
-     */
-    private initializeBalanceValidationConfig(
-        overrides?: Partial<IBalanceValidationConfig>
-    ): IBalanceValidationConfig {
-        const defaults: IBalanceValidationConfig = {
-            minBalanceMultiplier: 3.0,
-            minAbsoluteBalance: 50,
-            maxRiskPercentage: 0.02, // 2%
-            enabled: true,
-            safetyBuffer: 0.1 // 10%
-        };
-
-        return { ...defaults, ...overrides };
-    }
-
-    /**
-     * Performs pre-trade balance validation
-     * @param {number} stake 
-     * @param {IUserAccount} account 
-     * @returns {boolean}
-     * 
-     * @description
-     * Simplified version that throws errors on failure
-     * Wraps the detailed validateAccountBalance method
-     */
-    private ensureValidBalance(stake: number, account: IDerivUserAccount): boolean {
-        const validation = this.validateAccountBalance(stake, account);
-
-        if (!validation.isValid) {
-            throw new Error(
-                `Balance validation failed: ${validation.reasons.join('; ')}\n` +
-                `Details: ${JSON.stringify(validation.metrics)}`
-            );
-        }
-
-        return true;
-    }
-
-    /***
-     * 
-     * 
-     * USAGE EXAMPLE
-     * 
-     * 
-     * Initialize with custom balance validation settings
-        const riskManager = new VolatilityRiskManager(
-            10, // baseStake
-            "1HZ100V", // market
-            "USD", // currency
-            ContractType.DIGITODD, // contractType
-            5, // contractDurationValue
-            "t", // contractDurationUnits
-            [], // strategies
-            {}, // circuit breaker config
-            {}, // rapid loss config
-            {
-                minBalanceMultiplier: 2.5,
-                minAbsoluteBalance: 100,
-                maxRiskPercentage: 0.05 // 5%
-            }
-        );
-        
-        // Test cases
-        const testAccount = { balance: 1000, currency: "USD" };
-        
-        // 1. Valid trade
-        const validation1 = riskManager.validateAccountBalance(20, testAccount);
-        console.log(validation1.isValid); // true
-        console.log(validation1.metrics.riskPercentage); // 0.02 (2%)
-        
-        // 2. Stake too large relative to balance
-        const validation2 = riskManager.validateAccountBalance(60, testAccount);
-        console.log(validation2.isValid); // false
-        console.log(validation2.reasons);
-        // ["Stake 60 exceeds 5% of account balance (max 50)"]
-        
-        // 3. Would leave insufficient remaining balance
-        const validation3 = riskManager.validateAccountBalance(800, testAccount);
-        console.log(validation3.isValid); // false
-        console.log(validation3.reasons);
-        // [
-        //   "Post-trade balance 200 would be below required minimum 2000",
-        //   "Stake 800 exceeds 5% of account balance (max 50)"
-        // ]
-        
-        // 4. Absolute minimum check
-        const smallAccount = { balance: 30, currency: "USD" };
-        const validation4 = riskManager.validateAccountBalance(10, smallAccount);
-        console.log(validation4.isValid); // false
-        console.log(validation4.reasons);
-        // ["Balance 30 below absolute minimum 100"]
-        
-        // 5. Simplified version (throws on failure)
-        try {
-            riskManager.ensureValidBalance(900, testAccount);
-            console.log("Trade allowed");
-        } catch (e) {
-            console.error(e.message);
-            // "Balance validation failed: Post-trade balance 100 would be below required minimum 2250..."
-        }
-     * 
-     */
-
-    /**
- * Adjusts profit percentage based on multiple factors
- * @param {string} strategyName - Name of the strategy being adjusted
- * @param {MarketConditions} marketConditions - Current market state
- * @param {number} [currentStake] - Optional current stake amount
- * @returns {number} Adjusted profit percentage
- * 
- * @description
- * Dynamically adjusts profit targets based on:
- * 1. Strategy historical performance
- * 2. Current market conditions
- * 3. Recent trade outcomes
- * 4. Current stake size
- * 
- * Uses weighted averaging of multiple factors to determine
- * optimal profit percentage while respecting configured limits
- */
-    public adjustProfitPercentage(
-        strategyName: string,
-        marketConditions: MarketConditions,
-        currentStake?: number
-    ): number {
-        // Early exit if adjustment disabled
-        if (!this.profitAdjustmentConfig.enabled) {
-            return this.profitAdjustmentConfig.basePercentage;
-        }
-
-        // Get strategy performance data
-        const strategyData = this.getStrategyPerformance(strategyName);
-        const basePercentage = this.profitAdjustmentConfig.basePercentage;
-
-        // Calculate adjustment factors (0-1 scale)
-        const factors = {
-            // Historical win rate factor (higher win rate -> higher percentage)
-            winRate: this.calculateWinRateFactor(strategyData.winRate),
-
-            // Recent performance factor (better performance -> higher percentage)
-            recentPerformance: this.calculateRecentPerformanceFactor(strategyData.recentProfit),
-
-            // Market volatility factor (higher volatility -> lower percentage)
-            volatility: this.calculateVolatilityFactor(marketConditions.volatility),
-
-            // Market trend factor
-            trend: this.calculateTrendFactor(marketConditions.trend),
-
-            // Stake size factor (larger stakes -> slightly lower percentage)
-            stakeSize: currentStake ? this.calculateStakeSizeFactor(currentStake) : 1
-        };
-
-        // Calculate weighted adjustment
-        const weights = this.profitAdjustmentConfig.weights;
-        const weightedAdjustment =
-            (factors.winRate * weights.winRate) +
-            (factors.recentPerformance * weights.recentPerformance) +
-            (factors.volatility * factors.trend * weights.marketConditions);
-
-        // Apply base adjustment with limits
-        let adjustedPercentage = basePercentage * weightedAdjustment;
-
-        // Apply stake size modifier
-        adjustedPercentage *= factors.stakeSize;
-
-        // Enforce absolute limits
-        const maxAdjustment = this.profitAdjustmentConfig.maxAdjustment;
-        adjustedPercentage = Math.max(
-            this.profitAdjustmentConfig.minPercentage,
-            Math.min(
-                basePercentage * (1 + maxAdjustment),
-                adjustedPercentage
-            )
-        );
-
-        // Log adjustment details for auditing
-        this.logAdjustment({
-            strategyName,
-            basePercentage,
-            adjustedPercentage,
-            factors,
-            marketConditions,
-            currentStake
-        });
-
-        return adjustedPercentage;
-    }
-
-    /**
-     * Calculates win rate adjustment factor
-     * @private
-     * @param {number} winRate - Strategy win rate (0-1)
-     * @returns {number} Adjustment factor (0.8-1.2)
-     */
-    private calculateWinRateFactor(winRate: number): number {
-        // Normalize to 0.8-1.2 range where 1.0 = 50% win rate
-        return 0.8 + (winRate * 0.4);
-    }
-
-    /**
-     * Calculates recent performance factor
-     * @private
-     * @param {number} recentProfit - Recent profitability score
-     * @returns {number} Adjustment factor (0.9-1.1)
-     */
-    private calculateRecentPerformanceFactor(recentProfit: number): number {
-        // Recent profit is normalized to 0-2 where 1 = neutral
-        return Math.max(0.9, Math.min(1.1, recentProfit));
-    }
-
-    /**
-     * Calculates volatility adjustment factor
-     * @private
-     * @param {number} volatility - Current volatility (0-1)
-     * @returns {number} Adjustment factor (0.7-1.0)
-     */
-    private calculateVolatilityFactor(volatility: number): number {
-        const sensitivity = this.profitAdjustmentConfig.volatilitySensitivity;
-        // Higher volatility reduces profit targets
-        return 1 - (volatility * sensitivity * 0.3);
-    }
-
-    /**
-     * Calculates market trend factor
-     * @private
-     * @param {'up' | 'down' | 'neutral'} trend - Market trend
-     * @returns {number} Adjustment factor
-     */
-    private calculateTrendFactor(trend: 'up' | 'down' | 'neutral'): number {
-        return this.profitAdjustmentConfig.trendMultipliers[trend];
-    }
-
-    /**
-     * Calculates stake size adjustment factor
-     * @private
-     * @param {number} stake - Current stake amount
-     * @returns {number} Adjustment factor (0.95-1.0)
-     */
-    private calculateStakeSizeFactor(stake: number): number {
-        // Larger stakes get slightly reduced profit targets
-        const base = this.baseStake;
-        if (stake <= base) return 1.0;
-        if (stake >= base * 5) return 0.95;
-        return 1 - ((stake - base) / (base * 5) * 0.05);
-    }
-
-    /**
-     * Logs adjustment details for auditing
-     * @private
-     * @param {object} details - Adjustment details
-     * @returns {void}
-     */
-    private logAdjustment(details: {
-        strategyName: string;
-        basePercentage: number;
-        adjustedPercentage: number;
-        factors: Record<string, number>;
-        marketConditions: MarketConditions;
-        currentStake?: number;
-    }): void {
-        logger.debug({
-            event: 'PROFIT_PERCENTAGE_ADJUSTED',
-            strategy: details.strategyName,
-            base: details.basePercentage,
-            adjusted: details.adjustedPercentage,
-            change: ((details.adjustedPercentage / details.basePercentage) - 1) * 100,
-            factors: details.factors,
-            marketConditions: details.marketConditions,
-            stake: details.currentStake,
-            timestamp: Date.now()
-        });
-    }
-
-    /**
-     * Initializes profit adjustment configuration
-     * @param {Partial<IProfitAdjustmentConfig>} [overrides]
-     * @returns {IProfitAdjustmentConfig}
-     */
-    private initializeProfitAdjustmentConfig(
-        overrides?: Partial<IProfitAdjustmentConfig>
-    ): IProfitAdjustmentConfig {
-        const defaults: IProfitAdjustmentConfig = {
-            basePercentage: 80,
-            maxAdjustment: 0.3,
-            volatilitySensitivity: 0.5,
-            trendMultipliers: {
-                up: 1.1,
-                down: 0.9,
-                neutral: 1.0
-            },
-            weights: {
-                winRate: 0.4,
-                recentPerformance: 0.3,
-                marketConditions: 0.3
-            },
-            minPercentage: 50,
-            enabled: true
-        };
-
-        return { ...defaults, ...overrides };
-    }
-
-    /***
-     * 
-     * 
-     * USAGE EXAMPLE
-     * 
-     * 
-     * Initialize with custom profit adjustment settings
-        const riskManager = new VolatilityRiskManager(
-            10, // baseStake
-            "1HZ100V", // market
-            "USD", // currency
-            ContractType.DIGITODD, // contractType
-            5, // contractDurationValue
-            "t", // contractDurationUnits
-            [], // strategies
-            {}, // circuit breaker config
-            {}, // rapid loss config
-            {}, // balance validation config
-            {
-                basePercentage: 75,
-                volatilitySensitivity: 0.7,
-                trendMultipliers: {
-                    up: 1.15,
-                    down: 0.85,
-                    neutral: 1.0
-                },
-                minPercentage: 60
-            }
-        );
-    
-        // Mock strategy performance data
-        riskManager.saveStrategyPerformance("RecoveryV1", {
-            winRate: 0.65, // 65% win rate
-            recentProfit: 1.2, // 20% better than neutral
-            totalTrades: 42
-        });
-    
-        // Test case 1: Favorable conditions
-        const marketUp = { volatility: 0.3, trend: 'up' };
-        const adjusted1 = riskManager.adjustProfitPercentage("RecoveryV1", marketUp, 15);
-        console.log(adjusted1); // ~86.5 (base 75 + up trend + good performance)
-    
-        // Test case 2: Volatile down market
-        const marketDown = { volatility: 0.8, trend: 'down' };
-        const adjusted2 = riskManager.adjustProfitPercentage("RecoveryV1", marketDown, 25);
-        console.log(adjusted2); // ~60 (minimum due to bad conditions + large stake)
-    
-        // Test case 3: Disabled adjustment
-        riskManager.profitAdjustmentConfig.enabled = false;
-        const adjusted3 = riskManager.adjustProfitPercentage("RecoveryV1", marketUp, 10);
-        console.log(adjusted3); // 75 (base percentage)
-    
-     */
-
-    private validateStrategy(strategy: any): boolean {
-        if (!strategy.strategySteps.length) return false;
-        if (strategy.maxRiskExposure > MAX_STAKE_MULTIPLIER) return false;
-        return strategy.strategySteps.every((step:any) =>
-            step.amount !== undefined && step.amount > 0
-        );
-    }
-
-    private getFallbackStrategy(): any {
-        return {
-            strategyName: "SAFE_FALLBACK",
-            strategySteps: [
-                {
-                    amount: this.baseStake,
-                    symbol: this.market,
-                    contractType: this.contractType,
-                    contractDurationValue: this.contractDurationValue,
-                    contractDurationUnits: this.contractDurationUnits
-                }
-            ],
-            // Conservative parameters
-            maxSequence: 1,
-            profitPercentage: 50,
-            lossRecoveryPercentage: 50,
-            anticipatedProfitPercentage: 50,
-            maxConsecutiveLosses: 2,
-            maxRiskExposure: 3
         };
     }
 
-    private marketConditions = {
-        volatility: 0, // 0-1 scale
-        trend: 'neutral' // up/down/neutral
-    };
-
-    private adjustForMarketConditions(stake: number): number {
-        if (this.marketConditions.volatility > 0.7) {
-            return stake * 0.8; // Reduce stake in high volatility
-        }
-        if (this.marketConditions.trend === 'up') {
-            return stake * 1.1; // Increase slightly in upward trends
-        }
-        return stake;
-    }
-
-    // Add machine learning integration point
-    private predictWinProbability(strategy: any): number {
-        // Could integrate with ML model
-        const baseProbability = 1 / strategy.strategySteps.length;
-        return this.marketConditions.volatility > 0.7
-            ? baseProbability * 0.8
-            : baseProbability;
-    }
-
-    // Enhanced error handling
-    private handleError(code: ErrorCode, message: string): void {
-        logger.error({ code, message });
-        this.enterSafetyMode(code);
-        // throw new Error(`${code}: ${message}`);
-    }
-
-
-    /**
-     * Checks all circuit breaker conditions
-     * @param {IUserAccount} account - Current user account state
-     * @returns {boolean} True if any circuit breaker should trigger
-     * 
-     * @description
-     * Evaluates multiple risk protection layers:
-     * 1. Absolute loss limits
-     * 2. Time-based loss limits (daily)
-     * 3. Consecutive loss patterns
-     * 4. Account balance protection
-     * 5. Abnormal loss frequency detection
-     * 
-     * Uses conservative defaults that can be overridden in constructor
-     */
-    public checkCircuitBreakers(account: IDerivUserAccount): boolean {
-        // Initialize circuit breaker state if it doesn't exist
-        if (!this.circuitBreakerState) {
-            this.circuitBreakerState = {
-                lastTriggered: null,
-                lastReason: null,
-                dailyLoss: 0,
-                lastDailyReset: Date.now(),
-                recentLossTimestamps: []
-            };
-        }
-
-        // Check if we're still in cooldown from previous trigger
-        if (this.circuitBreakerState.lastTriggered &&
-            Date.now() - this.circuitBreakerState.lastTriggered < this.circuitBreakerConfig.cooldownPeriod) {
-            return true;
-        }
-
-        // Reset daily loss counter if needed
-        this.resetDailyLossCounterIfNewDay();
-
-        // Check absolute loss limit
-        if (this.totalLossAmount >= this.circuitBreakerConfig.maxAbsoluteLoss) {
-            this.triggerCircuitBreaker('absolute_loss_limit');
-            return true;
-        }
-
-        // Check daily loss limit
-        if (this.circuitBreakerState.dailyLoss >= this.circuitBreakerConfig.maxDailyLoss) {
-            this.triggerCircuitBreaker('daily_loss_limit');
-            return true;
-        }
-
-        // Check account balance protection
-        const balancePercentageLoss = this.totalLossAmount / account.balance;
-        if (balancePercentageLoss >= this.circuitBreakerConfig.maxBalancePercentageLoss) {
-            this.triggerCircuitBreaker('balance_protection');
-            return true;
-        }
-
-        // Check consecutive losses
-        if (this.consecutiveLosses >= this.circuitBreakerConfig.maxConsecutiveLosses) {
-            this.triggerCircuitBreaker('consecutive_losses');
-            return true;
-        }
-
-        // Check for rapid losses (abnormal frequency)
-        if (this.checkRapidLosses()) {
-            this.triggerCircuitBreaker('rapid_losses');
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Records a loss for circuit breaker tracking
-     * @param {number} amount - Loss amount to record
-     * @returns {void}
-     * 
-     * @description
-     * Updates all loss tracking systems:
-     * - Total loss amount
-     * - Daily loss accumulator
-     * - Recent loss timestamps for frequency detection
-     */
-    public recordLoss(amount: number): void {
-        if (!this.circuitBreakerState) {
-            this.circuitBreakerState = this.initializeCircuitBreakerState();
-        }
-
-        // Update total loss (maintained by main class)
-        this.totalLossAmount += amount;
-
-        // Update daily loss
-        this.circuitBreakerState.dailyLoss += amount;
-
-        // Record loss timestamp for frequency detection
-        const now = Date.now();
-        this.circuitBreakerState.recentLossTimestamps.push(now);
-
-        // Cleanup old timestamps (older than our detection window)
-        this.circuitBreakerState.recentLossTimestamps =
-            this.circuitBreakerState.recentLossTimestamps.filter(
-                (timestamp: number) => now - timestamp < this.circuitBreakerConfig.rapidLossTimeWindow
-            );
-    }
-
-    /**
- * Checks for rapid consecutive losses within configured time window
- * @param {number} [currentStake] - Optional current stake amount for validation
- * @returns {boolean} True if rapid losses detected and protection should trigger
- * 
- * @description
- * This detection system:
- * 1. Tracks both timing and size of losses
- * 2. Only considers losses above minimum stake threshold
- * 3. Uses sliding window algorithm for efficient tracking
- * 4. Enforces cool-down periods after detection
- * 5. Provides detailed monitoring capabilities
- * 
- * Algorithm:
- * - Maintains rolling window of recent qualifying losses
- * - Triggers when threshold met within time window
- * - Automatically purges outdated entries
- * - Enforces minimum stake requirements
- */
-    public checkRapidLosses(currentStake?: number): boolean {
-        // Early exit if protection disabled
-        if (!this.rapidLossConfig.enabled) return false;
-
-        // Initialize state if not exists
-        if (!this.rapidLossState) {
-            this.rapidLossState = {
-                recentLossTimestamps: [],
-                recentLossAmounts: [],
-                lastDetectedTime: null,
-                eventCount: 0
-            };
-        }
-
-        // Check if in cool-down period
-        if (this.isInRapidLossCoolDown()) {
-            return true;
-        }
-
-        const now = Date.now();
-        const minStake = this.baseStake * this.rapidLossConfig.minStakeMultiplier;
-
-        // Filter only recent losses within time window
-        const recentLosses = this.rapidLossState.recentLossTimestamps
-            .map((ts, i) => ({ timestamp: ts, amount: this.rapidLossState.recentLossAmounts[i] }))
-            .filter(loss => {
-                const isRecent = now - loss.timestamp < this.rapidLossConfig.timeWindowMs;
-                const isSignificant = loss.amount >= minStake;
-                return isRecent && isSignificant;
-            });
-
-        // Update state with filtered losses
-        this.rapidLossState.recentLossTimestamps = recentLosses.map(l => l.timestamp);
-        this.rapidLossState.recentLossAmounts = recentLosses.map(l => l.amount);
-
-        // Check if threshold reached
-        if (recentLosses.length >= this.rapidLossConfig.threshold) {
-            this.handleRapidLossDetection();
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Records a loss for rapid loss detection
-     * @param {number} amount - Loss amount to record
-     * @returns {void}
-     * 
-     * @description
-     * Stores loss information for frequency analysis:
-     * - Timestamps for temporal pattern detection
-     * - Amounts for significance validation
-     * - Automatically purges stale entries
-     */
-    public recordRapidLoss(amount: number): void {
-        if (!this.rapidLossState) {
-            this.rapidLossState = this.initializeRapidLossState();
-        }
-
-        const now = Date.now();
-
-        // Add new loss to tracking
-        this.rapidLossState.recentLossTimestamps.push(now);
-        this.rapidLossState.recentLossAmounts.push(amount);
-
-        // Cleanup old entries beyond time window
-        this.cleanupOldLosses();
-    }
-
-    /**
-     * Checks if rapid loss cool-down period is active
-     * @private
-     * @returns {boolean} True if in cool-down period
-     */
-    private isInRapidLossCoolDown(): boolean {
-        return this.rapidLossState.lastDetectedTime !== null &&
-            Date.now() - this.rapidLossState.lastDetectedTime < this.rapidLossConfig.coolDownMs;
-    }
-
-    /**
-     * Handles rapid loss detection event
-     * @private
-     * @returns {void}
-     * 
-     * @description
-     * Actions taken on detection:
-     * 1. Records detection time
-     * 2. Increments event counter
-     * 3. Logs detailed event information
-     * 4. Triggers safety protocols
-     */
-    private handleRapidLossDetection(): void {
-        const now = Date.now();
-
-        this.rapidLossState = {
-            ...this.rapidLossState,
-            lastDetectedTime: now,
-            eventCount: this.rapidLossState.eventCount + 1
-        };
-
-        // Calculate statistics about the rapid losses
-        const losses = this.rapidLossState.recentLossAmounts;
-        const totalLoss = losses.reduce((sum, amount) => sum + amount, 0);
-        const avgLoss = totalLoss / losses.length;
-
-        logger.warn({
-            event: 'RAPID_LOSS_DETECTED',
-            count: losses.length,
-            timeWindow: this.rapidLossConfig.timeWindowMs,
-            totalLoss,
-            avgLoss,
-            maxLoss: Math.max(...losses),
-            timestamps: this.rapidLossState.recentLossTimestamps
-        });
-
-        // Trigger safety protocols
-        this.enterSafetyMode('rapid_loss_detection');
-    }
-
-    /**
-     * Cleans up old loss records beyond time window
-     * @private
-     * @returns {void}
-     */
-    private cleanupOldLosses(): void {
-        const now = Date.now();
-        const cutoff = now - this.rapidLossConfig.timeWindowMs;
-
-        const validEntries = this.rapidLossState.recentLossTimestamps
-            .map((ts, i) => ({ timestamp: ts, amount: this.rapidLossState.recentLossAmounts[i] }))
-            .filter(entry => entry.timestamp >= cutoff);
-
-        this.rapidLossState.recentLossTimestamps = validEntries.map((e: any) => e.timestamp);
-        this.rapidLossState.recentLossAmounts = validEntries.map((e: any) => e.amount);
-    }
-
-    /**
-     * Initializes rapid loss configuration with defaults
-     * @param {Partial<IRapidLossConfig>} [overrides] - Configuration overrides
-     * @returns {IRapidLossConfig} Complete configuration
-     */
-    private initializeRapidLossConfig(overrides?: Partial<IRapidLossConfig>): IRapidLossConfig {
-        const defaults: IRapidLossConfig = {
-            timeWindowMs: 5 * 60 * 1000,    // 5 minutes
-            threshold: 3,                   // 3 losses
-            minStakeMultiplier: 1.5,        // 1.5x base stake
-            coolDownMs: 15 * 60 * 1000,     // 15 minutes
-            enabled: true
-        };
-
-        return { ...defaults, ...overrides };
-    }
-
-    /**
-     * Gets current rapid loss detection state
-     * @returns {IRapidLossState} Readonly snapshot of current state
-     */
-    public getRapidLossState(): Readonly<IRapidLossState> {
-        return Object.freeze({ ...this.rapidLossState });
-    }
-
-    /****
-     * 
-     * USAGE EXAMPLE
-     * 
-     * 
-     * Initialize with custom rapid loss settings
-    const riskManager = new VolatilityRiskManager(
-        10, // baseStake
-        "1HZ100V", // market
-        "USD", // currency
-        ContractType.DIGITODD, // contractType
-        5, // contractDurationValue
-        "t", // contractDurationUnits
-        [], // strategies
-        {}, // circuit breaker config
-        {
-            timeWindowMs: 180000, // 3 minute window
-            threshold: 2,         // 2 losses trigger
-            minStakeMultiplier: 2 // Only count losses > 2x base stake
-        }
-    );
-    
-    // Simulate normal trading
-    riskManager.recordRapidLoss(15); // Below threshold (10 * 2 = 20)
-    console.log(riskManager.checkRapidLosses()); // false
-    
-    // Simulate qualifying losses
-    riskManager.recordRapidLoss(25); // Above threshold
-    riskManager.recordRapidLoss(30); // Above threshold
-    
-    // Check rapid losses (within 3 minute window)
-    console.log(riskManager.checkRapidLosses()); // true
-    
-    // Check state
-    console.log(riskManager.getRapidLossState());
-     
-    {
-        recentLossTimestamps: [ts1, ts2],
-        recentLossAmounts: [25, 30],
-        lastDetectedTime: [currentTimestamp],
-        eventCount: 1
-    }
-     
-    
-    // Attempt to trade while in cool-down
-    const nextTrade = riskManager.processTradeResult(tradeData);
-    console.log(nextTrade.metadata.safetyMode); // true
-    console.log(nextTrade.metadata.reason); // "rapid_loss_detection"
-    
-    // Force cool-down expiration (in real usage would wait)
-    riskManager.rapidLossState.lastDetectedTime = Date.now() - 16 * 60 * 1000;
-    
-    // Verify cool-down expired
-    console.log(riskManager.checkRapidLosses()); // false
-     * 
-     */
-
-    /**
-     * Resets daily loss counter if new trading day
-     * @private
-     * @returns {void}
-     * 
-     * @description
-     * Uses local time to detect day change and reset:
-     * - Daily loss counter
-     * - Daily metrics
-     */
-    private resetDailyLossCounterIfNewDay(): void {
-        const now = new Date();
-        const lastReset = new Date(this.circuitBreakerState.lastDailyReset);
-
-        if (now.getDate() !== lastReset.getDate() ||
-            now.getMonth() !== lastReset.getMonth() ||
-            now.getFullYear() !== lastReset.getFullYear()) {
-
-            this.circuitBreakerState.dailyLoss = 0;
-            this.circuitBreakerState.lastDailyReset = now.getTime();
-
-            // Also reset daily metrics
-            if (this.metrics?.timeMetrics) {
-                this.metrics.timeMetrics.daily = { wins: 0, losses: 0, profit: 0 };
-            }
-        }
-    }
-
-    /**
-     * Triggers circuit breaker protection
-     * @private
-     * @param {string} reason - Reason for triggering
-     * @returns {void}
-     * 
-     * @description
-     * Actions taken:
-     * 1. Records trigger event
-     * 2. Enters safety mode
-     * 3. Logs incident
-     * 4. Notifies monitoring systems
-     */
-    private triggerCircuitBreaker(reason: string): void {
-        const now = Date.now();
-
-        this.circuitBreakerState = {
-            ...this.circuitBreakerState,
-            lastTriggered: now,
-            lastReason: reason
-        };
-
-        // Enter safety mode
-        this.enterSafetyMode(`circuit_breaker:${reason}`);
-
-        // Log the event with details
-        logger.warn({
-            event: 'CIRCUIT_BREAKER_TRIGGERED',
-            reason,
-            totalLoss: this.totalLossAmount,
-            dailyLoss: this.circuitBreakerState.dailyLoss,
-            consecutiveLosses: this.consecutiveLosses,
-            recentLosses: this.circuitBreakerState.recentLossTimestamps.length
-        });
-
-        // TODO: Add external notification hook here
-        // this.notifyRiskTeam(reason);
-    }
-
-    /**
-     * Initializes circuit breaker configuration with defaults
-     * @param {Partial<ICircuitBreakerConfig>} [overrides] - Configuration overrides
-     * @returns {ICircuitBreakerConfig} Complete configuration
-     * 
-     * @description
-     * Provides conservative default values that can be:
-     * - Overridden in constructor
-     * - Adjusted based on account risk profile
-     * - Dynamically modified during operation
-     */
-    private initializeCircuitBreakerConfig(
-        overrides?: Partial<ICircuitBreakerConfig>
-    ): ICircuitBreakerConfig {
-        const baseConfig: ICircuitBreakerConfig = {
-            maxAbsoluteLoss: this.baseStake * 100,  // 100x base stake
-            maxDailyLoss: this.baseStake * 20,     // 20x base stake
-            maxConsecutiveLosses: 5,
-            maxBalancePercentageLoss: 0.2,         // 20% of account balance
-            rapidLossTimeWindow: 5 * 60 * 1000,    // 5 minute window
-            rapidLossThreshold: 3,                 // 3 losses in 5 minutes
-            cooldownPeriod: 30 * 60 * 1000         // 30 minute cooldown
-        };
-
-        return { ...baseConfig, ...overrides };
-    }
-
-    /***
-     * 
-     * USAGE EXAMPLE
-     * 
-     * Initialize risk manager with custom circuit breaker settings
-    const riskManager = new VolatilityRiskManager(
-        10, // baseStake
-        "1HZ100V", // market
-        "USD", // currency
-        ContractType.DIGITODD, // contractType
-        5, // contractDurationValue
-        "t", // contractDurationUnits
-        [], // strategies (use defaults)
-        {
-            // Custom circuit breaker thresholds
-            maxAbsoluteLoss: 500, // $500 max loss
-            maxDailyLoss: 200,    // $200 daily loss
-            maxBalancePercentageLoss: 0.15 // 15% of balance
-        }
-    );
-    
-    // Simulate trading sequence
-    const account = { balance: 1000, currency: "USD" };
-    
-    // 1. Normal trading
-    riskManager.recordLoss(15); // Small loss
-    console.log(riskManager.checkCircuitBreakers(account)); // false
-    
-    // 2. Accumulate losses
-    [50, 75, 30].forEach(loss => riskManager.recordLoss(loss));
-    console.log(riskManager.checkCircuitBreakers(account)); // false
-    
-    // 3. Trigger daily limit
-    riskManager.recordLoss(100); // Total daily loss now $270
-    console.log(riskManager.checkCircuitBreakers(account)); // true (exceeded $200 daily limit)
-    
-    // Check breaker state
-    console.log(riskManager.getCircuitBreakerState());
-     
-    {
-        lastTriggered: [timestamp],
-        lastReason: "daily_loss_limit",
-        dailyLoss: 270,
-        recentLossTimestamps: [array of 5 timestamps]
-    }
-     
-    
-    // 4. Try to process trade while in safety mode
-    const nextTrade = riskManager.processTradeResult({
-        ...tradeData,
-        strategyParams: { ...tradeData.strategyParams, totalLost: 270 }
-    });
-    console.log(nextTrade.metadata.safetyMode); // true
-    console.log(nextTrade.metadata.reason); // "circuit_breaker:daily_loss_limit"
-    
-    // 5. After cooldown period expires
-    // (In real usage, would need to wait 30 mins based on defaults)
-    riskManager.circuitBreakerState.lastTriggered = Date.now() - 31 * 60 * 1000;
-    console.log(riskManager.checkCircuitBreakers(account)); // false (cooldown expired)
-    
-    // 6. Simulate rapid losses
-    riskManager.recordLoss(10);
-    riskManager.recordLoss(15);
-    riskManager.recordLoss(20); // 3 losses in quick succession
-    console.log(riskManager.checkCircuitBreakers(account)); // true (rapid loss threshold)
-     * 
-     */
-
-    /**
-     * Updates performance metrics after each trade outcome
-     * @param {boolean} success - Whether the recovery attempt was successful
-     * @param {string} strategyUsed - Name of the strategy used
-     * @param {number} recoveryAmount - Amount recovered (if successful)
-     * @param {number} duration - Time taken for the recovery (ms)
-     * @param {object} marketConditions - Current market state snapshot
-     * @returns {void}
-     * 
-     * @description
-     * This comprehensive metrics system tracks:
-     * 1. Overall and strategy-specific success rates
-     * 2. Recovery efficiency (time and amount)
-     * 3. Win/loss streaks
-     * 4. Time-based performance patterns
-     * 5. Strategy effectiveness scores
-     * 
-     * All metrics are updated using exponential moving averages for
-     * responsiveness while maintaining stability.
-     */
-    private updateMetrics(
-        success: boolean,
-        strategyUsed: string,
-        recoveryAmount: number = 0,
-        duration: number = 0,
-        marketConditions?: {
-            volatility: number;
-            trend: 'up' | 'down' | 'neutral';
-        }
-    ): void {
-        // Initialize metrics if they don't exist
-        if (!this.metrics) {
-            this.metrics = {
-                recoverySuccessRate: 0,
-                avgRecoveryTime: 0,
-                strategyEffectiveness: new Map(),
-                tradeHistory: [],
-                streaks: {
-                    currentWin: 0,
-                    currentLoss: 0,
-                    maxWin: 0,
-                    maxLoss: 0
-                },
-                timeMetrics: {
-                    hourly: { wins: 0, losses: 0, profit: 0 },
-                    daily: { wins: 0, losses: 0, profit: 0 }
-                },
-                calculated: {
-                    hourlyWinRate: 0,
-                    dailyWinRate: 0,
-                    filteredWinRate: 0,
-                    filteredCount: 0,
-                }
-            };
-        }
-
-        const now = Date.now();
-        const currentHour = new Date(now).getHours();
-        const currentDay = new Date(now).getDay();
-
-        // Update streaks
-        if (success) {
-            this.metrics.streaks.currentWin++;
-            this.metrics.streaks.currentLoss = 0;
-            if (this.metrics.streaks.currentWin > this.metrics.streaks.maxWin) {
-                this.metrics.streaks.maxWin = this.metrics.streaks.currentWin;
-            }
-        } else {
-            this.metrics.streaks.currentLoss++;
-            this.metrics.streaks.currentWin = 0;
-            if (this.metrics.streaks.currentLoss > this.metrics.streaks.maxLoss) {
-                this.metrics.streaks.maxLoss = this.metrics.streaks.currentLoss;
-            }
-        }
-
-        // Calculate exponential moving average for success rate (alpha = 0.1)
-        const alpha = 0.1;
-        this.metrics.recoverySuccessRate =
-            alpha * (success ? 1 : 0) +
-            (1 - alpha) * this.metrics.recoverySuccessRate;
-
-        // Update average recovery time only for successful recoveries
-        if (success && duration > 0) {
-            this.metrics.avgRecoveryTime =
-                alpha * duration +
-                (1 - alpha) * this.metrics.avgRecoveryTime;
-        }
-
-        // Update strategy effectiveness (composite score 0-100)
-        const strategyData = this.metrics.strategyEffectiveness.get(strategyUsed) || 50;
-        const effectivenessUpdate = success
-            ? Math.min(100, strategyData + 5)  // Successful recovery boosts score
-            : Math.max(0, strategyData - 10);  // Failed recovery penalizes more
-
-        this.metrics.strategyEffectiveness.set(strategyUsed, effectivenessUpdate);
-
-        // Record trade in history
-        this.metrics.tradeHistory.push({
-            timestamp: now,
-            strategy: strategyUsed,
-            stake: this.getCurrentState().amount,
-            outcome: success ? 'win' : 'loss',
-            recoveryAmount: success ? recoveryAmount : 0,
-            duration,
-            marketConditions: marketConditions
-                ? `${marketConditions.trend}_${marketConditions.volatility.toFixed(2)}`
-                : undefined
-        });
-
-        // Maintain rolling history (last 1000 trades)
-        if (this.metrics.tradeHistory.length > 1000) {
-            this.metrics.tradeHistory.shift();
-        }
-
-        // Update time-based metrics
-        const timeMetrics = this.metrics.timeMetrics;
-
-        // Reset hourly metrics if hour changed
-        if (currentHour !== new Date(this.metrics.tradeHistory[0]?.timestamp).getHours()) {
-            timeMetrics.hourly = { wins: 0, losses: 0, profit: 0 };
-        }
-
-        // Reset daily metrics if day changed
-        if (currentDay !== new Date(this.metrics.tradeHistory[0]?.timestamp).getDay()) {
-            timeMetrics.daily = { wins: 0, losses: 0, profit: 0 };
-        }
-
-        // Update counts
-        if (success) {
-            timeMetrics.hourly.wins++;
-            timeMetrics.daily.wins++;
-            timeMetrics.hourly.profit += recoveryAmount;
-            timeMetrics.daily.profit += recoveryAmount;
-        } else {
-            timeMetrics.hourly.losses++;
-            timeMetrics.daily.losses++;
-        }
-
-        // Calculate additional derived metrics
-        this.calculateDerivedMetrics();
-
-        if (this.metrics.tradeHistory.length % 100 === 0) {
-            this.cleanupOldMetrics();
-        }
-    }
-
-    private cleanupOldMetrics(): void {
-        const cutoff = Date.now() - (this.metricsRetentionDays * 24 * 60 * 60 * 1000);
-
-        this.metrics.tradeHistory = this.metrics.tradeHistory
-            .filter(trade => trade.timestamp >= cutoff)
-            .slice(-this.maxHistoryItems);
-
-        // Add similar cleanup for other metrics as needed
-    }
-
-    /**
-     * Calculates derived performance metrics
-     * @private
-     * @returns {void}
-     * 
-     * @description
-     * Computes additional performance indicators including:
-     * - Win/loss ratios by time period
-     * - Strategy risk-adjusted returns
-     * - Market condition correlations
-     */
-    private calculateDerivedMetrics(): void {
-        // Calculate hourly win rate
-        const hourly = this.metrics.timeMetrics.hourly;
-        const hourlyWinRate = hourly.wins + hourly.losses > 0
-            ? hourly.wins / (hourly.wins + hourly.losses)
-            : 0;
-
-        // Calculate daily win rate
-        const daily = this.metrics.timeMetrics.daily;
-        const dailyWinRate = daily.wins + daily.losses > 0
-            ? daily.wins / (daily.wins + daily.losses)
-            : 0;
-
-        // Calculate strategy risk profiles
-        const strategyRisk = new Map<string, { wins: number; losses: number; avgProfit: number }>();
-
-        this.metrics.tradeHistory.forEach((trade: any) => {
-            const data = strategyRisk.get(trade.strategy) || { wins: 0, losses: 0, avgProfit: 0 };
-            if (trade.outcome === 'win') {
-                data.wins++;
-                data.avgProfit = (data.avgProfit * (data.wins - 1) + trade.recoveryAmount) / data.wins;
-            } else {
-                data.losses++;
-            }
-            strategyRisk.set(trade.strategy, data);
-        });
-
-        // Store additional calculated metrics
-        this.metrics.calculated = {
-            hourlyWinRate,
-            dailyWinRate,
-            strategyRisk,
-            // Add more derived metrics as needed
-        };
-    }
-
-    /**
-     * Gets performance metrics with optional filtering
-     * @param {object} [options] - Filtering options
-     * @param {string} [options.strategy] - Filter by strategy name
-     * @param {number} [options.since] - Timestamp for filtering history
-     * @returns {IPerformanceMetrics} Filtered performance metrics
-     * 
-     * @description
-     * Returns metrics with optional filters applied. Includes:
-     * - Full metrics when no filters
-     * - Strategy-specific metrics when filtered
-     * - Time-window metrics when since timestamp provided
-     */
-    public getMetrics(options?: { strategy?: string; since?: number }): IPerformanceMetrics {
-        if (!options) {
-            return this.metrics;
-        }
-
-        const filteredMetrics: IPerformanceMetrics = {
-            ...this.metrics,
-            tradeHistory: this.metrics.tradeHistory.filter(trade => {
-                const matchesStrategy = options.strategy ? trade.strategy === options.strategy : true;
-                const matchesTime = options.since ? trade.timestamp >= options.since : true;
-                return matchesStrategy && matchesTime;
-            }),
-            // Recalculate derived metrics for filtered subset
-            calculated: this.calculateFilteredMetrics(options)
-        };
-
-        return filteredMetrics;
-    }
-
-    /**
-     * Calculates metrics for filtered data subsets
-     * @private
-     * @param {object} options - Filtering options
-     * @returns {object} Recalculated derived metrics
-     */
-    private calculateFilteredMetrics(options: { strategy?: string; since?: number }): object {
-        // Implement specific filtered calculations
-        const filteredHistory = this.metrics.tradeHistory.filter((trade: any) => {
-            const matchesStrategy = options.strategy ? trade.strategy === options.strategy : true;
-            const matchesTime = options.since ? trade.timestamp >= options.since : true;
-            return matchesStrategy && matchesTime;
-        });
-
-        const wins = filteredHistory.filter((t: any) => t.outcome === 'win').length;
-        const losses = filteredHistory.filter((t: any) => t.outcome === 'loss').length;
-        const winRate = wins + losses > 0 ? wins / (wins + losses) : 0;
-
-        return {
-            filteredWinRate: winRate,
-            filteredCount: filteredHistory.length,
-            // Add more filtered metrics as needed
-        };
-    }
-
-    /*****
-     * 
-     * USAGE EXAMPLE
-     * 
-     * 
-     * 
-     * 
-     * After a trade completes:
-    riskManager.updateMetrics(
-        true, // success
-        "anyV2", 
-        85.50, // recovered amount
-        1200, // duration in ms
-        { volatility: 0.65, trend: 'up' } // market conditions
-    );
-
-    // Get filtered metrics:
-    const strategyMetrics = riskManager.getMetrics({ 
-        strategy: "anyV2",
-        since: Date.now() - 86400000 // last 24 hours
-    });
-
-     */
-
-
-    /**
-     * Gets the total losses amount
-     * @returns The total losses
-     */
-    public calculateTotalLosses(): number {
-        return this.totalLossAmount;
-    }
-
-    /**
-     * Calculates total amount needed to recover including recovery percentage
-     * @returns The total amount to recover
-     */
-    public calculateTotalToRecover(): number {
-        // If no active strategy, return raw loss amount
-        if (!this.activeStrategy) return this.totalLossAmount;
-
-        // Calculate total including recovery percentage
-        return this.totalLossAmount * (1 + this.activeStrategy.lossRecoveryPercentage / 100);
-    }
-
-    /**
-   * Calculates next stake with dynamic strategy support and safety limits
-   */
-    private calculateNextStake(): number {
-        if (!this.activeStrategy || this.totalLossAmount <= 0) {
-            return this.baseStake;
-        }
-
-        const currentStep = this.activeStrategy.strategySteps[
-            Math.min(this.currentRecoveryStepIndex, this.activeStrategy.strategySteps.length - 1)
-        ];
-
-        // Handle dynamic stake calculation functions
-        const stepAmount = typeof currentStep.amount === 'function'
-            ? currentStep.amount(this.totalLossAmount)
-            : currentStep.amount;
-
-        // Apply risk adjustment
-        return this.calculateRiskAdjustedStake(stepAmount);
-    }
-
-    /**
-       * Adjusts stake amount based on risk limits
-       * @param requiredStake - The calculated required stake
-       * @returns The stake amount adjusted for risk limits
-       */
-    private calculateRiskAdjustedStake(requiredStake: number): number {
-        if (!this.activeStrategy) {
-            return Math.min(requiredStake, this.baseStake * MAX_STAKE_MULTIPLIER);
-        }
-
-        // Calculate multiple risk factors
-        const maxStakeByExposure = this.baseStake * this.activeStrategy.maxRiskExposure;
-        const maxStakeByBalance = this.baseStake * MAX_STAKE_MULTIPLIER;
-        const sequenceRiskFactor = 1 - (this.currentRecoveryStepIndex / this.activeStrategy.strategySteps.length);
-
-        const maxAllowedStake = Math.min(
-            maxStakeByExposure,
-            maxStakeByBalance,
-            this.baseStake * (MAX_STAKE_MULTIPLIER * sequenceRiskFactor)
-        );
-
-        return Math.min(requiredStake, maxAllowedStake);
-    }
-
-
-
-    /**
-     * Calculates the required win rate for the strategy to break even
-     * @returns The required win rate (0-1)
-     */
-    public calculateRequiredWinRate(): number {
-        // If no active strategy, assume 50% win rate needed
-        if (!this.activeStrategy) return 0.5;
-
-        // Calculate minimum win rate needed (1 / sequence length)
-        const sequenceLength = this.activeStrategy.strategySteps.length;
-        return 1 / sequenceLength;
-    }
-
-    /**
-     * Calculates potential payout for a given stake
-     * @param stake - The stake amount
-     * @returns The potential payout amount
-     */
-    public calculatePotentialPayout(stake: number): number {
-        // If no active strategy, assume 80% profit (1.8x payout)
-        if (!this.activeStrategy) return stake * 1.8;
-
-        // Calculate payout based on strategy profit percentage
-        return stake * (1 + this.activeStrategy.profitPercentage / 100);
-    }
-
-    /**
-     * Calculates profit percentage based on strategy type and stake
-     * @param strategyType - The trading strategy type
-     * @param stake - The trade stake amount
-     * @returns The expected profit percentage
-     * @throws Error if strategy type is invalid or stake is out of range
-     */
-    static calculateProfitPercentage(strategyType: ContractType, stake: number): number {
-        // Get reward structure for this strategy type
-        const rewards = this.rewardStructures[strategyType];
-        if (!rewards) {
-            logger.error(`No reward structure found for strategy: ${strategyType}`);
-            throw new Error(`Unsupported strategy type: ${strategyType}`);
-        }
-
-        // Find the reward tier that matches the stake amount
-        const rewardTier = rewards.find(tier =>
-            stake >= tier.minStake && stake <= tier.maxStake
-        );
-
-        if (!rewardTier) {
-            logger.error(`No reward tier found for stake: ${stake}`);
-            throw new Error(`Stake amount ${stake} out of valid range`);
-        }
-
-        // Log and return the reward percentage
-        logger.debug(`Calculated ${rewardTier.rewardPercentage}% profit for ${strategyType} with stake ${stake}`);
-        return rewardTier.rewardPercentage;
-    }
-
-    /**
-     * Validates previous trade data structure
-     * @param data - The data to validate
-     * @throws Error if data is invalid
-     */
-    private validatePreviousTradeData(data: IPreviousTradeResult): void {
-        if (!data || !data.strategyParams) {
-            throw new Error('Invalid previous trade data');
-        }
-    }
-
-    /**
-   * Validates trade result data structure and values
-   */
     private validateTradeResult(data: IPreviousTradeResult): boolean {
         if (!data || typeof data !== 'object') return false;
         if (!data.strategyParams || typeof data.strategyParams !== 'object') return false;
@@ -2643,110 +345,249 @@ export class VolatilityRiskManager {
         return true;
     }
 
-    /**
-     * Validates recovery parameters against strategy limits
-     * @returns True if parameters are valid, false otherwise
-     */
-    private validateRecoveryParameters(): boolean {
-        // If no active strategy, return false
-        if (!this.activeStrategy) return false;
-
-        // Check if consecutive losses exceed strategy maximum
-        if (this.consecutiveLosses >= this.activeStrategy.maxConsecutiveLosses) {
-            return false;
-        }
-
-        // Check if current stake exceeds maximum risk exposure
-        const currentStep = this.computedSteps[this.currentRecoveryStepIndex];
-        if (currentStep.amount > this.baseStake * this.activeStrategy.maxRiskExposure) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Resets all state to initial values
-     */
-    private resetState(): void {
-        this.consecutiveLosses = 0;
-        this.totalLossAmount = 0;
-        this.currentRecoveryStepIndex = 0;
-        this.currentStrategyIndex = 0;
-        this.refreshComputedSteps();
-        this.activeStrategy = this.strategyParser.safeGetStep(0);
-    }
-
-    /**
-     * Resets recovery-specific state (keeps loss amount)
-     */
     private resetRecoveryState(): void {
         this.consecutiveLosses = 0;
-        this.currentRecoveryStepIndex = 0;
     }
 
-    /**
-     * Gets the currently active strategy
-     * @returns The active strategy or null
-     */
-    public getCurrentStrategy(): StrategyConfig {
-        return this.strategyParser.getStrategyConfig();
+    // Additional helper methods
+    public getCurrentState() {
+        return {
+            basis: BasisTypeEnum.Default,
+            symbol: this.market,
+            amount: this.baseStake,
+            barrier: null,
+            currency: this.currency,
+            contractType: this.contractType,
+            contractDurationValue: this.contractDurationValue,
+            contractDurationUnits: this.contractDurationUnits,
+            previousResultStatus: this.resultIsWin,
+            consecutiveLosses: this.consecutiveLosses,
+            totalAmountToRecover: this.totalLossAmount,
+            winningTrades: this.winningTrades,
+            losingTrades: this.losingTrades,
+            inSafetyMode: this.inSafetyMode,
+            recoveryAttempts: this.recoveryAttempts
+        };
     }
 
-    public getStrategySteps(): StrategyStepOutput[] {
-        return this.strategyParser.getAllSteps();
+    public getStrategyMetrics(): StrategyMetrics {
+        return this.strategyParser.getStrategyMetrics();
     }
 
     public getStrategyMeta(): StrategyMeta {
         return this.strategyParser.getMetaInfo();
     }
 
-    /**
-     * Gets the delay for the current strategy step
-     * @returns The delay in milliseconds
-     */
-    public getStrategyDelay(): number {
-        // If no active strategy, return 0 delay
-        if (!this.activeStrategy) return 0;
-        // Get delay from current step (default to 0 if not specified)
-        return this.activeStrategy.strategySteps[this.currentRecoveryStepIndex].delay || 0;
+    public getStrategyVisualization(): StrategyVisualization {
+        return this.strategyParser.generateVisualization();
     }
 
     /**
-     * Gets performance data for a specific strategy
-     * @param strategyName - Name of the strategy to look up
-     * @returns Strategy performance data (defaults if not found)
+     * Checks for rapid loss patterns
+     * @param amount Optional loss amount to record before checking
+     * @returns boolean indicating if rapid losses were detected
      */
-    public getStrategyPerformance(strategyName: string): IStrategyPerformance {
-        // Return cached data if available
-        if (this.strategyPerformanceData.has(strategyName)) {
-            return this.strategyPerformanceData.get(strategyName)!;
+    public checkRapidLosses(amount?: number): boolean {
+        if (amount !== undefined) {
+            this.recordRapidLoss(amount);
         }
 
-        // Return defaults if strategy not found
+        // Filter losses that are within the time window
+        const now = Date.now();
+        const recentLosses = this.rapidLossState.recentLossTimestamps.filter(
+            timestamp => now - timestamp <= this.circuitBreakerConfig.rapidLossTimeWindow
+        );
+
+        // Update state with only recent losses
+        this.rapidLossState.recentLossTimestamps = recentLosses;
+        this.rapidLossState.recentLossAmounts = this.rapidLossState.recentLossAmounts.slice(
+            0, recentLosses.length
+        );
+
+        // Check if threshold is exceeded
+        if (recentLosses.length >= this.circuitBreakerConfig.rapidLossThreshold) {
+            this.rapidLossState.eventCount++;
+            this.rapidLossState.lastDetectedTime = now;
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Records a rapid loss event
+     * @param amount Loss amount to record
+     */
+    public recordRapidLoss(amount: number): void {
+        const now = Date.now();
+        this.rapidLossState.recentLossTimestamps.push(now);
+        this.rapidLossState.recentLossAmounts.push(amount);
+    }
+
+    /**
+     * Records a loss and updates daily loss tracking
+     * @param amount Loss amount to record
+     */
+    public recordLoss(amount: number): void {
+        this.totalLossAmount += amount;
+        this.dailyLossAmount += amount;
+        this.losingTrades++;
+    }
+
+    /**
+     * Validates account balance against proposed trade amount
+     * @param amount Proposed trade amount
+     * @param account User account information
+     * @returns Validation result
+     */
+    public validateAccountBalance(amount: number, account: IDerivUserAccount): {
+        isValid: boolean;
+        reasons: string[];
+        metrics: {
+            balance: number;
+            proposedStake: number;
+            riskPercentage: number;
+            requiredMinimum: number;
+            availableAfterTrade: number;
+        };
+    } {
+        const reasons: string[] = [];
+        const balance = account.balance;
+        const riskPercentage = (amount / balance) * 100;
+        const availableAfterTrade = balance - amount;
+        const requiredMinimum = this.baseStake * 3; // Minimum 3x base stake
+
+        // Check various balance conditions
+        if (amount > balance) {
+            reasons.push('insufficient_balance');
+        }
+        if (availableAfterTrade < requiredMinimum) {
+            reasons.push('minimum_balance_violation');
+        }
+        if (riskPercentage > this.circuitBreakerConfig.maxBalancePercentageLoss * 100) {
+            reasons.push('max_risk_exceeded');
+        }
+
         return {
-            winRate: 0.5,  // Default to 50% win rate
-            recentProfit: 1.0,  // Neutral recent performance
-            totalTrades: 0
+            isValid: reasons.length === 0,
+            reasons,
+            metrics: {
+                balance,
+                proposedStake: amount,
+                riskPercentage,
+                requiredMinimum,
+                availableAfterTrade
+            }
         };
     }
 
     /**
-     * Saves/updates performance data for a strategy
-     * @param strategyName - Name of the strategy
-     * @param data - Performance data to store
+     * Checks all circuit breakers
+     * @param account User account information
+     * @returns boolean indicating if any circuit breaker was triggered
      */
-    public saveStrategyPerformance(strategyName: string, data: Partial<IStrategyPerformance>): void {
-        const current = this.getStrategyPerformance(strategyName);
+    public checkCircuitBreakers(account: IDerivUserAccount): boolean {
+        const now = Date.now();
+        let triggered = false;
+        let reason = '';
 
-        // Merge with existing data (if any)
-        const updatedData: IStrategyPerformance = {
-            winRate: data.winRate ?? current.winRate,
-            recentProfit: data.recentProfit ?? current.recentProfit,
-            totalTrades: data.totalTrades ?? current.totalTrades
+        // Check daily loss limit
+        if (this.dailyLossAmount >= this.circuitBreakerConfig.maxDailyLoss) {
+            triggered = true;
+            reason = 'daily_loss_limit';
+        }
+
+        // Check absolute loss limit
+        if (this.totalLossAmount >= this.circuitBreakerConfig.maxAbsoluteLoss) {
+            triggered = true;
+            reason = 'absolute_loss_limit';
+        }
+
+        // Check consecutive losses
+        if (this.consecutiveLosses >= this.circuitBreakerConfig.maxConsecutiveLosses) {
+            triggered = true;
+            reason = 'max_consecutive_losses';
+        }
+
+        // Check balance percentage
+        const balanceCheck = this.validateAccountBalance(this.baseStake, account);
+        if (!balanceCheck.isValid) {
+            triggered = true;
+            reason = 'balance_validation_failed';
+        }
+
+        // Check rapid losses
+        if (this.checkRapidLosses()) {
+            triggered = true;
+            reason = 'rapid_loss_detected';
+        }
+
+        // Update circuit breaker state if triggered
+        if (triggered) {
+            this.circuitBreakerState = {
+                triggered: true,
+                lastTriggered: now,
+                lastReason: reason,
+                inSafetyMode: true,
+                safetyModeUntil: now + this.circuitBreakerConfig.cooldownPeriod
+            };
+            logger.warn(`Circuit breaker triggered: ${reason}`);
+        }
+
+        return triggered;
+    }
+
+    /**
+     * Gets the current circuit breaker state
+     * @returns CircuitBreakerState
+     */
+    public getCircuitBreakerState(): CircuitBreakerState {
+        return this.circuitBreakerState;
+    }
+
+    /**
+     * Gets the rapid loss configuration
+     * @returns Rapid loss configuration
+     */
+    public getRapidLossConfig(): { coolDownMs: number } {
+        return {
+            coolDownMs: this.circuitBreakerConfig.cooldownPeriod
         };
+    }
 
-        this.strategyPerformanceData.set(strategyName, updatedData);
+    /**
+     * Gets the current rapid loss state
+     * @returns RapidLossState
+     */
+    public getRapidLossState(): RapidLossState {
+        return this.rapidLossState;
+    }
+
+    /**
+     * Gets the circuit breaker configuration
+     * @returns CircuitBreakerConfig
+     */
+    public getCircuitBreakerConfig(): CircuitBreakerConfig {
+        return this.circuitBreakerConfig;
+    }
+
+    /**
+     * Enters safety mode with optional cooldown period
+     * @param reason Reason for entering safety mode
+     * @param cooldownMs Optional cooldown period in milliseconds
+     */
+    public enterSafetyMode(reason: string, cooldownMs?: number): void {
+        const now = Date.now();
+        this.inSafetyMode = true;
+        this.safetyModeUntil = now + (cooldownMs || this.circuitBreakerConfig.cooldownPeriod);
+        this.circuitBreakerState = {
+            ...this.circuitBreakerState,
+            inSafetyMode: true,
+            safetyModeUntil: this.safetyModeUntil,
+            lastReason: reason
+        };
+        logger.warn(`Entered safety mode: ${reason}`);
     }
 
 }
+

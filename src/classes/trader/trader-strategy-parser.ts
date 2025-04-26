@@ -2,11 +2,12 @@ import { ContractType, MarketType, ContractDurationUnitType, BasisType, Currency
 import { TradeRewardStructures } from './trade-reward-structures';
 import { ContractParamsFactory } from './contract-factory';
 import { getRandomDigit } from '@/common/utils/snippets';
+import { isPercentage, isNonNegativeNumber } from '../../common/utils/snippets';
 
 type NonNegativeNumber = number & { __nonNegative: true };
 type Percentage = number & { __percentage: true };
 
-interface StrategyStepInput {
+export interface StrategyStepInput {
     amount?: NonNegativeNumber;
     basis?: BasisType;
     currency: CurrencyType;
@@ -17,7 +18,7 @@ interface StrategyStepInput {
     barrier?: string | number;
 }
 
-interface StrategyStepOutput {
+export interface StrategyStepOutput {
     amount: NonNegativeNumber;
     basis: BasisType;
     currency: CurrencyType;
@@ -33,7 +34,7 @@ interface StrategyStepOutput {
     stepNumber?: number;
 }
 
-interface StrategyConfig {
+export interface StrategyConfig {
     strategyName: string;
     strategySteps: StrategyStepInput[];
     isAggressive: boolean;
@@ -51,7 +52,7 @@ interface StrategyConfig {
     meta?: StrategyMeta;
 }
 
-interface StrategyMeta {
+export interface StrategyMeta {
     title: string;
     description: string;
     version: string;
@@ -63,7 +64,7 @@ interface StrategyMeta {
     recommendedBalance?: number;
 }
 
-interface StrategyMetrics {
+export interface StrategyMetrics {
     totalRiskExposure: number;
     maxSingleRisk: number;
     rewardToRiskRatios: number[];
@@ -71,9 +72,10 @@ interface StrategyMetrics {
     maxRewardToRiskRatio: number;
     minRewardToRiskRatio: number;
     winProbability: number;
+    riskOfRuin: number;
 }
 
-interface StrategyVisualization {
+export interface StrategyVisualization {
     chartData: Array<{
         step: number;
         amount: number;
@@ -86,12 +88,12 @@ interface StrategyVisualization {
     };
 }
 
-interface OptimizationPreset {
+export interface OptimizationPreset {
     maxRisk: number;
     riskMultiplier: number;
 }
 
-interface OptimizationAnalysis {
+export interface OptimizationAnalysis {
     originalRisk: number;
     optimizedRisk: number;
     originalPotential: number;
@@ -100,7 +102,7 @@ interface OptimizationAnalysis {
     potentialGain: number;
 }
 
-interface OptimizationCriteria {
+export interface OptimizationCriteria {
     maxRisk?: number;
     targetProfit?: number;
     maxConsecutiveLosses?: number;
@@ -110,7 +112,7 @@ interface OptimizationCriteria {
 export class StrategyParser {
     private rewardCalculator: TradeRewardStructures;
     private baseStake: number;
-    private strategyConfig: StrategyConfig | StrategyConfig[];
+    public strategyConfig: StrategyConfig | StrategyConfig[];
     private computedSteps: StrategyStepOutput[] = [];
     private computedAllStrategies: Map<number, StrategyStepOutput[]> = new Map();
 
@@ -321,8 +323,10 @@ export class StrategyParser {
         }
     }
 
+    // Update the createStepOutput method to ensure proper types
     private createStepOutput(stepIndex: number, amount: number, formula?: string): StrategyStepOutput {
-        const stepInput = this.strategyConfig.strategySteps[stepIndex];
+        const config = this.getSingleStrategyConfig();
+        const stepInput = config.strategySteps[stepIndex];
 
         // Clean up contract type by removing numeric suffixes
         let cleanedContractType = stepInput.contractType;
@@ -345,13 +349,15 @@ export class StrategyParser {
             stepInput.barrier || this.getDefaultBarrier(stepInput.contractType)
         );
 
+        // Ensure proper type assertions
         return {
             ...contractParams,
             formula,
-            profitPercentage: 0 as Percentage, // Will be set by computeAllSteps
-            anticipatedProfit: 0 as NonNegativeNumber, // Will be set by computeAllSteps
+            profitPercentage: 0 as Percentage,
+            anticipatedProfit: 0 as NonNegativeNumber,
             stepIndex: stepIndex,
-            stepNumber: stepIndex + 1
+            stepNumber: stepIndex + 1,
+            amount: amount as NonNegativeNumber
         };
     }
 
@@ -440,7 +446,7 @@ export class StrategyParser {
         });
     }
 
-    private getMetaInfo(config?: StrategyConfig): StrategyMeta {
+    public getMetaInfo(config?: StrategyConfig): StrategyMeta {
         const strategyConfig = config || (this.strategyConfig as StrategyConfig);
         const meta = strategyConfig.meta || {};
 
@@ -529,6 +535,23 @@ export class StrategyParser {
         return this.computedAllStrategies;
     }
 
+    private getSingleStrategyConfig(): StrategyConfig {
+        if (Array.isArray(this.strategyConfig)) {
+            throw new Error("Strategy config is an array, use getAllStrategies() instead");
+        }
+        return this.strategyConfig;
+    }
+
+    private getStrategyConfigAtIndex(index: number): StrategyConfig {
+        if (!Array.isArray(this.strategyConfig)) {
+            throw new Error("Strategy config is not an array");
+        }
+        if (index < 0 || index >= this.strategyConfig.length) {
+            throw new Error(`Invalid strategy index: ${index}`);
+        }
+        return this.strategyConfig[index];
+    }
+
     public getFormattedOutput(strategyIndex?: number): {
         meta: StrategyMeta;
         configuration: Omit<StrategyConfig, 'strategySteps'>;
@@ -537,33 +560,47 @@ export class StrategyParser {
         let config: StrategyConfig;
         let steps: StrategyStepOutput[];
 
-        if (strategyIndex !== undefined && this.computedAllStrategies.has(strategyIndex)) {
-            config = (this.strategyConfig as StrategyConfig[])[strategyIndex];
+        if (strategyIndex !== undefined) {
+            config = this.getStrategyConfigAtIndex(strategyIndex);
             steps = this.computedAllStrategies.get(strategyIndex) || [];
         } else {
-            config = this.strategyConfig as StrategyConfig;
+            config = this.getSingleStrategyConfig();
             steps = this.computedSteps;
         }
 
+        // Ensure all required properties are included
+        const configuration: Omit<StrategyConfig, 'strategySteps'> = {
+            strategyName: config.strategyName,
+            isAggressive: config.isAggressive,
+            baseStake: config.baseStake,
+            minStake: config.minStake,
+            maxStake: config.maxStake,
+            maxSequence: config.maxSequence,
+            profitPercentage: config.profitPercentage,
+            lossRecoveryPercentage: config.lossRecoveryPercentage,
+            anticipatedProfitPercentage: config.anticipatedProfitPercentage,
+            maxConsecutiveLosses: config.maxConsecutiveLosses,
+            maxRiskExposure: config.maxRiskExposure,
+            basis: config.basis,
+            currency: config.currency,
+            meta: config.meta
+        };
+
+        // Ensure proper type assertions for Percentage and NonNegativeNumber
+        const typedSteps = steps.map((step, index) => ({
+            ...step,
+            profitPercentage: isPercentage(step.profitPercentage) ? step.profitPercentage : 0 as Percentage,
+            anticipatedProfit: isNonNegativeNumber(step.anticipatedProfit) ? step.anticipatedProfit : 0 as NonNegativeNumber,
+            amount: isNonNegativeNumber(step.amount) ? step.amount : 0 as NonNegativeNumber,
+            stepNumber: index + 1
+        }));
+
         return {
             meta: this.getMetaInfo(config),
-            configuration: {
-                strategyName: config.strategyName,
-                isAggressive: config.isAggressive,
-                baseStake: config.baseStake,
-                maxSequence: config.maxSequence,
-                profitPercentage: config.profitPercentage,
-                lossRecoveryPercentage: config.lossRecoveryPercentage,
-                anticipatedProfitPercentage: config.anticipatedProfitPercentage,
-                maxConsecutiveLosses: config.maxConsecutiveLosses,
-                maxRiskExposure: config.maxRiskExposure,
-                meta: config.meta
-            },
-            steps: steps.map((step, index) => ({
-                ...step,
-                stepNumber: index + 1
-            }))
+            configuration,
+            steps: typedSteps
         };
+
     }
 
     public generateVisualization(): StrategyVisualization {

@@ -12,8 +12,6 @@ import { IDerivUserAccount } from "./deriv-user-account";
 
 const logger = pino({ name: "TradeManager" });
 
-const StrategyGeneriv001 = require("./strategies/StrategyGeneric001.json") ;
-
 /**
  * Manages trade execution and strategy adaptation
  */
@@ -105,22 +103,22 @@ export class TradeManager {
 
         switch (contractType) {
             case ContractTypeEnum.DigitDiff:
-                return new DigitDiffStrategy(StrategyGeneriv001);
+                return new DigitDiffStrategy();
             case ContractTypeEnum.DigitOver:
-                return new DigitOverStrategy(StrategyGeneriv001);
+                return new DigitOverStrategy();
             case ContractTypeEnum.DigitUnder:
-                return new DigitUnderStrategy(StrategyGeneriv001);
+                return new DigitUnderStrategy();
             case ContractTypeEnum.DigitEven:
-                return new DigitEvenStrategy(StrategyGeneriv001);
+                return new DigitEvenStrategy();
             case ContractTypeEnum.DigitOdd:
-                return new DigitOddStrategy(StrategyGeneriv001);
+                return new DigitOddStrategy();
             case ContractTypeEnum.Call:
-                return new CallStrategy(StrategyGeneriv001);
+                return new CallStrategy();
             case ContractTypeEnum.Put:
-                return new PutStrategy(StrategyGeneriv001);
+                return new PutStrategy();
             default:
                 logger.warn(`Unknown strategy type: ${contractType}, using DigitDiffStrategy as fallback`);
-                return new DigitDiffStrategy(StrategyGeneriv001);
+                return new DigitDiffStrategy();
         }
 
     }
