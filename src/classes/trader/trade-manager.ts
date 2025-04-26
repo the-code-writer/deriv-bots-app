@@ -118,7 +118,7 @@ export class TradeManager {
                 return new PutStrategy();
             default:
                 logger.warn(`Unknown strategy type: ${contractType}, using DigitDiffStrategy as fallback`);
-                return new DigitDiffStrategy();
+                break;
         }
 
     }
