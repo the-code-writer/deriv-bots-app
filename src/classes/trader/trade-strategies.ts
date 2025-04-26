@@ -25,6 +25,7 @@ import { VolatilityRiskManager } from './trade-risk-manager';
 import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "./deriv-user-account";
+import { StrategyParser } from './trader-strategy-parser';
 
 const logger = pino({
     name: "TradeStrategy",
@@ -80,6 +81,8 @@ export abstract class TradeStrategy {
 
     protected contractFactory: typeof ContractParamsFactory;
 
+    protected strategyParser: StrategyParser;
+
     protected strategyTemplate: any = [];
 
     protected predictedDigit: number = 0;
@@ -94,6 +97,10 @@ export abstract class TradeStrategy {
 
         this.contractFactory = ContractParamsFactory;
 
+        // Initialize strategy parser
+        const strategyJson = require("./strategies/StrategyGeneric001.json");
+        this.strategyParser = new StrategyParser(strategyJson, this.baseStake);
+
     }
 
     /**
@@ -104,12 +111,6 @@ export abstract class TradeStrategy {
     abstract execute(): Promise<ITradeData>;
 
     public initializeVolatilityRiskManager(): void {
-
-        console.log("STRATEGIES", this.strategyTemplate)
-
-        const parsedStrategies: any = this.parseStrategies(this.strategyTemplate.strategies);
-
-        console.log("STRATEGIES - PARSED", parsedStrategies[0].strategySteps);
 
         // When initializing your risk manager:
         const circuitBreakerConfig = {
@@ -129,188 +130,10 @@ export abstract class TradeStrategy {
             this.contractType, // contractType
             this.contractDurationValue, // contractDurationValue
             this.contractDurationUnits, // contractDurationUnits (ticks)
-            parsedStrategies, // Custom recovery strategies
+            this.strategyParser, // Pass the strategy parser
             circuitBreakerConfig
         );
 
-    }
-
-    /**
-     * Parses and validates strategy configurations
-     * @param {IStrategyConfig[]} strategies - Array of strategy configurations
-     * @returns {IStrategyConfig[]} Validated and normalized strategies
-     * @throws {Error} If any strategy is invalid
-     */
-    private parseStrategies(strategies: IStrategyConfig[]): IStrategyConfig[] {
-        if (!strategies || strategies.length === 0) {
-            return this.createDefaultStrategies();
-        }
-
-        return strategies.map(strategy => this.processStrategy(strategy));
-    }
-
-    /**
-     * Creates default strategies with both conservative and aggressive options
-     */
-    private createDefaultStrategies(): IStrategyConfig[] {
-
-        const baseAmount = 1;
-        const market = MarketTypeEnum.Default;
-        const contractType = ContractTypeEnum.Default;
-        const durationValue = 1;
-        const durationUnits = ContractDurationUnitTypeEnum.Default;
-        const rewardStructure = this.tradeRewardStructures.getRewardStructure(contractType);
-
-        return [
-            // Conservative recovery strategy
-            this.createStrategyConfig(
-                "RhinoStrategy",
-                baseAmount,
-                market,
-                contractType,
-                durationValue,
-                durationUnits,
-                rewardStructure,
-                4, // steps
-                false // not aggressive
-            ),
-            // Aggressive recovery strategy
-            this.createStrategyConfig(
-                "RhinoAggressiveStrategy",
-                baseAmount,
-                market,
-                contractType,
-                durationValue,
-                durationUnits,
-                rewardStructure,
-                4, // steps
-                true // aggressive
-            )
-        ];
-    }
-
-    /**
-     * Processes individual strategy configuration
-     */
-    private processStrategy(strategy: IStrategyConfig): IStrategyConfig {
-        const firstStep = strategy.strategySteps[0];
-        const rewardStructure = this.tradeRewardStructures.getRewardStructure(firstStep.contractType);
-        const isAggressive = strategy.isAggressive;
-
-        return {
-            ...strategy,
-            strategySteps: this.generateRecoverySteps(
-                firstStep.amount,
-                firstStep.symbol,
-                firstStep.contractType,
-                firstStep.contractDurationValue,
-                firstStep.contractDurationUnits,
-                rewardStructure,
-                strategy.strategySteps.length,
-                isAggressive
-            ),
-            profitPercentage: strategy.profitPercentage || this.calculateOptimalProfitPercentage(rewardStructure, isAggressive),
-            anticipatedProfitPercentage: strategy.anticipatedProfitPercentage ||
-                this.calculateOptimalProfitPercentage(rewardStructure, isAggressive)
-        };
-    }
-
-    /**
-     * Generates recovery steps with loss and profit accounting
-     */
-    private generateRecoverySteps(
-        baseAmount: number,
-        market: MarketType,
-        contractType: ContractType,
-        durationValue: number,
-        durationUnits: ContractDurationUnitType,
-        rewardStructure: any[],
-        stepCount: number = 4,
-        isAggressive: boolean = false
-    ): any[] {
-        const steps: any[] = [];
-        let currentAmount = baseAmount;
-        const rewardPercentage = this.getBaseRewardPercentage(rewardStructure, baseAmount);
-
-        // Calculate base multiplier based on recovery mode
-        const baseMultiplier = isAggressive
-            ? this.calculateAggressiveMultiplier(rewardPercentage)
-            : this.calculateConservativeMultiplier(rewardPercentage);
-
-        for (let i = 0; i < stepCount; i++) {
-            // Calculate amount needed to recover previous losses plus target profit
-            if (i > 0) {
-                const totalLoss = steps.slice(0, i).reduce((sum, step) => sum + step.amount, 0);
-                const targetProfit = totalLoss * (1 + (rewardPercentage / 100));
-                currentAmount = targetProfit / (rewardPercentage / 100);
-
-                // Apply multiplier adjustment
-                currentAmount = currentAmount * baseMultiplier;
-            }
-
-            // Ensure amount stays within reward tiers
-            currentAmount = this.adjustAmountToTier(currentAmount, rewardStructure);
-
-            steps.push({
-                amount: currentAmount,
-                symbol: market,
-                contractType: contractType,
-                contractDurationValue: durationValue,
-                contractDurationUnits: durationUnits,
-                // Dynamic function for amount calculation in risk manager
-                amountFn: (totalLoss: number) => {
-                    const neededToRecover = totalLoss * (1 + (rewardPercentage / 100));
-                    return this.adjustAmountToTier(neededToRecover / (rewardPercentage / 100), rewardStructure);
-                }
-            });
-        }
-
-        return steps;
-    }
-
-    /**
-     * Calculates multipliers based on strategy type
-     */
-    private calculateAggressiveMultiplier(rewardPercentage: number): number {
-        // More aggressive compounding for low reward percentages
-        return rewardPercentage < 10 ? 4.0 : 2.5;
-    }
-
-    private calculateConservativeMultiplier(rewardPercentage: number): number {
-        // Less aggressive compounding
-        return rewardPercentage < 10 ? 2.0 : 1.5;
-    }
-
-    /**
-     * Adjusts amount to fit within reward tiers
-     */
-    private adjustAmountToTier(amount: number, rewardStructure: any[]): number {
-        const tier = rewardStructure.find(t => amount >= t.minStake && amount <= t.maxStake);
-        if (tier) return amount;
-
-        // If amount is below minimum, use minimum
-        if (amount < rewardStructure[0].minStake) {
-            return rewardStructure[0].minStake;
-        }
-
-        // If amount is above maximum, use maximum
-        return rewardStructure[rewardStructure.length - 1].maxStake;
-    }
-
-    /**
-     * Gets base reward percentage for a given amount
-     */
-    private getBaseRewardPercentage(rewardStructure: any[], amount: number): number {
-        const tier = rewardStructure.find(t => amount >= t.minStake && amount <= t.maxStake);
-        return tier?.rewardPercentage || rewardStructure[rewardStructure.length - 1].rewardPercentage;
-    }
-
-    /**
-     * Calculates optimal profit percentage based on strategy type
-     */
-    private calculateOptimalProfitPercentage(rewardStructure: any[], isAggressive: boolean): number {
-        const average = rewardStructure.reduce((sum, t) => sum + t.rewardPercentage, 0) / rewardStructure.length;
-        return isAggressive ? average * 0.8 : average; // Aggressive strategies aim for slightly less profit
     }
 
     protected handleTradeResult(params: any, result: any) {
@@ -363,7 +186,7 @@ export abstract class TradeStrategy {
 
                 // Implement additional protective measures
                 if (rapidLossState.eventCount > 3) {
-                    strategy.reduceBaseStake(0.5); // Cut stake by 50%
+                    // strategy.reduceBaseStake(0.5); // Cut stake by 50%
                 }
             }
         }
@@ -566,6 +389,9 @@ export abstract class TradeStrategy {
      * @throws {Error} If parameters are invalid
      */
     protected validateParameters(params: ContractParams): void {
+
+        console.log("::: validateParameters :::", params)
+
         if (!params) {
             throw new Error('Trade parameters are required');
         }
@@ -872,7 +698,6 @@ export class DigitDiffStrategy extends TradeStrategy {
             });
 
             const params = this.getNextContractParams(this.contractType);
-            params.barrier = this.predictedDigit;
 
             this.validateParameters(params);
 
@@ -1172,7 +997,6 @@ export class DigitUnderStrategy extends TradeStrategy {
             });
 
             const params = this.getNextContractParams(this.contractType);
-            params.barrier = this.barrier as number;
 
             this.validateParameters(params);
 
@@ -1237,7 +1061,6 @@ export class DigitOverStrategy extends TradeStrategy {
             });
 
             const params = this.getNextContractParams(this.contractType);
-            params.barrier = this.barrier as number;
 
             this.validateParameters(params);
 

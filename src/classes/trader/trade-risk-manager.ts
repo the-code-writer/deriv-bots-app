@@ -1,7 +1,8 @@
 import { getRandomDigit } from '@/common/utils/snippets';
 import { IDerivUserAccount } from './deriv-user-account';
-import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, MarketType, CurrencyType, ContractDurationUnitType, ITradeData, IPreviousTradeResult } from './types';
+import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult } from './types';
 import { pino } from "pino";
+import { StrategyParser } from './trader-strategy-parser';
 
 // Initialize logger for tracking events and errors
 // Enhanced logger with error tracking
@@ -48,42 +49,6 @@ interface NextTradeParams {
     totalAmountToRecover: number;    // Total amount needing recovery
     winningTrades: number;           // Count of winning trades
     losingTrades: number;            // Count of losing trades
-}
-
-/**
- * Interface defining a recovery strategy
- */
-interface RecoveryStrategy {
-    readonly strategyName: string;            // Name of the strategy
-    readonly strategySteps: RecoveryStep[];    // Sequence of steps in the strategy
-    readonly maxSequence: number;             // Maximum steps in sequence
-    profitPercentage: number;        // Expected profit percentage
-    readonly lossRecoveryPercentage: number;  // Percentage of loss to recover
-    readonly anticipatedProfitPercentage: number; // Percentage of anticipated profit
-    readonly maxConsecutiveLosses: number;    // Maximum allowed consecutive losses
-    readonly maxRiskExposure: number;         // Maximum risk exposure multiplier
-    readonly minBalanceRequired?: number;
-}
-
-interface AdaptiveRecoveryStrategy extends RecoveryStrategy {
-    historicalWinRate?: number;
-    dynamicProfitPercentage?: boolean;
-    maxDailyAttempts?: number;
-}
-
-/**
- * Interface defining a single step in a recovery strategy
- */
-interface RecoveryStep {
-    amount: number | ((prevLoss: number) => number); // Stake amount for this step
-    symbol: string;                  // Market symbol
-    contractType: ContractType;      // Contract type
-    contractDurationValue: number;   // Contract duration value
-    contractDurationUnits: string;   // Contract duration units
-    contractBarrier?: number;        // Optional barrier price
-    delay?: number;                  // Optional delay before next trade
-    profitPercentage?: number | ((prevLoss: number, contractType: ContractType) => number);
-    readonly minSuccessProbability?: number;
 }
 
 /**
@@ -544,9 +509,8 @@ export class VolatilityRiskManager {
 
     // Recovery strategy management
     private currentStrategyIndex: number = 0;        // Index of current strategy
-    private currentRecoveryStep: number = 0;         // Current step in strategy
-    private recoveryStrategies: RecoveryStrategy[];   // Available strategies
-    private activeStrategy: RecoveryStrategy | null;  // Currently active strategy
+    private currentRecoveryStepIndex: number = 0;         // Current step in strategy
+    private activeStrategy: any | null;  // Currently active strategy
 
     private lastLossTimestamps: number[] = [];
 
@@ -570,11 +534,14 @@ export class VolatilityRiskManager {
 
     private metricsRetentionDays = 7;
 
-    private strategyCache = new Map<string, RecoveryStrategy>();
+    private strategyParser: StrategyParser;
+
+    private strategyCache = new Map<string, any>();
 
     private strategyPerformanceData: Map<string, IStrategyPerformance> = new Map();
 
-    private defaultFallbackStrategy: string;
+    private computedSteps: StrategyStepOutput[] = [];
+
     private balanceValidationConfig: IBalanceValidationConfig;
     private profitAdjustmentConfig: IProfitAdjustmentConfig;
     private circuitBreakerState: ICircuitBreakerState;
@@ -599,7 +566,7 @@ export class VolatilityRiskManager {
         contractType: ContractType,
         contractDurationValue: number,
         contractDurationUnits: string,
-        recoveryStrategies: RecoveryStrategy[],
+        strategyParser: StrategyParser,
         circuitBreakerConfigOverrides?: Partial<ICircuitBreakerConfig>,
         rapidLossConfigOverrides?: Partial<IRapidLossConfig>,
         balanceValidationConfigOverrides?: Partial<IBalanceValidationConfig>,
@@ -613,6 +580,10 @@ export class VolatilityRiskManager {
             throw new Error("Invalid purchase type");
         }
 
+        this.strategyParser = strategyParser;
+        this.activeStrategy = this.strategyParser.getStrategyConfig();
+        this.computedSteps = this.strategyParser.getAllSteps();
+
         // Initialize basic parameters
         this.baseStake = baseStake;
         this.market = market;
@@ -621,23 +592,20 @@ export class VolatilityRiskManager {
         this.contractDurationValue = contractDurationValue;
         this.contractDurationUnits = contractDurationUnits;
 
-        // Set up recovery strategies
-        this.recoveryStrategies = recoveryStrategies.length > 0 ? recoveryStrategies : this.initializeDefaultStrategies();
-        this.activeStrategy = this.recoveryStrategies[0];
+        // Set active strategy from the parser
+        this.activeStrategy = this.strategyParser.getStrategyConfig();
+        this.computedSteps = this.strategyParser.getAllSteps();
 
 
+        // Initialize circuit breakers based on strategy
         this.circuitBreakers = {
-            totalLoss: this.baseStake * 20,
+            totalLoss: this.baseStake * (this.activeStrategy.maxRiskExposure || 20),
             dailyLoss: this.baseStake * 100,
             weeklyLoss: this.baseStake * 500
         };
 
         this.metrics = this.initializeMetrics();
 
-        // Initialize default fallback strategy (first strategy or 'SafeRecovery')
-        this.defaultFallbackStrategy = recoveryStrategies.length > 0
-            ? recoveryStrategies[0].strategyName
-            : 'SafeRecovery';
 
         // Initialize balance validation config with potential overrides
         this.balanceValidationConfig = this.initializeBalanceValidationConfig(balanceValidationConfigOverrides);
@@ -655,92 +623,6 @@ export class VolatilityRiskManager {
         this.circuitBreakerState = this.initializeCircuitBreakerState();
         this.rapidLossState = this.initializeRapidLossState();
 
-    }
-
-    /**
-   * Initializes reward structures with validation
-   */
-    private initializeRewardStructures(): StrategyRewards {
-        const structures: StrategyRewards = {
-            DIGITDIFF: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 5.71 },
-                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
-                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
-                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
-                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
-                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 9.67 }
-            ],
-            DIGITEVEN: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 88.57 },
-                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 92.00 },
-                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 94.67 },
-                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 95.00 },
-                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 95.50 },
-                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 95.33 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 95.40 }
-            ],
-            DIGITODD: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 88.57 },
-                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 92.00 },
-                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 94.67 },
-                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 95.00 },
-                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 95.50 },
-                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 95.33 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 95.40 }
-            ],
-            CALLE: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 77.14 },
-                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 78.00 },
-                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 78.67 },
-                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 79.00 },
-                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 79.50 },
-                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 79.33 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 79.40 }
-            ],
-            PUTE: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 77.14 },
-                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 78.00 },
-                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 78.67 },
-                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 79.00 },
-                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 79.50 },
-                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 79.33 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 79.40 }
-            ],
-            DIGITUNDER: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 5.71 },
-                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
-                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
-                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
-                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
-                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 9.67 }
-            ],
-            DIGITOVER: [
-                { minStake: 0.35, maxStake: 0.49, rewardPercentage: 5.71 },
-                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
-                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
-                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
-                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
-                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
-                { minStake: 5.00, maxStake: Infinity, rewardPercentage: 9.67 }
-            ]
-        };
-
-
-        // Validate all reward structures
-        for (const [type, tiers] of Object.entries(structures)) {
-            if (!tiers || tiers.length === 0) {
-                throw new Error(`Invalid reward structure for ${type}`);
-            }
-
-            // Check for coverage from 0 to Infinity
-            if (tiers[0].minStake !== 0 || tiers[tiers.length - 1].maxStake !== Infinity) {
-                throw new Error(`Reward structure for ${type} must cover full stake range`);
-            }
-        }
-
-        return structures;
     }
 
     // Helper methods for initialization
@@ -831,22 +713,21 @@ export class VolatilityRiskManager {
    * @returns Parameters for next trade or safety exit if conditions are met
    */
     public processTradeResult(
-        previousTradeResultData: IPreviousTradeResult
+        tradeResultData: IPreviousTradeResult
     ): Readonly<NextTradeParams> {
-        if (!this.validateTradeResult(previousTradeResultData)) {
+        if (!this.validateTradeResult(tradeResultData)) {
             logger.warn("Invalid trade result received");
             return this.getSafetyExitResult("invalid_trade_data");
         }
 
         this.totalTrades++;
-        this.resultIsWin = previousTradeResultData.resultIsWin;
+        this.resultIsWin = tradeResultData.resultIsWin;
         this.lastTradeTimestamp = Date.now();
 
         try {
-            this.updatePreviousTradeResult(previousTradeResultData);
 
             // Check if we should enter safety mode
-            if (this.shouldEnterSafetyMode(previousTradeResultData)) {
+            if (this.shouldEnterSafetyMode(tradeResultData)) {
                 return this.enterSafetyMode("excessive_losses");
             }
 
@@ -855,6 +736,7 @@ export class VolatilityRiskManager {
             } else {
                 return this.handleLoss();
             }
+
         } catch (error) {
             logger.error(error, "Error processing trade result");
             return this.enterSafetyMode("processing_error");
@@ -888,11 +770,12 @@ export class VolatilityRiskManager {
             }
         } else {
             // Normal win, reset recovery state
-            // this.resetRecoveryState();
+            this.resetRecoveryState();
         }
 
         // Get parameters for next trade
         return this.getNextTradeParams();
+
     }
 
     /**
@@ -913,12 +796,15 @@ export class VolatilityRiskManager {
 
         logger.warn(`Loss recorded. Total loss: ${this.totalLossAmount}, Consecutive: ${this.consecutiveLosses}`);
 
+        // Ensure we have fresh steps
+        this.refreshComputedSteps();
+
         // Check for strategy switch or safety mode
         if (this.activeStrategy) {
             if (this.consecutiveLosses >= this.activeStrategy.maxConsecutiveLosses) {
                 if (this.currentStrategyIndex < this.recoveryStrategies.length - 1) {
                     logger.info("Switching to next recovery strategy");
-                    this.nextRecoveryStrategy();
+                    this.nextany();
                 } else if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
                     return this.enterSafetyMode("max_recovery_attempts");
                 }
@@ -943,9 +829,9 @@ export class VolatilityRiskManager {
         if (!this.activeStrategy) return 0;
 
         // Get current step in recovery strategy
-        const currentStep = this.activeStrategy.strategySteps[this.currentRecoveryStep];
+        const currentStep = this.activeStrategy.strategySteps[this.currentRecoveryStepIndex];
         // Get stake amount for this step
-        const stake = this.getStepAmount(currentStep, this.totalLossAmount);
+        const stake = currentStep.amount;
 
         // Get profit percentage from strategy
         const profitPercentage = this.activeStrategy.profitPercentage;
@@ -964,9 +850,9 @@ export class VolatilityRiskManager {
         if (!this.activeStrategy) return this.baseStake;
 
         // Get current step in recovery strategy
-        const currentStep = this.activeStrategy.strategySteps[this.currentRecoveryStep];
+        const currentStep = this.activeStrategy.strategySteps[this.currentRecoveryStepIndex];
         // Get stake amount for this step
-        const stake = this.getStepAmount(currentStep, this.totalLossAmount);
+        const stake = currentStep.amount;
 
         // Calculate anticipated profit that would have been earned
         const anticipatedProfit = stake * (this.activeStrategy.anticipatedProfitPercentage / 100);
@@ -975,10 +861,7 @@ export class VolatilityRiskManager {
         return stake + anticipatedProfit;
     }
 
-    public getStepAmount(step: RecoveryStep, totalLoss: number): number {
-        if (typeof step.amount === 'function') {
-            return step.amount(totalLoss);
-        }
+    public getStepAmount(step: any): number {
         return step.amount;
     }
 
@@ -987,42 +870,42 @@ export class VolatilityRiskManager {
      * @returns Parameters for the next trade
      */
     public getNextTradeParams(): NextTradeParams {
-        // If no active strategy, return base trade parameters
-        if (!this.activeStrategy) {
+        // If no active strategy or no losses, return base trade parameters
+        if (!this.activeStrategy || (this.totalLossAmount <= 0 && this.consecutiveLosses <= 0)) {
             return this.getBaseTradeParams();
         }
 
-        // If in recovery mode (losses to recover or consecutive losses)
-        if (this.totalLossAmount > 0 || this.consecutiveLosses > 0) {
-            // Move to next step in strategy (without exceeding max steps)
-            this.currentRecoveryStep = Math.min(
-                this.currentRecoveryStep + 1,
-                this.activeStrategy.strategySteps.length - 1
-            );
-
-            // Get the current step parameters
-            const step = this.activeStrategy.strategySteps[this.currentRecoveryStep];
-
-            // Return trade parameters with values from strategy or defaults
-            return {
-                basis: BasisTypeEnum.Default,
-                symbol: step.symbol || this.market,
-                amount: this.getStepAmount(step, this.totalLossAmount),
-                barrier: step.contractBarrier || this.getBarrier(this.contractType),
-                currency: this.currency,
-                contractType: step.contractType || this.contractType,
-                contractDurationValue: step.contractDurationValue || this.contractDurationValue,
-                contractDurationUnits: step.contractDurationUnits || this.contractDurationUnits,
-                previousResultStatus: this.resultIsWin,
-                consecutiveLosses: this.consecutiveLosses,
-                totalAmountToRecover: this.totalLossAmount,
-                winningTrades: this.winningTrades,
-                losingTrades: this.losingTrades
-            };
+        // Ensure we have computed steps
+        if (!this.computedSteps || this.computedSteps.length === 0) {
+            this.computedSteps = this.strategyParser.getAllSteps();
         }
 
-        // Default to base trade parameters if not in recovery
-        return this.getBaseTradeParams();
+        // Safely get the next step
+        const stepIndex = Math.min(this.consecutiveLosses, this.computedSteps.length - 1);
+        const step = this.computedSteps[stepIndex];
+
+        return {
+            basis: step.basis || BasisTypeEnum.Default,
+            symbol: step.symbol || this.market,
+            amount: step.amount,
+            barrier: step.barrier || this.getBarrier(step.contract_type || this.contractType),
+            currency: step.currency || this.currency,
+            contractType: step.contract_type || this.contractType,
+            contractDurationValue: step.duration || this.contractDurationValue,
+            contractDurationUnits: step.duration_unit || this.contractDurationUnits,
+            previousResultStatus: this.resultIsWin,
+            consecutiveLosses: this.consecutiveLosses,
+            totalAmountToRecover: this.totalLossAmount,
+            winningTrades: this.winningTrades,
+            losingTrades: this.losingTrades
+        };
+
+    }
+
+    private refreshComputedSteps(): void {
+        if (this.strategyParser) {
+            this.computedSteps = this.strategyParser.getAllSteps();
+        }
     }
 
     getBarrier(contractType: ContractType): number | string {
@@ -1152,7 +1035,7 @@ export class VolatilityRiskManager {
         return Object.freeze({
             ...this.getBaseTradeParams(),
             amount: this.baseStake,
-            barrier: null,
+            barrier: 5,
             recoveryAttempt: this.recoveryAttempts,
             metadata: {
                 safetyMode: true,
@@ -1194,236 +1077,13 @@ export class VolatilityRiskManager {
         return false;
     }
 
-    /**
- * Retrieves a recovery strategy by name with enhanced validation and fallback logic
- * @param {string} name - Name of the strategy to retrieve
- * @param {object} [options] - Additional options
- * @param {boolean} [options.throwOnNotFound=true] - Whether to throw if strategy not found
- * @param {boolean} [options.validate=true] - Whether to validate strategy before returning
- * @param {string} [options.fallbackStrategy] - Fallback strategy name if primary not found
- * @returns {RecoveryStrategy | undefined} The requested strategy or fallback if configured
- * 
- * @description
- * This enhanced version provides:
- * 1. Robust strategy lookup with multiple fallback options
- * 2. Strategy validation before returning
- * 3. Configurable error handling
- * 4. Detailed logging
- * 5. Performance optimization through caching
- * 
- * Throws an error if:
- * - Strategy not found and throwOnNotFound=true
- * - Strategy is invalid and validate=true
- */
-    public getRecoveryStrategy(
-        name: string,
-        options: {
-            throwOnNotFound?: boolean;
-            validate?: boolean;
-            fallbackStrategy?: string;
-        } = {}
-    ): RecoveryStrategy | undefined {
-        const {
-            throwOnNotFound = true,
-            validate = true,
-            fallbackStrategy
-        } = options;
-
-        // Check cache first
-        if (this.strategyCache.has(name)) {
-            const cached = this.strategyCache.get(name);
-            if (!validate || this.validateRecoveryStrategy(cached)) {
-                return cached;
-            }
-        }
-
-        // Find strategy in available strategies
-        let strategy = this.recoveryStrategies.find(s => s.strategyName === name);
-
-        // If not found, attempt fallback in this order:
-        // 1. Specified fallbackStrategy parameter
-        // 2. Default fallback strategy
-        // 3. First available strategy
-        if (!strategy) {
-
-            const fallbackOptions: string[] = [];
-
-            if (fallbackStrategy) {
-                fallbackOptions.push(`specified fallback (${fallbackStrategy})`);
-                strategy = this.recoveryStrategies.find(s => s.strategyName === fallbackStrategy);
-            }
-
-            if (!strategy && this.defaultFallbackStrategy) {
-                fallbackOptions.push(`default fallback (${this.defaultFallbackStrategy})`);
-                strategy = this.recoveryStrategies.find(s => s.strategyName === this.defaultFallbackStrategy);
-            }
-
-            if (!strategy && this.recoveryStrategies.length > 0) {
-                fallbackOptions.push(`first available strategy (${this.recoveryStrategies[0].strategyName})`);
-                strategy = this.recoveryStrategies[0];
-            }
-
-            if (strategy) {
-                logger.warn(`Strategy "${name}" not found, using ${fallbackOptions.join(' -> ')}`);
-            }
-        }
-
-        // Throw if still not found and configured to do so
-        if (!strategy && throwOnNotFound) {
-            const error = new Error(`Recovery strategy "${name}" not found and no valid fallback available`);
-            logger.error(error.message, { availableStrategies: this.getStrategyNames() });
-            throw error;
-        }
-
-        // Validate strategy if found and validation enabled
-        if (strategy && validate && !this.validateRecoveryStrategy(strategy)) {
-            const error = new Error(`Recovery strategy "${name}" failed validation`);
-            logger.error(error.message, { strategy });
-
-            if (throwOnNotFound) {
-                throw error;
-            }
-            return undefined;
-        }
-
-        // Cache valid strategy
-        if (strategy) {
-            this.strategyCache.set(name, strategy);
-        }
-
-        return strategy;
-    }
-
-    /**
-     * Validates a recovery strategy's structure and parameters
-     * @private
-     * @param {RecoveryStrategy} strategy - Strategy to validate
-     * @returns {boolean} True if strategy is valid
-     * 
-     * @description
-     * Performs comprehensive validation including:
-     * 1. Basic structure validation
-     * 2. Parameter range checking
-     * 3. Sequence step validation
-     * 4. Risk parameter consistency
-     */
-    private validateRecoveryStrategy(strategy: RecoveryStrategy | undefined): boolean {
-        if (!strategy) return false;
-
-        const errors: string[] = [];
-
-        // Validate basic structure
-        if (!strategy.strategyName?.trim() || typeof strategy.strategyName !== 'string') {
-            errors.push('Missing or invalid strategyName');
-        }
-
-        if (!Array.isArray(strategy.strategySteps) || strategy.strategySteps.length === 0) {
-            errors.push('strategySteps must be a non-empty array');
-        } else {
-
-            // Validate each step in the strategy
-
-            strategy.strategySteps.forEach((step, i) => {
-                if (typeof step.amount !== 'number' && typeof step.amount !== 'function') {
-                    errors.push(`Step ${i} amount must be number or function`);
-                }
-                if (typeof step.amount !== 'number' || step.amount <= 0) {
-                    errors.push(`Step ${i + 1} has invalid amount: ${step.amount}`);
-                }
-                if (!step.symbol?.trim()) {
-                    errors.push(`Step ${i} symbol is required`);
-                }
-                if (!Object.values(ContractTypeEnum).includes(step.contractType)) {
-                    errors.push(`Step ${i} has invalid contractType`);
-                }
-                if (!step.contractType || !Object.values(ContractTypeEnum).includes(step.contractType)) {
-                    errors.push(`Step ${i + 1} has invalid contractType: ${step.contractType}`);
-                }
-
-                if (typeof step.contractDurationValue !== 'number' || step.contractDurationValue <= 0) {
-                    errors.push(`Step ${i + 1} has invalid durationValue: ${step.contractDurationValue}`);
-                }
-            });
-        }
-
-        // Validate numerical parameters
-        const validateRange = (value: number, min: number, max: number, name: string) => {
-            if (typeof value !== 'number' || value < min || value > max) {
-                errors.push(`${name} must be between ${min} and ${max}, got ${value}`);
-            }
-        };
-
-        validateRange(strategy.profitPercentage, 1, 1000, 'profitPercentage');
-        validateRange(strategy.lossRecoveryPercentage, 50, 200, 'lossRecoveryPercentage');
-        validateRange(strategy.maxConsecutiveLosses, 1, 20, 'maxConsecutiveLosses');
-        validateRange(strategy.maxRiskExposure, 1, 50, 'maxRiskExposure');
-
-        // Check risk exposure consistency
-        const maxStepAmount = Math.max(...strategy.strategySteps.map(step => this.getStepAmount(step, this.totalLossAmount)));
-        const maxAllowed = this.baseStake * strategy.maxRiskExposure;
-
-        if (maxStepAmount > maxAllowed) {
-            errors.push(
-                `Max step amount ${maxStepAmount} exceeds maxRiskExposure ` +
-                `of ${strategy.maxRiskExposure}x base stake (${maxAllowed})`
-            );
-        }
-
-        // Validate adaptive strategies
-        if ('historicalWinRate' in strategy) {
-            const adaptive = strategy as AdaptiveRecoveryStrategy;
-            if (adaptive.historicalWinRate !== undefined &&
-                (adaptive.historicalWinRate < 0 || adaptive.historicalWinRate > 1)) {
-                errors.push('historicalWinRate must be between 0 and 1');
-            }
-        }
-
-        // Log validation errors if any
-        if (errors.length > 0) {
-            logger.warn('Strategy validation failed', {
-                strategy: strategy.strategyName,
-                errors
-            });
-            return false;
-        }
-
-        return true;
-
-    }
-
-    /**
-     * Gets names of all available strategies
-     * @returns {string[]} Array of strategy names
-     */
-    public getStrategyNames(): string[] {
-        return this.recoveryStrategies.map(s => s.strategyName);
-    }
-
-    /**
-     * Initializes strategy cache
-     * @private
-     * @returns {Map<string, RecoveryStrategy>}
-     */
-    private initializeStrategyCache(): Map<string, RecoveryStrategy> {
-        const cache = new Map<string, RecoveryStrategy>();
-
-        // Pre-cache validated strategies
-        this.recoveryStrategies.forEach(strategy => {
-            if (this.validateRecoveryStrategy(strategy)) {
-                cache.set(strategy.strategyName, strategy);
-            }
-        });
-
-        return cache;
-    }
-
     /***
      * 
      * 
      * USAGE EXAMPLE
      * 
      * 
-     * // Initialize with multiple strategies
+     * Initialize with multiple strategies
         const riskManager = new VolatilityRiskManager(
             10, // baseStake
             "1HZ100V", // market
@@ -1457,18 +1117,18 @@ export class VolatilityRiskManager {
         );
 
         // 1. Basic successful lookup
-        const aggressive = riskManager.getRecoveryStrategy("AggressiveRecovery");
+        const aggressive = riskManager.getany("AggressiveRecovery");
         console.log(aggressive?.strategyName); // "AggressiveRecovery"
 
         // 2. Failed lookup with fallback
-        const safe = riskManager.getRecoveryStrategy("Nonexistent", {
+        const safe = riskManager.getany("Nonexistent", {
             fallbackStrategy: "SafeRecovery"
         });
         console.log(safe?.strategyName); // "SafeRecovery"
 
         // 3. Failed lookup with error
         try {
-            riskManager.getRecoveryStrategy("Nonexistent", {
+            riskManager.getany("Nonexistent", {
                 throwOnNotFound: true
             });
         } catch (e) {
@@ -1485,7 +1145,7 @@ export class VolatilityRiskManager {
         };
         riskManager.recoveryStrategies.push(invalidStrategy);
 
-        const result = riskManager.getRecoveryStrategy("Invalid", {
+        const result = riskManager.getany("Invalid", {
             validate: true,
             throwOnNotFound: false
         });
@@ -1498,34 +1158,6 @@ export class VolatilityRiskManager {
      */
 
     /**
-     * Updates or adds a recovery strategy
-     * @param strategy - The strategy to update or add
-     */
-    public updateRecoveryStrategy(strategy: RecoveryStrategy): void {
-        // Find index of existing strategy with same name
-        const index = this.recoveryStrategies.findIndex(s => s.strategyName === strategy.strategyName);
-        if (index >= 0) {
-            // Update existing strategy
-            this.recoveryStrategies[index] = strategy;
-        } else {
-            // Add new strategy
-            this.recoveryStrategies.push(strategy);
-        }
-    }
-
-    /**
-     * Moves to the next recovery strategy in the list
-     */
-    public nextRecoveryStrategy(): void {
-        // Cycle to next strategy (wrapping around if necessary)
-        this.currentStrategyIndex = (this.currentStrategyIndex + 1) % this.recoveryStrategies.length;
-        // Set active strategy
-        this.activeStrategy = this.recoveryStrategies[this.currentStrategyIndex];
-        // Reset to first step in new strategy
-        this.currentRecoveryStep = 0;
-    }
-
-    /**
      * Calculates delay before next trade based on current strategy
      * @returns Delay in milliseconds
      */
@@ -1534,7 +1166,7 @@ export class VolatilityRiskManager {
         if (!this.activeStrategy) return 0;
 
         // Get delay from current step (default to 0 if not specified)
-        const step = this.activeStrategy.strategySteps[this.currentRecoveryStep];
+        const step = this.activeStrategy.strategySteps[this.currentRecoveryStepIndex];
         return step.delay || 0;
     }
 
@@ -1703,7 +1335,7 @@ export class VolatilityRiskManager {
      * USAGE EXAMPLE
      * 
      * 
-     * // Initialize with custom balance validation settings
+     * Initialize with custom balance validation settings
         const riskManager = new VolatilityRiskManager(
             10, // baseStake
             "1HZ100V", // market
@@ -1967,7 +1599,7 @@ export class VolatilityRiskManager {
      * USAGE EXAMPLE
      * 
      * 
-     * // Initialize with custom profit adjustment settings
+     * Initialize with custom profit adjustment settings
         const riskManager = new VolatilityRiskManager(
             10, // baseStake
             "1HZ100V", // market
@@ -2015,15 +1647,15 @@ export class VolatilityRiskManager {
     
      */
 
-    private validateStrategy(strategy: RecoveryStrategy): boolean {
+    private validateStrategy(strategy: any): boolean {
         if (!strategy.strategySteps.length) return false;
         if (strategy.maxRiskExposure > MAX_STAKE_MULTIPLIER) return false;
-        return strategy.strategySteps.every(step =>
-            step.amount !== undefined && this.getStepAmount(step, this.totalLossAmount) > 0
+        return strategy.strategySteps.every((step:any) =>
+            step.amount !== undefined && step.amount > 0
         );
     }
 
-    private getFallbackStrategy(): RecoveryStrategy {
+    private getFallbackStrategy(): any {
         return {
             strategyName: "SAFE_FALLBACK",
             strategySteps: [
@@ -2061,7 +1693,7 @@ export class VolatilityRiskManager {
     }
 
     // Add machine learning integration point
-    private predictWinProbability(strategy: RecoveryStrategy): number {
+    private predictWinProbability(strategy: any): number {
         // Could integrate with ML model
         const baseProbability = 1 / strategy.strategySteps.length;
         return this.marketConditions.volatility > 0.7
@@ -2366,7 +1998,7 @@ export class VolatilityRiskManager {
      * USAGE EXAMPLE
      * 
      * 
-     * // Initialize with custom rapid loss settings
+     * Initialize with custom rapid loss settings
     const riskManager = new VolatilityRiskManager(
         10, // baseStake
         "1HZ100V", // market
@@ -2516,7 +2148,7 @@ export class VolatilityRiskManager {
      * 
      * USAGE EXAMPLE
      * 
-     * // Initialize risk manager with custom circuit breaker settings
+     * Initialize risk manager with custom circuit breaker settings
     const riskManager = new VolatilityRiskManager(
         10, // baseStake
         "1HZ100V", // market
@@ -2847,10 +2479,10 @@ export class VolatilityRiskManager {
      * 
      * 
      * 
-     * // After a trade completes:
+     * After a trade completes:
     riskManager.updateMetrics(
         true, // success
-        "RecoveryStrategyV2", 
+        "anyV2", 
         85.50, // recovered amount
         1200, // duration in ms
         { volatility: 0.65, trend: 'up' } // market conditions
@@ -2858,7 +2490,7 @@ export class VolatilityRiskManager {
 
     // Get filtered metrics:
     const strategyMetrics = riskManager.getMetrics({ 
-        strategy: "RecoveryStrategyV2",
+        strategy: "anyV2",
         since: Date.now() - 86400000 // last 24 hours
     });
 
@@ -2894,7 +2526,7 @@ export class VolatilityRiskManager {
         }
 
         const currentStep = this.activeStrategy.strategySteps[
-            Math.min(this.currentRecoveryStep, this.activeStrategy.strategySteps.length - 1)
+            Math.min(this.currentRecoveryStepIndex, this.activeStrategy.strategySteps.length - 1)
         ];
 
         // Handle dynamic stake calculation functions
@@ -2919,7 +2551,7 @@ export class VolatilityRiskManager {
         // Calculate multiple risk factors
         const maxStakeByExposure = this.baseStake * this.activeStrategy.maxRiskExposure;
         const maxStakeByBalance = this.baseStake * MAX_STAKE_MULTIPLIER;
-        const sequenceRiskFactor = 1 - (this.currentRecoveryStep / this.activeStrategy.strategySteps.length);
+        const sequenceRiskFactor = 1 - (this.currentRecoveryStepIndex / this.activeStrategy.strategySteps.length);
 
         const maxAllowedStake = Math.min(
             maxStakeByExposure,
@@ -2989,22 +2621,6 @@ export class VolatilityRiskManager {
     }
 
     /**
-     * Updates internal state with previous trade result data
-     * @param data - The previous trade result data
-     */
-    private updatePreviousTradeResult(data: IPreviousTradeResult): void {
-        // Validate the input data
-        this.validatePreviousTradeData(data);
-
-        // Update internal state from trade result
-        this.resultIsWin = data.resultIsWin;
-        this.consecutiveLosses = data.strategyParams.consecutiveLosses;
-        this.totalLossAmount = data.strategyParams.totalLost || 0;
-        this.winningTrades = data.strategyParams.winningTrades || 0;
-        this.losingTrades = data.strategyParams.losingTrades || 0;
-    }
-
-    /**
      * Validates previous trade data structure
      * @param data - The data to validate
      * @throws Error if data is invalid
@@ -3041,8 +2657,8 @@ export class VolatilityRiskManager {
         }
 
         // Check if current stake exceeds maximum risk exposure
-        const currentStake = this.getStepAmount(this.activeStrategy.strategySteps[this.currentRecoveryStep], this.totalLossAmount);
-        if (currentStake > this.baseStake * this.activeStrategy.maxRiskExposure) {
+        const currentStep = this.computedSteps[this.currentRecoveryStepIndex];
+        if (currentStep.amount > this.baseStake * this.activeStrategy.maxRiskExposure) {
             return false;
         }
 
@@ -3055,9 +2671,10 @@ export class VolatilityRiskManager {
     private resetState(): void {
         this.consecutiveLosses = 0;
         this.totalLossAmount = 0;
-        this.currentRecoveryStep = 0;
+        this.currentRecoveryStepIndex = 0;
         this.currentStrategyIndex = 0;
-        this.activeStrategy = this.recoveryStrategies[0];
+        this.refreshComputedSteps();
+        this.activeStrategy = this.strategyParser.safeGetStep(0);
     }
 
     /**
@@ -3065,15 +2682,23 @@ export class VolatilityRiskManager {
      */
     private resetRecoveryState(): void {
         this.consecutiveLosses = 0;
-        this.currentRecoveryStep = 0;
+        this.currentRecoveryStepIndex = 0;
     }
 
     /**
      * Gets the currently active strategy
      * @returns The active strategy or null
      */
-    public getCurrentStrategy(): RecoveryStrategy | null {
-        return this.activeStrategy;
+    public getCurrentStrategy(): StrategyConfig {
+        return this.strategyParser.getStrategyConfig();
+    }
+
+    public getStrategySteps(): StrategyStepOutput[] {
+        return this.strategyParser.getAllSteps();
+    }
+
+    public getStrategyMeta(): StrategyMeta {
+        return this.strategyParser.getMetaInfo();
     }
 
     /**
@@ -3084,7 +2709,7 @@ export class VolatilityRiskManager {
         // If no active strategy, return 0 delay
         if (!this.activeStrategy) return 0;
         // Get delay from current step (default to 0 if not specified)
-        return this.activeStrategy.strategySteps[this.currentRecoveryStep].delay || 0;
+        return this.activeStrategy.strategySteps[this.currentRecoveryStepIndex].delay || 0;
     }
 
     /**
@@ -3124,76 +2749,4 @@ export class VolatilityRiskManager {
         this.strategyPerformanceData.set(strategyName, updatedData);
     }
 
-    /**
-     * Initializes default recovery strategies
-     * @returns Array of default recovery strategies
-     */
-    private initializeDefaultStrategies(): RecoveryStrategy[] {
-        return [
-            {
-                strategyName: "Beast001",
-                strategySteps: [
-                    {
-                        amount: this.baseStake * 2,
-                        symbol: this.market,
-                        contractType: this.contractType,
-                        contractDurationValue: this.contractDurationValue,
-                        contractDurationUnits: this.contractDurationUnits
-                    },
-                    {
-                        amount: this.baseStake * 4,
-                        symbol: this.market,
-                        contractType: this.contractType,
-                        contractDurationValue: this.contractDurationValue,
-                        contractDurationUnits: this.contractDurationUnits
-                    },
-                    {
-                        amount: this.baseStake * 8,
-                        symbol: this.market,
-                        contractType: this.contractType,
-                        contractDurationValue: this.contractDurationValue,
-                        contractDurationUnits: this.contractDurationUnits
-                    }
-                ],
-                maxSequence: 3,
-                profitPercentage: 80,
-                lossRecoveryPercentage: 100,
-                anticipatedProfitPercentage: 80,
-                maxConsecutiveLosses: 5,
-                maxRiskExposure: 15
-            },
-            {
-                strategyName: "SafeRecovery",
-                strategySteps: [
-                    {
-                        amount: this.baseStake * 1.5,
-                        symbol: this.market,
-                        contractType: this.contractType,
-                        contractDurationValue: this.contractDurationValue,
-                        contractDurationUnits: this.contractDurationUnits
-                    },
-                    {
-                        amount: this.baseStake * 2.25,
-                        symbol: this.market,
-                        contractType: this.contractType,
-                        contractDurationValue: this.contractDurationValue,
-                        contractDurationUnits: this.contractDurationUnits
-                    },
-                    {
-                        amount: this.baseStake * 3.375,
-                        symbol: this.market,
-                        contractType: this.contractType,
-                        contractDurationValue: this.contractDurationValue,
-                        contractDurationUnits: this.contractDurationUnits
-                    }
-                ],
-                maxSequence: 3,
-                profitPercentage: 50,
-                lossRecoveryPercentage: 80,
-                anticipatedProfitPercentage: 50,
-                maxConsecutiveLosses: 3,
-                maxRiskExposure: 5
-            }
-        ];
-    }
 }
