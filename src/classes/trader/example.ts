@@ -31,7 +31,7 @@ const tradingSession = {
     "tradeDuration": "10min ⏱️",
     "updateFrequency": "5sec ⏱️",
     "contractDurationUnits": "Ticks ⏱️",
-    "contractDurationValue": "1Tick ⏱️",
+    "contractDurationValue": "8Tick ⏱️",
     "tradingMode": "📈 Manual Trading"
 };
 

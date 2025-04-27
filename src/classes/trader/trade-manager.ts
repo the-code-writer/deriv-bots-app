@@ -17,18 +17,7 @@ const logger = pino({ name: "TradeManager" });
  */
 export class TradeManager {
 
-    private market?: MarketType;
     private contractType?: ContractType;
-    private baseStake?: number;
-    private takeProfit?: number;
-    private stopLoss?: number;
-    private contractDurationUnits?: ContractDurationUnitType;
-    private contractDurationValue?: number;
-    private tradingMode?: TradingModeType;
-    private sessionData?: TradingSessionDataType;
-
-    private userAccount?: IDerivUserAccount;
-
     private currentContractType: TradeStrategy;
 
     /**
@@ -37,23 +26,8 @@ export class TradeManager {
      */
     constructor(config: BotConfig) {
 
-        this.market = config.market;
         this.contractType = config.contractType;
-        this.baseStake = config.baseStake;
-        this.takeProfit = config.takeProfit;
-        this.stopLoss = config.stopLoss;
-        this.contractDurationUnits = config.contractDurationUnits;
-        this.contractDurationValue = config.contractDurationValue;
-        this.tradingMode = config.tradingMode;
-        this.sessionData = config.sessionData;
-
-        this.currentContractType = this.initializeContractTypeClass(this.contractType);
-
-    }
-
-    setUserAccount(userAccount:IDerivUserAccount) : void {
-
-        this.userAccount = userAccount;
+        this.currentContractType = this.initializeContractTypeClass(this.contractType, config);
 
     }
 
@@ -63,7 +37,13 @@ export class TradeManager {
      * @param {ContractType} contractType - Type of trade to execute
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async executeTrade(): Promise<ITradeData | undefined> {
+    async executeTrade(userAccountToken:string): Promise<ITradeData | undefined> {
+
+        logger.warn({
+            userAccountToken,
+            contractType : this.contractType,
+            //currentContractType: this.currentContractType
+        })
 
         if (!this.contractType) {
             throw new Error('TradeManager can not execute trade : Missing Contract Type');
@@ -76,7 +56,7 @@ export class TradeManager {
         try {
 
             // Execute the trade using current strategy
-            const response = await this.currentContractType.execute();
+            const response = await this.currentContractType.execute(userAccountToken);
 
             // Validate and process trade result
             return response;
@@ -99,26 +79,26 @@ export class TradeManager {
      * @returns {TradeStrategy} Strategy instance
      * @private
      */
-    private initializeContractTypeClass(contractType: ContractType | undefined): TradeStrategy {
+    private initializeContractTypeClass(contractType: ContractType | undefined, config:BotConfig): TradeStrategy {
 
         switch (contractType) {
             case ContractTypeEnum.DigitDiff:
-                return new DigitDiffStrategy();
+                return new DigitDiffStrategy(config);
             case ContractTypeEnum.DigitOver:
-                return new DigitOverStrategy();
+                return new DigitOverStrategy(config);
             case ContractTypeEnum.DigitUnder:
-                return new DigitUnderStrategy();
+                return new DigitUnderStrategy(config);
             case ContractTypeEnum.DigitEven:
-                return new DigitEvenStrategy();
+                return new DigitEvenStrategy(config);
             case ContractTypeEnum.DigitOdd:
-                return new DigitOddStrategy();
+                return new DigitOddStrategy(config);
             case ContractTypeEnum.Call:
-                return new CallStrategy();
+                return new CallStrategy(config);
             case ContractTypeEnum.Put:
-                return new PutStrategy();
+                return new PutStrategy(config);
             default:
                 logger.warn(`Unknown strategy type: ${contractType}, using DigitDiffStrategy as fallback`);
-                break;
+                return new DigitDiffStrategy(config);
         }
 
     }

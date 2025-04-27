@@ -143,6 +143,10 @@ export class TradeExecutor {
      */
     private validateContractParameters(params: ContractParams): void {
 
+        logger.warn({
+            params
+        })
+
         const requiredFields = ['amount', 'contract_type', 'currency', 'symbol'];
 
         // @ts-ignore
@@ -168,7 +172,7 @@ export class TradeExecutor {
             throw new Error(`Amount must be ${env.MIN_STAKE} or above`);
         }
 
-        if (Number(params.amount) < env.MAX_STAKE) {
+        if (Number(params.amount) > env.MAX_STAKE) {
             throw new Error(`Amount must be ${env.MAX_STAKE} or below`);
         }
 

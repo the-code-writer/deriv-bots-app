@@ -26,6 +26,7 @@ import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "./deriv-user-account";
 import { StrategyParser } from './trader-strategy-parser';
+import { BotConfig } from './types';
 
 const logger = pino({
     name: "TradeStrategy",
@@ -81,7 +82,10 @@ export abstract class TradeStrategy {
     protected predictedDigit: number = 0;
     protected barrier: number | string = 0;
 
-    constructor() {
+    protected config: BotConfig;
+
+    constructor(config: BotConfig) {
+        this.config = config;
         this.executor = new TradeExecutor();
         this.tradeRewardStructures = new TradeRewardStructures();
         this.contractFactory = ContractParamsFactory;
@@ -92,7 +96,7 @@ export abstract class TradeStrategy {
      * @abstract
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    abstract execute(): Promise<ITradeData>;
+    abstract execute(userAccountToken: string): Promise<ITradeData>;
 
     protected initializeVolatilityRiskManager(strategyName: string): void {
 
@@ -136,7 +140,7 @@ export abstract class TradeStrategy {
         );
     }
 
-    protected async executeTrade(): Promise<ITradeData> {
+    protected async executeTrade(userAccountToken: string): Promise<ITradeData> {
         await this.preContractPurchaseChecks(this.contractType);
 
         logger.info({
@@ -149,7 +153,7 @@ export abstract class TradeStrategy {
         const params = this.getNextContractParams(this.contractType);
         this.validateParameters(params);
 
-        const result = await this.executor.purchaseContract(params, this.userAccountToken);
+        const result = await this.executor.purchaseContract(params, userAccountToken);
         this.handleTradeResult(params, result);
 
         return result;
@@ -475,15 +479,16 @@ export abstract class TradeStrategy {
 
 // Concrete strategy implementations
 export class DigitDiffStrategy extends TradeStrategy {
-    constructor() {
-        super();
+    constructor(config: BotConfig) {
+        super(config);
+        // Class based contract type
         this.contractType = ContractTypeEnum.DigitDiff;
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData> {
+    async execute(userAccountToken: string): Promise<ITradeData> {
         try {
-            return await this.executeTrade();
+            return await this.executeTrade(userAccountToken);
         } catch (error) {
             logger.error({
                 error,
@@ -497,15 +502,16 @@ export class DigitDiffStrategy extends TradeStrategy {
 }
 
 export class DigitEvenStrategy extends TradeStrategy {
-    constructor() {
-        super();
+    constructor(config: BotConfig) {
+        super(config);
+        // Class based contract type
         this.contractType = ContractTypeEnum.DigitEven;
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData> {
+    async execute(userAccountToken: string): Promise<ITradeData> {
         try {
-            return await this.executeTrade();
+            return await this.executeTrade(userAccountToken);
         } catch (error) {
             logger.error({
                 error,
@@ -519,15 +525,16 @@ export class DigitEvenStrategy extends TradeStrategy {
 }
 
 export class DigitOddStrategy extends TradeStrategy {
-    constructor() {
-        super();
+    constructor(config: BotConfig) {
+        super(config);
+        // Class based contract type
         this.contractType = ContractTypeEnum.DigitOdd;
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData> {
+    async execute(userAccountToken: string): Promise<ITradeData> {
         try {
-            return await this.executeTrade();
+            return await this.executeTrade(userAccountToken);
         } catch (error) {
             logger.error({
                 error,
@@ -541,15 +548,16 @@ export class DigitOddStrategy extends TradeStrategy {
 }
 
 export class CallStrategy extends TradeStrategy {
-    constructor() {
-        super();
+    constructor(config: BotConfig) {
+        super(config);
+        // Class based contract type
         this.contractType = ContractTypeEnum.Call;
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData> {
+    async execute(userAccountToken: string): Promise<ITradeData> {
         try {
-            return await this.executeTrade();
+            return await this.executeTrade(userAccountToken);
         } catch (error) {
             logger.error({
                 error,
@@ -557,21 +565,22 @@ export class CallStrategy extends TradeStrategy {
                 message: 'Error executing CALL strategy'
             });
             this.checkCircuitBreakersOnFailure();
-            throw error;
+            //throw error;
         }
     }
 }
 
 export class PutStrategy extends TradeStrategy {
-    constructor() {
-        super();
+    constructor(config: BotConfig) {
+        super(config);
+        // Class based contract type
         this.contractType = ContractTypeEnum.Put;
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData> {
+    async execute(userAccountToken: string): Promise<ITradeData> {
         try {
-            return await this.executeTrade();
+            return await this.executeTrade(userAccountToken);
         } catch (error) {
             logger.error({
                 error,
@@ -585,15 +594,16 @@ export class PutStrategy extends TradeStrategy {
 }
 
 export class DigitUnderStrategy extends TradeStrategy {
-    constructor() {
-        super();
+    constructor(config: BotConfig) {
+        super(config);
+        // Class based contract type
         this.contractType = ContractTypeEnum.DigitUnder;
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData> {
+    async execute(userAccountToken: string): Promise<ITradeData> {
         try {
-            return await this.executeTrade();
+            return await this.executeTrade(userAccountToken);
         } catch (error) {
             logger.error({
                 error,
@@ -607,15 +617,16 @@ export class DigitUnderStrategy extends TradeStrategy {
 }
 
 export class DigitOverStrategy extends TradeStrategy {
-    constructor() {
-        super();
+    constructor(config: BotConfig) {
+        super(config);
+        // Class based contract type
         this.contractType = ContractTypeEnum.DigitOver;
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData> {
+    async execute(userAccountToken: string): Promise<ITradeData> {
         try {
-            return await this.executeTrade();
+            return await this.executeTrade(userAccountToken);
         } catch (error) {
             logger.error({
                 error,

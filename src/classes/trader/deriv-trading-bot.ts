@@ -215,7 +215,7 @@ export class DerivTradingBot {
                     // Start the main trading loop
                     this.isTrading = true;
 
-                    await this.executeTradeSequence();
+                    await this.executeTradeSequence(userAccountToken);
 
                 } else {
 
@@ -529,13 +529,13 @@ export class DerivTradingBot {
     /**
      * Main trade execution flow without while loops
      */
-    private async executeTradeSequence(): Promise<void> {
+    private async executeTradeSequence(userAccountToken: string): Promise<void> {
 
         if (!this.isTrading) return;
 
         try {
 
-            const tradeResult: ITradeData | undefined = await this.tradeManager.executeTrade() as ITradeData;
+            const tradeResult: ITradeData | undefined = await this.tradeManager.executeTrade(userAccountToken) as ITradeData;
 
             await this.processTradeResult(tradeResult);
 
@@ -545,7 +545,7 @@ export class DerivTradingBot {
             }
 
             // Next trade in a loop until halted by internal mechanisms
-            await this.executeTradeSequence();
+            await this.executeTradeSequence(userAccountToken);
 
         } catch (error) {
 
