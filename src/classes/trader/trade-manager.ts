@@ -17,8 +17,9 @@ const logger = pino({ name: "TradeManager" });
  */
 export class TradeManager {
 
-    private contractType?: ContractType;
     private currentContractType: TradeStrategy;
+
+    private config: BotConfig;
 
     /**
      * Constructs a new TradeManager instance
@@ -26,8 +27,11 @@ export class TradeManager {
      */
     constructor(config: BotConfig) {
 
-        this.contractType = config.contractType;
-        this.currentContractType = this.initializeContractTypeClass(this.contractType, config);
+        this.config = config;
+
+        console.log("***********************  config ******", config);
+
+        this.currentContractType = this.initializeContractTypeClass();
 
     }
 
@@ -41,11 +45,11 @@ export class TradeManager {
 
         logger.warn({
             userAccountToken,
-            contractType : this.contractType,
+            config : this.config,
             //currentContractType: this.currentContractType
         })
 
-        if (!this.contractType) {
+        if (!this.config.contractType) {
             throw new Error('TradeManager can not execute trade : Missing Contract Type');
         }
 
@@ -79,26 +83,28 @@ export class TradeManager {
      * @returns {TradeStrategy} Strategy instance
      * @private
      */
-    private initializeContractTypeClass(contractType: ContractType | undefined, config:BotConfig): TradeStrategy {
+    private initializeContractTypeClass(): TradeStrategy {
 
-        switch (contractType) {
+        console.error('&&&&&&&&&&&&&&&&&&&&& initializeContractTypeClass', this.config);
+
+        switch (this.config.contractType) {
             case ContractTypeEnum.DigitDiff:
-                return new DigitDiffStrategy(config);
+                return new DigitDiffStrategy(this.config);
             case ContractTypeEnum.DigitOver:
-                return new DigitOverStrategy(config);
+                return new DigitOverStrategy(this.config);
             case ContractTypeEnum.DigitUnder:
-                return new DigitUnderStrategy(config);
+                return new DigitUnderStrategy(this.config);
             case ContractTypeEnum.DigitEven:
-                return new DigitEvenStrategy(config);
+                return new DigitEvenStrategy(this.config);
             case ContractTypeEnum.DigitOdd:
-                return new DigitOddStrategy(config);
+                return new DigitOddStrategy(this.config);
             case ContractTypeEnum.Call:
-                return new CallStrategy(config);
+                return new CallStrategy(this.config);
             case ContractTypeEnum.Put:
-                return new PutStrategy(config);
+                return new PutStrategy(this.config);
             default:
-                logger.warn(`Unknown strategy type: ${contractType}, using DigitDiffStrategy as fallback`);
-                return new DigitDiffStrategy(config);
+                logger.warn({error: `Unknown strategy type: ${this.config.contractType}, using DigitDiffStrategy as fallback`, config: this.config});
+                return new DigitDiffStrategy(this.config);
         }
 
     }

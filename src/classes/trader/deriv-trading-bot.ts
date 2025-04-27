@@ -202,8 +202,6 @@ export class DerivTradingBot {
 
                         this.userAccountToken = userAccountToken;
 
-                        this.tradeManager.setUserAccount(this.userAccount);
-
                     }
 
                     const connectedText: string = "🟢 Deriv connection established!";
@@ -512,6 +510,8 @@ export class DerivTradingBot {
             maxStake: this.maxStake,
             minStake: this.minStake,
         };
+
+        console.log("***********************  XXXXXXXX ******", config);
 
         this.tradeManager = new TradeManager(config);
 
