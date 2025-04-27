@@ -15,6 +15,7 @@
     "dev-crypt": "tsx watch --clear-screen=false src/classes/cryptography/example.ts | pino-pretty",
     "dev-connect": "tsx watch --clear-screen=false src/classes/deriv/example.ts | pino-pretty",
     "dev-trade": "tsx watch --clear-screen=false src/classes/trader/example.ts | pino-pretty",
+    "dev-strategy": "tsx watch --clear-screen=false src/classes/trader/example-trade-strategy-parser.ts | pino-pretty",
     "dev": "tsx watch --clear-screen=false src/index.ts | pino-pretty",
     "build": "tsup",
     "start": "node --no-deprecation dist/index.cjs",

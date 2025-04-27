@@ -779,3 +779,12 @@ export const getRandomDigit = () => {
 export const isValidObject = (obj:any) : boolean => {
   return Object.keys(obj).every(field => obj[field] !== undefined);
 }
+
+// Add these type assertion functions at the top of the file
+export const isPercentage = (value: number): any => { //value is Percentage {
+  return value >= 0 && value <= 100;
+}
+
+export const isNonNegativeNumber = (value: number): any => { // value is NonNegativeNumber {
+  return value >= 0;
+}

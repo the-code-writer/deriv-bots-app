@@ -128,8 +128,8 @@ private getDerivativesContractParams(
     const params: ContractParams = { ...baseParams, symbol: this.defaultMarket };
 
     switch (contractType) {
-        case ContractType.CALL:
-        case ContractType.PUT:
+        case ContractType.CALLE:
+        case ContractType.PUTE:
             return {
                 ...params,
                 contract_type: contractType,

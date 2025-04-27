@@ -45,10 +45,10 @@ type ContractType =
     | "DIGITUNDER9_DIGITOVER_0"
     | "DIGITUNDER8_DIGITOVER_1"
     | "DIGITUNDER7_DIGITOVER_2"
-    | "EVEN"
-    | "ODD"
-    | "CALL"
-    | "PUT"
+    | "DIGITEVEN"
+    | "DIGITODD"
+    | "CALLE"
+    | "PUTE"
     | "ACCU";
 
 // Trading and market types
@@ -313,8 +313,8 @@ class DerivAutoTradingBot {
         this.stopLoss = mergedConfig.stopLoss || 0;
         this.consecutiveTrades = 0;
         this.profitPercentage = 0;
-        this.originalContractType = "CALL";
-        this.currentContractType = "CALL";
+        this.originalContractType = "CALLE";
+        this.currentContractType = "CALLE";
         this.cumulativeLossAmount = 0;
         this.cumulativeLosses = 0;
         this.numberOfWins = 0;
