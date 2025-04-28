@@ -198,7 +198,7 @@ export class TradeExecutor {
 
         const timeoutPromise = new Promise<never>((_, reject) =>
             setTimeout(
-                () => reject(new Error('Contract creation timed out')),
+                () => reject({error: 'Contract creation timed out'}),
                 this.connectionTimeout
             )
         );

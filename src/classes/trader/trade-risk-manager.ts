@@ -17,31 +17,43 @@ const logger = pino({
 
 // Constants
 const MAX_RECOVERY_ATTEMPTS = 5;
-const SAFETY_COOLDOWN_MS = 5000;
-const RAPID_LOSS_THRESHOLD = 3;
-const RAPID_LOSS_TIME_WINDOW = 60000;
 
 interface CircuitBreakerConfig {
+    // Existing properties
     maxAbsoluteLoss: number;
     maxDailyLoss: number;
     maxConsecutiveLosses: number;
     maxBalancePercentageLoss: number;
-    rapidLossTimeWindow: number;
-    rapidLossThreshold: number;
+
+    // Improved rapid loss properties
+    rapidLoss: {
+        timeWindowMs: number;          // Monitoring window (e.g., 30000 = 30 seconds)
+        threshold: number;             // Losses needed to trigger (e.g., 2)
+        initialCooldownMs: number;     // First cooldown period (e.g., 30000 = 30s)
+        maxCooldownMs: number;         // Maximum cooldown (e.g., 300000 = 5min)
+        cooldownMultiplier: number;    // How much to increase cooldown each time (e.g., 2 = double)
+    };
+
+    // Other properties
     cooldownPeriod: number;
 }
 
 interface RapidLossState {
-    recentLossTimestamps: number[];
-    recentLossAmounts: number[];
-    eventCount: number;
-    lastDetectedTime: number;
+    recentLosses: Array<{
+        timestamp: number;
+        amount: number;
+    }>;
+    lastTriggerTime: number;
+    triggerCount: number;
+    currentCooldownMs: number;
+    isActive: boolean;
 }
 
 interface CircuitBreakerState {
     triggered: boolean;
     lastTriggered: number;
     lastReason: string;
+    reasons: string[];
     inSafetyMode: boolean;
     safetyModeUntil: number;
 }
@@ -115,25 +127,34 @@ export class VolatilityRiskManager {
             maxAbsoluteLoss: 1000,
             maxDailyLoss: 500,
             maxConsecutiveLosses: 5,
-            maxBalancePercentageLoss: 0.2,
-            rapidLossTimeWindow: 300000,
-            rapidLossThreshold: 3,
-            cooldownPeriod: 1800000
+            maxBalancePercentageLoss: 0.5,
+
+            rapidLoss: {
+                timeWindowMs: 30000,     // 30 second window
+                threshold: 2,            // 2 losses in 30s triggers
+                initialCooldownMs: 30000, // 30s initial cooldown
+                maxCooldownMs: 300000,   // 5min maximum cooldown
+                cooldownMultiplier: 2    // Double cooldown each time
+            },
+
+            cooldownPeriod: 60000        // 1min for other circuit breakers
         };
 
         this.rapidLossState = {
-            recentLossTimestamps: [],
-            recentLossAmounts: [],
-            eventCount: 0,
-            lastDetectedTime: 0
+            recentLosses: [],
+            lastTriggerTime: 0,
+            triggerCount: 0,
+            currentCooldownMs: 0,
+            isActive: false,
         };
 
         this.circuitBreakerState = {
             triggered: false,
             lastTriggered: 0,
             lastReason: '',
+            reasons: [],
             inSafetyMode: false,
-            safetyModeUntil: 0
+            safetyModeUntil: 0,
         };
 
         this.validateInitialization();
@@ -206,6 +227,7 @@ export class VolatilityRiskManager {
         const lossAmount = this.calculateLossAmount(tradeResult);
 
         this.totalLossAmount += lossAmount;
+        this.dailyLossAmount += lossAmount;
 
         logger.warn(`Loss recorded. Trade loss: ${lossAmount}, Total loss: ${this.totalLossAmount}, Consecutive: ${this.consecutiveLosses}`);
 
@@ -425,7 +447,22 @@ export class VolatilityRiskManager {
     }
 
     /**
-     * Checks for rapid loss patterns
+     * Gets the remaining cooldown time for rapid losses in milliseconds
+     * @returns {number} Remaining cooldown time in ms, 0 if not in cooldown
+     */
+    public getRapidLossCooldownRemaining(): number {
+        if (!this.rapidLossState.isActive) {
+            return 0;
+        }
+
+        const now = Date.now();
+        const cooldownEnd = this.rapidLossState.lastTriggerTime + this.rapidLossState.currentCooldownMs;
+
+        return Math.max(0, cooldownEnd - now);
+    }
+
+    /**
+     * Checks if rapid losses should trigger a cooldown
      * @param amount Optional loss amount to record before checking
      * @returns boolean indicating if rapid losses were detected
      */
@@ -436,44 +473,110 @@ export class VolatilityRiskManager {
 
         // Filter losses that are within the time window
         const now = Date.now();
-        const recentLosses = this.rapidLossState.recentLossTimestamps.filter(
-            timestamp => now - timestamp <= this.circuitBreakerConfig.rapidLossTimeWindow
+        const recentLosses = this.rapidLossState.recentLosses.filter(
+            loss => now - loss.timestamp <= this.circuitBreakerConfig.rapidLoss.timeWindowMs
         );
 
         // Update state with only recent losses
-        this.rapidLossState.recentLossTimestamps = recentLosses;
-        this.rapidLossState.recentLossAmounts = this.rapidLossState.recentLossAmounts.slice(
-            0, recentLosses.length
-        );
+        this.rapidLossState.recentLosses = recentLosses;
 
-        // Check if threshold is exceeded
-        if (recentLosses.length >= this.circuitBreakerConfig.rapidLossThreshold) {
-            this.rapidLossState.eventCount++;
-            this.rapidLossState.lastDetectedTime = now;
-            return true;
+        // Check if threshold is exceeded and handle cooldown
+        if (recentLosses.length >= this.circuitBreakerConfig.rapidLoss.threshold) {
+            return this.handleRapidLossTrigger();
         }
 
         return false;
     }
 
-    /**
-     * Records a rapid loss event
-     * @param amount Loss amount to record
-     */
-    public recordRapidLoss(amount: number): void {
+    private recordLoss(amount: number): void {
+        this.rapidLossState.recentLosses.push({
+            timestamp: Date.now(),
+            amount
+        });
+    }
+
+    private clearExpiredLosses(): void {
         const now = Date.now();
-        this.rapidLossState.recentLossTimestamps.push(now);
-        this.rapidLossState.recentLossAmounts.push(amount);
+        this.rapidLossState.recentLosses = this.rapidLossState.recentLosses.filter(
+            loss => now - loss.timestamp <= this.circuitBreakerConfig.rapidLoss.timeWindowMs
+        );
     }
 
     /**
-     * Records a loss and updates daily loss tracking
-     * @param amount Loss amount to record
+    * Records a rapid loss event
+    * @param amount Loss amount to record
+    */
+    public recordRapidLoss(amount: number): void {
+        this.rapidLossState.recentLosses.push({
+            timestamp: Date.now(),
+            amount
+        });
+    }
+
+    /**
+     * Handles a rapid loss trigger event
+     * @returns boolean indicating if rapid losses were detected
      */
-    public recordLoss(amount: number): void {
-        this.totalLossAmount += amount;
-        this.dailyLossAmount += amount;
-        this.losingTrades++;
+    private handleRapidLossTrigger(): boolean {
+        const now = Date.now();
+
+        // If we're already in cooldown, don't trigger again
+        if (this.rapidLossState.isActive &&
+            now < this.rapidLossState.lastTriggerTime + this.rapidLossState.currentCooldownMs) {
+            return true;
+        }
+
+        // Increment trigger count
+        this.rapidLossState.triggerCount++;
+        this.rapidLossState.lastTriggerTime = now;
+
+        // Calculate new cooldown with exponential backoff, capped at max
+        this.rapidLossState.currentCooldownMs = Math.min(
+            this.circuitBreakerConfig.rapidLoss.initialCooldownMs *
+            Math.pow(this.circuitBreakerConfig.rapidLoss.cooldownMultiplier, this.rapidLossState.triggerCount - 1),
+            this.circuitBreakerConfig.rapidLoss.maxCooldownMs
+        );
+
+        this.rapidLossState.isActive = true;
+
+        logger.warn({
+            event: 'RAPID_LOSS_DETECTED',
+            lossesCount: this.rapidLossState.recentLosses.length,
+            totalAmount: this.rapidLossState.recentLosses.reduce((sum, loss) => sum + loss.amount, 0),
+            cooldownMs: this.rapidLossState.currentCooldownMs,
+            triggerCount: this.rapidLossState.triggerCount
+        });
+
+        return true;
+    }
+
+
+    /**
+    * Checks if currently in rapid loss cooldown
+    * @returns boolean indicating if in cooldown
+    */
+    public isInRapidLossCooldown(): boolean {
+        if (!this.rapidLossState.isActive) return false;
+
+        const now = Date.now();
+        const cooldownEnd = this.rapidLossState.lastTriggerTime + this.rapidLossState.currentCooldownMs;
+
+        // Reset if cooldown has expired
+        if (now >= cooldownEnd) {
+            this.resetRapidLossState();
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Resets the rapid loss tracking state
+     */
+    private resetRapidLossState(): void {
+        this.rapidLossState.recentLosses = [];
+        this.rapidLossState.isActive = false;
+        // Note: We intentionally don't reset triggerCount to maintain memory across incidents
     }
 
     /**
@@ -529,26 +632,30 @@ export class VolatilityRiskManager {
      * @returns boolean indicating if any circuit breaker was triggered
      */
     public checkCircuitBreakers(account: IDerivUserAccount): boolean {
-        const now = Date.now();
-        let triggered = false;
-        let reason = '';
+        const now:number = Date.now();
+        let triggered:boolean = false;
+        let reason:string = '';
+        const reasons: string[] = [];
 
         // Check daily loss limit
         if (this.dailyLossAmount >= this.circuitBreakerConfig.maxDailyLoss) {
             triggered = true;
             reason = 'daily_loss_limit';
+            reasons.push(reason);
         }
 
         // Check absolute loss limit
         if (this.totalLossAmount >= this.circuitBreakerConfig.maxAbsoluteLoss) {
             triggered = true;
             reason = 'absolute_loss_limit';
+            reasons.push(reason);
         }
 
         // Check consecutive losses
         if (this.consecutiveLosses >= this.circuitBreakerConfig.maxConsecutiveLosses) {
             triggered = true;
             reason = 'max_consecutive_losses';
+            reasons.push(reason);
         }
 
         // Check balance percentage
@@ -556,12 +663,14 @@ export class VolatilityRiskManager {
         if (!balanceCheck.isValid) {
             triggered = true;
             reason = 'balance_validation_failed';
+            reasons.push(reason);
         }
 
         // Check rapid losses
         if (this.checkRapidLosses()) {
             triggered = true;
             reason = 'rapid_loss_detected';
+            reasons.push(reason);
         }
 
         // Update circuit breaker state if triggered
@@ -570,6 +679,7 @@ export class VolatilityRiskManager {
                 triggered: true,
                 lastTriggered: now,
                 lastReason: reason,
+                reasons: reasons,
                 inSafetyMode: true,
                 safetyModeUntil: now + this.circuitBreakerConfig.cooldownPeriod
             };

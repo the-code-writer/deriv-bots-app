@@ -111,9 +111,16 @@ export abstract class TradeStrategy {
             maxDailyLoss: 500,
             maxConsecutiveLosses: 5,
             maxBalancePercentageLoss: 0.5,
-            rapidLossTimeWindow: 300000,
-            rapidLossThreshold: 4,
-            cooldownPeriod: 60000
+
+            rapidLoss: {
+                timeWindowMs: 30000,     // 30 second window
+                threshold: 7,            // 2 losses in 30s triggers
+                initialCooldownMs: 30000, // 30s initial cooldown
+                maxCooldownMs: 300000,   // 5min maximum cooldown
+                cooldownMultiplier: 2    // Double cooldown each time
+            },
+
+            cooldownPeriod: 60000        // 1min for other circuit breakers
         };
 
         // Initialize strategy parser
@@ -143,14 +150,11 @@ export abstract class TradeStrategy {
 
     protected async executeTrade(): Promise<ITradeData> {
 
-        await this.preContractPurchaseChecks(this.contractType);
+        const checksOK:boolean = await this.preContractPurchaseChecks(this.contractType);
 
-        logger.info({
-            action: 'executing_strategy',
-            strategy: this.contractType,
-            ...(this.predictedDigit ? { predictedDigit: this.predictedDigit } : {}),
-            ...(this.barrier ? { barrier: this.barrier } : {})
-        });
+        if (!checksOK) {
+            return;
+        }
 
         const params: ContractParams = this.getNextContractParams(this.config);
         
@@ -161,34 +165,21 @@ export abstract class TradeStrategy {
         this.handleTradeResult(params, result);
 
         return result;
+        
     }
 
     protected handleTradeResult(params: any, result: ITradeData): void {
-
         if (this.volatilityRiskManager) {
-
             this.volatilityRiskManager.processTradeResult(result);
 
-        }
+            if (!result.profit_is_win) {
+                // Record the loss and check for rapid losses
+                this.volatilityRiskManager.checkRapidLosses(result.buy_price_value);
 
-        if (result.profit_is_win) {
-
-
-            logger.warn(" ### WON ### ", result.sell_price_value - result.buy_price_value)
-
-            
-        } else {
-            
-            this.recordAndCheckLoss(result.buy_price_value);
-
-            const rapidLossState = this.volatilityRiskManager?.getRapidLossState();
-
-            if (rapidLossState?.lastDetectedTime) {
-                const cooldownRemaining = rapidLossState.lastDetectedTime +
-                    (this.volatilityRiskManager.getRapidLossConfig().coolDownMs || 0) - Date.now();
-                if (cooldownRemaining > 0) {
-                    logger.info(`In rapid loss cooldown: ${cooldownRemaining}ms remaining`);
-                    return this.getSafetyExitResult();
+                if (this.volatilityRiskManager.isInRapidLossCooldown()) {
+                    const remaining = this.volatilityRiskManager.getRapidLossCooldownRemaining();
+                    logger.info(`In rapid loss cooldown: ${Math.round(remaining / 1000)}s remaining`);
+                    return this.getSafetyExitResult('rapid_loss_cooldown');
                 }
             }
         }
@@ -215,7 +206,6 @@ export abstract class TradeStrategy {
             return;
         }
 
-        this.volatilityRiskManager.recordLoss(amount);
         this.volatilityRiskManager.recordRapidLoss(amount);
 
         const rapidLossDetected = this.volatilityRiskManager.checkRapidLosses(amount);
@@ -312,12 +302,15 @@ export abstract class TradeStrategy {
         }
     }
 
-    protected async preContractPurchaseChecks(contractType: ContractType): Promise<void> {
+    protected async preContractPurchaseChecks(contractType: ContractType): Promise<boolean> {
+
         if (this.volatilityRiskManager?.getCurrentState().inSafetyMode) {
-            throw new Error('Cannot execute trade while in safety mode');
+            return false;
+            //throw new Error('Cannot execute trade while in safety mode');
         }
 
         const circuitCheck = this.checkCircuitBreakers();
+
         if (circuitCheck.shouldBlock) {
             logger.warn({
                 event: 'TRADE_BLOCKED',
@@ -327,6 +320,9 @@ export abstract class TradeStrategy {
             this.enterSafetyMode(circuitCheck.reason!);
             return this.getSafetyExitResult(circuitCheck.reason!);
         }
+
+        return true;
+
     }
 
     protected getNextContractParams(config: BotConfig): ContractParams {

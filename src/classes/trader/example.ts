@@ -4,18 +4,7 @@ import { BotConfig } from './types';
 
 const logger = pino({ name: "DerivTradingBot" });
 // Usage example
-const botConfig: BotConfig = {
-    tradingType: "DERIVATIVES",
-    market: "R_100",
-    baseStake: 1,
-    maxStake: 5,
-    minStake: 0.35,
-    maxRecoveryTrades: 5,
-    takeProfit: 10,
-    stopLoss: 5,
-    contractDurationValue: 1,
-    contractDurationUnits: "t",
-};
+const botConfig: BotConfig = {};
 
 const tradingBot = new DerivTradingBot(botConfig);
 
@@ -28,8 +17,8 @@ const tradingSession = {
     "stake": 10,
     "takeProfit": "USD5,000.34",
     "stopLoss": 10000,
-    "tradeDuration": "10min ⏱️",
-    "updateFrequency": "5sec ⏱️",
+    "tradeDuration": "2000sec ⏱️",
+    "updateFrequency": "50sec ⏱️",
     "contractDurationUnits": "Ticks ⏱️",
     "contractDurationValue": "8Tick ⏱️",
     "tradingMode": "📈 Manual Trading"

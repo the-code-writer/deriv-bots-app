@@ -80,6 +80,9 @@ dependencies:
   mocha:
     specifier: ^11.1.0
     version: 11.1.0
+  moment:
+    specifier: ^2.30.1
+    version: 2.30.1
   mongodb:
     specifier: ^6.15.0
     version: 6.15.0
@@ -5174,6 +5177,10 @@ packages:
       yargs: 17.7.2
       yargs-parser: 21.1.1
       yargs-unparser: 2.0.0
+    dev: false
+
+  /moment@2.30.1:
+    resolution: {integrity: sha512-uEmtNhbDOrWPFS+hdjFCBfy9f2YoyzRpwcl+DqpC6taX21FzsTLQVbMV/W7PzNSX6x/bhC1zA3c2UQ5NzH6how==}
     dev: false
 
   /mongodb-connection-string-url@3.0.2:

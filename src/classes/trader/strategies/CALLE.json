@@ -4,27 +4,9 @@
       "strategyName": "CALLE",
       "strategySteps": [
         {
-          "symbol": "R_100",
+          "symbol": "R_75",
           "contractType": "CALLE",
           "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_100",
-          "contractType": "CALLE",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_100",
-          "contractType": "CALLE",
-          "contractDurationValue": 3,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_100",
-          "contractType": "CALLE",
-          "contractDurationValue": 5,
           "contractDurationUnits": "t"
         },
         {

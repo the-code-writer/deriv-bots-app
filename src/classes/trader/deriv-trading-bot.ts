@@ -12,10 +12,13 @@ import { env } from "@/common/utils/envConfig";
 import { convertTimeStringToSeconds } from '@/common/utils/snippets';
 import { sanitizeContractDurationUnit, sanitizeAccountType, sanitizeTradingType, sanitizeMarketType, sanitizeContractType, sanitizeAmount, sanitizeTradingMode, sanitizeString } from '@/common/utils/snippets';
 import { DerivUserAccount, IDerivUserAccount } from "./deriv-user-account";
+import { roundToTwoDecimals } from '../../common/utils/snippets';
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 
 const logger = pino({ name: "DerivTradingBot" });
+
+const moment = require('moment');
 /**
  * Main Deriv trading bot class implementing core trading functionality
  */
@@ -57,6 +60,8 @@ export class DerivTradingBot {
     private userAccount: IDerivUserAccount = {} as IDerivUserAccount;
     private userBalance: number = 0;
     private auditTrail: Array<any> = [];
+
+    private lastTradeSummary: string = "";
 
     private botConfig: BotConfig;
 
@@ -117,6 +122,8 @@ export class DerivTradingBot {
         this.userAccount = {} as IDerivUserAccount;
         this.userBalance = 0;
         this.auditTrail = [];
+
+        this.lastTradeSummary = "";
 
         // Clear any remaining intervals or timeouts
         if (this.tradeDurationTimeoutId) {
@@ -620,17 +627,20 @@ export class DerivTradingBot {
 
     private logTradeResult(tradeResult: ITradeData, resultIsWin: boolean, tradeValid: boolean, profit: number): void {
 
+        this.lastTradeSummary = `
+
+        ${tradeResult.longcode}\n
+        STATUS      : ${resultIsWin ? 'WON' : 'LOST'}
+        BUY         : ${tradeResult.buy_price_currency} ${roundToTwoDecimals(tradeResult.buy_price_value)}
+        SELL        : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(tradeResult.sell_price_value)}
+        PROFIT      : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(profit)}
+        TOTAL PROFIT: ${tradeResult.sell_price_currency} ${roundToTwoDecimals(this.totalProfit)}
+
+        ${moment().format('MMMM Do YYYY, h:mm:ss a')}
+        `;
 
         // Log trade details
-        logger.warn("*******************************************************************************************");
-        logger.info(`DEAL: ${tradeResult.longcode}`);
-        logger.info(`SPOT: ${tradeResult.entry_spot_value} -> ${tradeResult.exit_spot_value}`);
-        logger.info(`BUY : ${tradeResult.buy_price_currency} ${tradeResult.buy_price_value}`);
-        logger.info(`BID : ${tradeResult.bid_price_currency} ${tradeResult.bid_price_value}`);
-        logger.info(`SELL: ${tradeResult.sell_price_currency} ${tradeResult.sell_price_value} :: Status : ${tradeResult.status}`);
-        logger.info(`${resultIsWin ? 'WON' : 'LOST'} : ${tradeResult.profit_currency} ${tradeResult.profit_value * tradeResult.profit_sign} :: IS_WIN : ${resultIsWin}`);
-        logger.info(`VALIDITY: ${tradeValid} :*: PROFIT: ${[profit]} :*: IS_WIN : ${[resultIsWin]}`);
-        logger.warn("*******************************************************************************************");
+        logger.info(this.lastTradeSummary);
 
     }
 
@@ -717,6 +727,15 @@ export class DerivTradingBot {
      */
     private async generateTelemetry(): Promise<void> {
 
+        parentPort?.postMessage({ action: "lastTradeSummary", text: this.lastTradeSummary, meta: { user: this.userAccount, audit: {} } });
+
+    }
+
+    /**
+     * Generates a final trading summary report
+     */
+    private async generateTradingSummary(): Promise < void> {
+        
         if (this.userAccount && this.totalStake > 0) {
 
             // Retrieve account and balance information
@@ -725,7 +744,7 @@ export class DerivTradingBot {
             const totalBalance = parseFloat(`${this.userBalance}`).toFixed(2);
 
             // Calculate total profit, payout, and stake
-            const totalProfit = this.totalProfit;
+            let totalProfit = this.totalProfit;
             const totalPayout = this.totalPayout;
             const totalStake = this.totalStake;
 
@@ -734,10 +753,10 @@ export class DerivTradingBot {
             const averageProfitPerRun = totalProfit / this.totalNumberOfRuns;
 
             // Format start time, stop time, and duration
-            const startTime = new Date(this.tradeStartedAt * 1000);
+            const startTime = new Date(this.tradeStartedAt);
             const stopTime = new Date(); // Current time as stop time
-            const durationSeconds = Math.floor((Date.now() / 1000) - this.tradeStartedAt);
-            const duration = `${Math.floor(durationSeconds / 3600)}h ${Math.floor((durationSeconds % 3600) / 60)}m ${durationSeconds % 60}s`;
+            const durationSeconds = (stopTime.getTime() - startTime.getTime()) / 1000;
+            const duration = `${Math.floor(durationSeconds / 3600)}h ${Math.floor((durationSeconds % 3600) / 60)}m ${Math.floor(durationSeconds % 60)}s`;
 
             // Format start and stop times into two lines (date and time)
             const startDate = startTime.toLocaleDateString();
@@ -747,83 +766,69 @@ export class DerivTradingBot {
 
             // Create the telemetry table
             const telemetryTable = `
+=========================
+Trading Telemetry Summary
+=========================
 
-    =========================
-    Trading Telemetry Summary
-    =========================
+Account:        ${accountId.padEnd(20)} 
+Currency:       ${currency.padEnd(20)} 
 
-    Account:        ${accountId.padEnd(20)} 
-    Currency:       ${currency.padEnd(20)} 
-
-    Wins:           ${this.winningTrades.toString().padEnd(20)} 
-    Losses:         ${this.losingTrades.toString().padEnd(20)} 
-    Runs:           ${this.totalNumberOfRuns.toString().padEnd(20)} 
+Wins:           ${this.winningTrades.toString().padEnd(20)} 
+Losses:         ${this.losingTrades.toString().padEnd(20)} 
+Runs:           ${this.totalNumberOfRuns.toString().padEnd(20)} 
          
-    Total Payout:   $${totalPayout.toFixed(2).padEnd(20)} 
-    Total Stake:    $${totalStake.toFixed(2).padEnd(20)} 
-    Total Profit:   $${totalProfit.toFixed(2).padEnd(20)} 
-    Avg Profit/Run: $${averageProfitPerRun.toFixed(2).padEnd(20)} 
-    Total Balance:  $${totalBalance.padEnd(20)} 
+Total Payout:   $${totalPayout.toFixed(2).padEnd(20)} 
+Total Stake:    $${totalStake.toFixed(2).padEnd(20)} 
+Total Profit:   $${totalProfit.toFixed(2).padEnd(20)} 
+Avg Profit/Run: $${averageProfitPerRun.toFixed(2).padEnd(20)} 
+Total Balance:  $${totalBalance.padEnd(20)} 
 
-    Win Rate %:     ${winRate.toFixed(2)}%${" ".padEnd(17)} 
+Win Rate %:     ${winRate.toFixed(2)}%${" ".padEnd(17)} 
 
-    Start Date:     ${startDate.padEnd(20)} 
-    Start Time:     ${startTimeFormatted.padEnd(20)} 
+Start Date:     ${startDate.padEnd(20)} 
+Start Time:     ${startTimeFormatted.padEnd(20)} 
 
-    Stop Date:      ${stopDate.padEnd(20)} 
-    Stop Time:      ${stopTimeFormatted.padEnd(20)} 
+Stop Date:      ${stopDate.padEnd(20)} 
+Stop Time:      ${stopTimeFormatted.padEnd(20)} 
 
-    Duration:       ${duration.padEnd(20)} 
+Duration:       ${duration.padEnd(20)} 
+`;
 
-  `;
+            // Calculate total profit
+            totalProfit = this.auditTrail.reduce((sum: number, trade: any) => sum + trade.data.profit, 0);
 
-            // Log the telemetry table
-            console.log(telemetryTable);
-
-            parentPort?.postMessage({ action: "generateTelemetry", text: telemetryTable, meta: { user: this.userAccount, audit: {} } });
-
-        }
-
-    }
-
-    /**
-     * Generates a final trading summary report
-     */
-    private async generateTradingSummary(): Promise<void> {
-
-        // Calculate total profit
-        const totalProfit = this.auditTrail.reduce((sum: number, trade: any) => sum + trade.data.profit, 0);
-
-        // Define the table headers
-        const header = `
+            // Define the table headers
+            const header = `
 +-----+---------+----------+
 | Run |  Stake  |  Profit  |
 +-----+---------+----------+`;
 
-        // Define the table rows
-        const rows = this.auditTrail
-            .map((trade: any) => {
-                const run = String(trade.data.run).padStart(3); // Right-aligned, 3 characters
-                const stake = `$${trade.data.stake.toFixed(2)}`.padStart(7); // Right-aligned, 7 characters
-                const profit = `${trade.data.profit >= 0 ? "+" : "-"}${Math.abs(trade.data.profit).toFixed(2)}`.padStart(8); // Right-aligned, 8 characters
-                return `| ${run} | ${stake} | ${profit} |`;
-            })
-            .join("\n");
+            // Define the table rows
+            const rows = this.auditTrail
+                .map((trade: any) => {
+                    const run = String(trade.data.run).padStart(3); // Right-aligned, 3 characters
+                    const stake = `$${trade.data.stake.toFixed(2)}`.padStart(7); // Right-aligned, 7 characters
+                    const profit = `${trade.data.profit >= 0 ? "+" : "-"}${Math.abs(trade.data.profit).toFixed(2)}`.padStart(8); // Right-aligned, 8 characters
+                    return `| ${run} | ${stake} | ${profit} |`;
+                })
+                .join("\n");
 
-        // Define the total profit row
-        const totalRow = `+-----+---------+----------+
+            // Define the total profit row
+            const totalRow = `+-----+---------+----------+
 | TOTAL PROFIT  | ${totalProfit >= 0 ? "+" : "-"}${Math.abs(totalProfit).toFixed(2).padStart(7)} |
 +-----+---------+----------+
-   `;
+`;
 
-        // Combine the table
-        const tradeSummary = `${header}\n${rows}\n${totalRow}`;
+            // Combine the table
+            const tradeSummary = `${telemetryTable}\n${header}\n${rows}\n${totalRow}`;
 
-        // Log the trade summary
-        console.log(tradeSummary);
+            // Log the trade summary
+            console.log(tradeSummary);
 
-        //generateSummary
-        parentPort?.postMessage({ action: "generateTradingSummary", message: "Generating trading summary, please wait...", meta: { user: this.userAccount, audit: this.auditTrail } });
+            //generateSummary
+            parentPort?.postMessage({ action: "generateTradingSummary", message: "Generating trading summary, please wait...", meta: { user: this.userAccount, audit: this.auditTrail } });
+            
+        }
 
     }
 
