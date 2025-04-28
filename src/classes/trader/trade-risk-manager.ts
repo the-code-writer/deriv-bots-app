@@ -4,6 +4,7 @@ import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEn
 import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
 import { StrategyConfig, StrategyStepOutput, StrategyMetrics, StrategyMeta, StrategyVisualization } from './trader-strategy-parser';
+import { roundToTwoDecimals } from '../../common/utils/snippets';
 
 // Initialize logger
 const logger = pino({
@@ -149,7 +150,8 @@ export class VolatilityRiskManager {
 
     public processTradeResult(tradeResult: ITradeData): NextTradeParams {
         if (!this.validateTradeResult(tradeResult)) {
-            logger.warn("Invalid trade result received");
+            logger.warn(
+                { message: "Invalid trade result received", tradeResult });
             return this.getSafetyExitResult("invalid_trade_data");
         }
 
@@ -224,13 +226,13 @@ export class VolatilityRiskManager {
 
             // Get the appropriate step based on consecutive losses
             const stepIndex = Math.min(this.consecutiveLosses, steps.length - 1);
-            
+
             const step = steps[stepIndex];
 
             return {
                 basis: step.basis || strategyConfig.basis,
                 symbol: step.symbol || this.market,
-                amount: step.amount,
+                amount: roundToTwoDecimals(step.amount),
                 barrier: step.barrier || this.getBarrier(step.contract_type),
                 currency: step.currency || strategyConfig.currency,
                 contractType: step.contract_type || this.contractType,
@@ -373,7 +375,7 @@ export class VolatilityRiskManager {
         for (const detail of data.audit_details) {
             if (typeof detail !== 'object' || detail === null) return false;
             if (!('epoch' in detail) || typeof detail.epoch !== 'number') return false;
-            if (!('tick' in detail) || typeof detail.tick !== 'number') return false;
+            //if (!('tick' in detail) || typeof detail.tick !== 'number') return false;
         }
 
         // Basic type checks for other fields
@@ -381,7 +383,6 @@ export class VolatilityRiskManager {
         if (typeof data.symbol_full !== 'string') return false;
         if (typeof data.start_time !== 'number') return false;
         if (typeof data.expiry_time !== 'number') return false;
-        // Add more type checks as needed...
 
         return true;
     }

@@ -561,47 +561,60 @@ export class DerivTradingBot {
      */
     private async processTradeResult(tradeResult: ITradeData): Promise<void> {
 
-        this.totalNumberOfRuns++;
+        if (tradeResult && Object.hasOwn(tradeResult, "profit_is_win")) {
 
-        const resultIsWin: boolean = tradeResult.profit_is_win;
+            this.totalNumberOfRuns++;
 
-        const investment: number = tradeResult.buy_price_value;
+            const resultIsWin: boolean = tradeResult.profit_is_win;
 
-        const profit: number = tradeResult.profit_value * tradeResult.profit_sign;
+            const investment: number = tradeResult.buy_price_value;
 
-        const profitAfterSale: number = resultIsWin ? profit : -investment;
+            const profit: number = tradeResult.profit_value * tradeResult.profit_sign;
 
-        const tradeValid: boolean = profit === profitAfterSale;
+            const profitAfterSale: number = resultIsWin ? profit : -investment;
 
-        this.totalProfit += profit;
-        this.totalStake += tradeResult.buy_price_value;
-        this.totalPayout += tradeResult.sell_price_value;
+            const tradeValid: boolean = profit === profitAfterSale;
 
-        if (resultIsWin) {
-            this.winningTrades++;
-            this.consecutiveLosses = 0;
-            this.totalGained += profit;
-            this.totalLost = this.totalLost - this.totalPayout;
-        } else {
-            this.losingTrades++;
-            this.consecutiveLosses++;
-            this.totalLost += investment;
-        }
+            this.totalProfit += profit;
+            this.totalStake += tradeResult.buy_price_value;
+            this.totalPayout += tradeResult.sell_price_value;
 
-        // Log trade data
-        this.logTradeResult(tradeResult, resultIsWin, tradeValid, profit);
-
-        await this.saveData(
-            `R00${this.totalNumberOfRuns}`,
-            {
-                audit: {
-                    run: this.totalNumberOfRuns,
-                    stake: tradeResult.buy_price_value,
-                    profit: tradeResult.profit_value * tradeResult.profit_sign
-                },
-                tradeResult
+            if (resultIsWin) {
+                this.winningTrades++;
+                this.consecutiveLosses = 0;
+                this.totalGained += profit;
+                this.totalLost = this.totalLost - profit;
+            } else {
+                this.losingTrades++;
+                this.consecutiveLosses++;
+                this.totalLost += investment;
             }
-        );
+
+            // Log trade data
+            this.logTradeResult(tradeResult, resultIsWin, tradeValid, profit);
+
+            await this.saveData(
+                `R00${this.totalNumberOfRuns}`,
+                {
+                    audit: {
+                        run: this.totalNumberOfRuns,
+                        stake: tradeResult.buy_price_value,
+                        profit: tradeResult.profit_value * tradeResult.profit_sign
+                    },
+                    tradeResult
+                }
+            );
+
+        }else{
+
+            console.error({
+                title: "*************** PROFIT_IS_WIN_NOT_A_PROPERTY *****************",
+                data: tradeResult
+            })
+
+            process.exit(0);
+            
+        }
 
     }
 

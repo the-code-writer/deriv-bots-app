@@ -110,10 +110,10 @@ export abstract class TradeStrategy {
             maxAbsoluteLoss: 1000,
             maxDailyLoss: 500,
             maxConsecutiveLosses: 5,
-            maxBalancePercentageLoss: 0.2,
+            maxBalancePercentageLoss: 0.5,
             rapidLossTimeWindow: 300000,
-            rapidLossThreshold: 3,
-            cooldownPeriod: 1800000
+            rapidLossThreshold: 4,
+            cooldownPeriod: 60000
         };
 
         // Initialize strategy parser
@@ -164,9 +164,6 @@ export abstract class TradeStrategy {
     }
 
     protected handleTradeResult(params: any, result: ITradeData): void {
-
-        console.log("############ RESULT ###########", params, result)
-
 
         if (this.volatilityRiskManager) {
 

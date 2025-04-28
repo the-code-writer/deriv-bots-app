@@ -788,3 +788,7 @@ export const isPercentage = (value: number): any => { //value is Percentage {
 export const isNonNegativeNumber = (value: number): any => { // value is NonNegativeNumber {
   return value >= 0;
 }
+
+export const roundToTwoDecimals = (num: number): number => {
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+}
