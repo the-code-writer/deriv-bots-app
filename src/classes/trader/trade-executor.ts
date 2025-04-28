@@ -5,10 +5,10 @@
  */
 
 import { pino } from "pino";
-import { ContractParams, ContractResponse, CurrenciesEnum, ITradeData } from './types';
+import { BotConfig, ContractParams, ContractResponse, CurrenciesEnum, ITradeData } from './types';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
-import { DerivUserAccount } from "./deriv-user-account";
+import { DerivUserAccount, IDerivUserAccount } from './deriv-user-account';
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const logger = pino({ name: "Trade Executor" });
@@ -63,7 +63,7 @@ export class TradeExecutor {
      * @param {ContractParams} contractParameters - Parameters for the contract
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async purchaseContract(contractParameters: ContractParams, userAccountToken: string): Promise<ITradeData> {
+    async purchaseContract(contractParameters: ContractParams, config: BotConfig): Promise<ITradeData> {
 
         if (!contractParameters) {
             throw new Error('TradeExecutor not initialized');
@@ -81,7 +81,7 @@ export class TradeExecutor {
 
                 attempt++;
 
-                let contract = await this.createContract(contractParameters, userAccountToken);
+                const { contract, user } = await this.createContract(contractParameters, String(config.userAccountToken));
 
                 // Subscribe to contract updates to monitor its status in real-time
                 const onUpdateSubscription = contract.onUpdate(({ status, payout, bid_price }: any) => {
@@ -111,7 +111,7 @@ export class TradeExecutor {
                 // Unsubscribe from contract updates to clean up resources
                 onUpdateSubscription.unsubscribe();
 
-                return this.transformContractToTradeData(contract);
+                return this.transformContractToTradeData(contract, user);
 
             } catch (error: any) {
 
@@ -188,7 +188,7 @@ export class TradeExecutor {
      * @returns {Promise<ContractResponse>} Created contract
      * @private
      */
-    private async createContract(params: ContractParams, userAccountToken: string): Promise<ContractResponse> {
+    private async createContract(params: ContractParams, userAccountToken: string): Promise<{ contract: ContractResponse; user: IDerivUserAccount }> {
 
         if (!DERIV_APP_ENDPOINT_DOMAIN) throw new Error('API Endpoint [ DERIV_APP_ENDPOINT_DOMAIN ] not defined');
         if (!DERIV_APP_ENDPOINT_APP_ID) throw new Error('API AppID [ DERIV_APP_ENDPOINT_APP_ID ] not defined');
@@ -205,13 +205,13 @@ export class TradeExecutor {
 
         const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
-        await DerivUserAccount.getUserAccount(api, userAccountToken);
+        const user: IDerivUserAccount = await DerivUserAccount.getUserAccount(api, userAccountToken) as IDerivUserAccount;
 
         const contractPromise = api.contract(params);
 
-        const contractPromiseResult: ContractResponse = await Promise.race([contractPromise, timeoutPromise]);
+        const contract: ContractResponse = await Promise.race([contractPromise, timeoutPromise]);
 
-        return contractPromiseResult;
+        return { contract, user };
 
     }
 
@@ -221,7 +221,7 @@ export class TradeExecutor {
      * @returns {ITradeData} Standardized trade data
      * @private
      */
-    private transformContractToTradeData(contract: any): ITradeData {
+    private transformContractToTradeData(contract: any, user: IDerivUserAccount): ITradeData {
 
         // Extract relevant data from the contract for the trade audit
         const {
@@ -277,14 +277,20 @@ export class TradeExecutor {
             profit_percentage: profit._data.percentage,
             profit_is_win: profit._data.is_win,
             profit_sign: profit._data.sign,
+            safeProfit: 0,
             status: status,
             longcode: longcode,
             proposal_id: proposal_id,
-            balance_currency: CurrenciesEnum.Default,
-            balance_value: 0,
+            userAccount: user,
             audit_details: audit_details.all_ticks,
             ticks: ticks[0]
         };
+
+        const safeProfit = tradeData.sell_price_value === 0 && tradeData.buy_price_value > 0
+            ? 0
+            : tradeData.sell_price_value - tradeData.buy_price_value;
+        
+        tradeData.safeProfit = safeProfit;
 
         return tradeData;
 

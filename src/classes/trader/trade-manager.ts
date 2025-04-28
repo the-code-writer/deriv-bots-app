@@ -39,15 +39,14 @@ export class TradeManager {
      * @param {ContractType} contractType - Type of trade to execute
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async executeTrade(): Promise<ITradeData | undefined> {
-
-        logger.warn({
-            config : this.config,
-            //currentContractType: this.currentContractType
-        })
+    async executeTrade(): Promise<ITradeData | void> {
 
         if (!this.config.contractType) {
             throw new Error('TradeManager can not execute trade : Missing Contract Type');
+        }
+
+        if (!this.config.userAccountToken) {
+            throw new Error('TradeManager can not execute trade : Missing User Account Token');
         }
 
         if (!this.currentContractType) {

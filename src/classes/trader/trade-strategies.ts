@@ -27,6 +27,7 @@ import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "./deriv-user-account";
 import { StrategyParser } from './trader-strategy-parser';
 import { BotConfig } from './types';
+import { getRandomDigit } from "@/common/utils/snippets";
 
 const logger = pino({
     name: "TradeStrategy",
@@ -96,7 +97,7 @@ export abstract class TradeStrategy {
      * @abstract
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    abstract execute(): Promise<ITradeData>;
+    abstract execute(): Promise<ITradeData | void>;
 
     protected initializeVolatilityRiskManager(strategyName: string): void {
 
@@ -116,7 +117,7 @@ export abstract class TradeStrategy {
         };
 
         // Initialize strategy parser
-        const strategyJson = require(`./strategies/NDTXStrategy${strategyName}.json`);
+        const strategyJson = require(`./strategies/${strategyName}.json`);
 
         this.strategyParser = new StrategyParser(strategyJson, 0, this.baseStake);
 
@@ -140,7 +141,8 @@ export abstract class TradeStrategy {
         );
     }
 
-    protected async executeTrade(userAccountToken: string): Promise<ITradeData> {
+    protected async executeTrade(): Promise<ITradeData> {
+
         await this.preContractPurchaseChecks(this.contractType);
 
         logger.info({
@@ -150,38 +152,43 @@ export abstract class TradeStrategy {
             ...(this.barrier ? { barrier: this.barrier } : {})
         });
 
-        const params = this.getNextContractParams(this.contractType);
+        const params: ContractParams = this.getNextContractParams(this.config);
+        
         this.validateParameters(params);
 
-        const result = await this.executor.purchaseContract(params, userAccountToken);
+        const result: ITradeData = await this.executor.purchaseContract(params, this.config);
+
         this.handleTradeResult(params, result);
 
         return result;
     }
 
-    protected handleTradeResult(params: any, result: any): void {
+    protected handleTradeResult(params: any, result: ITradeData): void {
+
+        console.log("############ RESULT ###########", params, result)
+
+
         if (this.volatilityRiskManager) {
-            this.volatilityRiskManager.processTradeResult({
-                ...this.previousTradeResultData,
-                resultIsWin: result.status === StatusTypeEnum.Won
-            });
+
+            this.volatilityRiskManager.processTradeResult(result);
+
         }
 
-        if (result.status === StatusTypeEnum.Blocked) {
-            console.log(`Trade blocked due to: ${result.message}`); 
-            if (result.metadata?.cooldownRemaining > 0) {
-                console.log(`Wait ${result.metadata.cooldownRemaining}ms before retrying`);
-            }
-        }
+        if (result.profit_is_win) {
 
-        if (result.status === StatusTypeEnum.Lost) {
-            this.recordAndCheckLoss(params.amount);
+
+            logger.warn(" ### WON ### ", result.sell_price_value - result.buy_price_value)
+
+            
+        } else {
+            
+            this.recordAndCheckLoss(result.buy_price_value);
+
             const rapidLossState = this.volatilityRiskManager?.getRapidLossState();
 
             if (rapidLossState?.lastDetectedTime) {
                 const cooldownRemaining = rapidLossState.lastDetectedTime +
                     (this.volatilityRiskManager.getRapidLossConfig().coolDownMs || 0) - Date.now();
-
                 if (cooldownRemaining > 0) {
                     logger.info(`In rapid loss cooldown: ${cooldownRemaining}ms remaining`);
                     return this.getSafetyExitResult();
@@ -325,20 +332,25 @@ export abstract class TradeStrategy {
         }
     }
 
-    protected getNextContractParams(contractType: ContractType): ContractParams {
+    protected getNextContractParams(config: BotConfig): ContractParams {
+
         if (this.volatilityRiskManager) {
+
             const nextParams = this.volatilityRiskManager.getNextTradeParams();
+
             return this.createParamsFromFactory(
-                contractType,
+                config.contractType as ContractType,
                 nextParams.amount,
                 nextParams.barrier
             );
+
         }
 
         return this.createParamsFromFactory(
-            contractType,
+            config.contractType as ContractType,
             this.baseStake
         );
+
     }
 
     private createParamsFromFactory(
@@ -367,16 +379,15 @@ export abstract class TradeStrategy {
             duration_unit: this.contractDurationUnits,
             symbol: this.market,
             contract_type: contractType,
-            market: this.market, // Ensure market is included
-            durationUnit: this.contractDurationUnits // Ensure durationUnit is included
+            // market: this.market, // Ensure market is included
+            // durationUnit: this.contractDurationUnits // Ensure durationUnit is included
         };
 
         switch (contractType) {
             case ContractTypeEnum.DigitDiff:
                 return this.contractFactory.createDigitDiffParams({
                     ...commonParams,
-                    barrier: barrier !== undefined ? barrier : this.predictedDigit,
-                    predictedDigit: this.predictedDigit
+                    barrier: (barrier !== undefined ? barrier : getRandomDigit())
                 });
 
             case ContractTypeEnum.DigitOver:
@@ -432,21 +443,27 @@ export abstract class TradeStrategy {
     }
 
     private validateBarrier(barrier: number | string): number | string {
+
         if (typeof barrier === "string") {
-            if (barrier !== ContractTypeEnum.DigitEven && barrier !== ContractTypeEnum.DigitOdd) {
+            if (barrier === ContractTypeEnum.DigitEven) {
                 return ContractTypeEnum.DigitEven;
+            } else {
+                return ContractTypeEnum.DigitOdd;
             }
-            return barrier;
         }
 
         const validBarrier = Math.round(barrier);
+
         if (validBarrier < 0 || validBarrier > 9) {
             throw new Error('Barrier must be between 0-9');
         }
-        return validBarrier;
+
+        return parseInt(`${validBarrier}`);
+
     }
 
     protected validateAccountBalance(amount: number): any {
+
         if (!this.volatilityRiskManager) {
             logger.warn('VolatilityRiskManager not initialized - skipping balance validation');
             return {
@@ -474,7 +491,9 @@ export abstract class TradeStrategy {
         };
 
         return this.volatilityRiskManager.validateAccountBalance(amount, userAccount);
+
     }
+
 }
 
 // Concrete strategy implementations
@@ -488,7 +507,7 @@ export class DigitDiffStrategy extends TradeStrategy {
 
     async execute(): Promise<ITradeData | void> {
         try {
-            return await this.executeTrade(userAccountToken);
+            return await this.executeTrade();
         } catch (error) {
             logger.error({
                 error,
@@ -496,7 +515,7 @@ export class DigitDiffStrategy extends TradeStrategy {
                 message: 'Error executing DIGITDIFF strategy'
             });
             this.checkCircuitBreakersOnFailure();
-            throw error;
+            //throw error;
         }
     }
 }
@@ -511,7 +530,7 @@ export class DigitEvenStrategy extends TradeStrategy {
 
     async execute(): Promise<ITradeData | void> {
         try {
-            return await this.executeTrade(userAccountToken);
+            return await this.executeTrade();
         } catch (error) {
             logger.error({
                 error,
@@ -519,7 +538,7 @@ export class DigitEvenStrategy extends TradeStrategy {
                 message: 'Error executing DIGITEVEN strategy'
             });
             this.checkCircuitBreakersOnFailure();
-            throw error;
+            //throw error;
         }
     }
 }
@@ -534,7 +553,7 @@ export class DigitOddStrategy extends TradeStrategy {
 
     async execute(): Promise<ITradeData | void> {
         try {
-            return await this.executeTrade(userAccountToken);
+            return await this.executeTrade();
         } catch (error) {
             logger.error({
                 error,
@@ -542,7 +561,7 @@ export class DigitOddStrategy extends TradeStrategy {
                 message: 'Error executing DIGITODD strategy'
             });
             this.checkCircuitBreakersOnFailure();
-            throw error;
+            //throw error;
         }
     }
 }
@@ -557,7 +576,7 @@ export class CallStrategy extends TradeStrategy {
 
     async execute(): Promise<ITradeData | void> {
         try {
-            return await this.executeTrade(userAccountToken);
+            return await this.executeTrade();
         } catch (error) {
             logger.error({
                 error,
@@ -580,7 +599,7 @@ export class PutStrategy extends TradeStrategy {
 
     async execute(): Promise<ITradeData | void> {
         try {
-            return await this.executeTrade(userAccountToken);
+            return await this.executeTrade();
         } catch (error) {
             logger.error({
                 error,
@@ -588,7 +607,7 @@ export class PutStrategy extends TradeStrategy {
                 message: 'Error executing PUT strategy'
             });
             this.checkCircuitBreakersOnFailure();
-            throw error;
+            //throw error;
         }
     }
 }
@@ -603,7 +622,7 @@ export class DigitUnderStrategy extends TradeStrategy {
 
     async execute(): Promise<ITradeData | void> {
         try {
-            return await this.executeTrade(userAccountToken);
+            return await this.executeTrade();
         } catch (error) {
             logger.error({
                 error,
@@ -611,7 +630,7 @@ export class DigitUnderStrategy extends TradeStrategy {
                 message: 'Error executing DIGITUNDER strategy'
             });
             this.checkCircuitBreakersOnFailure();
-            throw error;
+            //throw error;
         }
     }
 }
@@ -626,7 +645,7 @@ export class DigitOverStrategy extends TradeStrategy {
 
     async execute(): Promise<ITradeData | void> {
         try {
-            return await this.executeTrade(userAccountToken);
+            return await this.executeTrade();
         } catch (error) {
             logger.error({
                 error,
@@ -634,7 +653,7 @@ export class DigitOverStrategy extends TradeStrategy {
                 message: 'Error executing DIGITOVER strategy'
             });
             this.checkCircuitBreakersOnFailure();
-            throw error;
+            //throw error;
         }
     }
 }

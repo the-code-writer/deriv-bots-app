@@ -1,6 +1,6 @@
 import { getRandomDigit } from '@/common/utils/snippets';
 import { IDerivUserAccount } from './deriv-user-account';
-import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult } from './types';
+import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult, ITradeData } from './types';
 import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
 import { StrategyConfig, StrategyStepOutput, StrategyMetrics, StrategyMeta, StrategyVisualization } from './trader-strategy-parser';
@@ -147,22 +147,21 @@ export class VolatilityRiskManager {
         }
     }
 
-    public processTradeResult(tradeResult: IPreviousTradeResult): NextTradeParams {
+    public processTradeResult(tradeResult: ITradeData): NextTradeParams {
         if (!this.validateTradeResult(tradeResult)) {
             logger.warn("Invalid trade result received");
             return this.getSafetyExitResult("invalid_trade_data");
         }
 
         this.totalTrades++;
-        this.resultIsWin = tradeResult.resultIsWin;
+        this.resultIsWin = tradeResult.profit_is_win;
         this.lastTradeTimestamp = Date.now();
 
         try {
             if (this.shouldEnterSafetyMode(tradeResult)) {
                 this.enterSafetyMode("excessive_losses");
             }
-
-            return this.resultIsWin ? this.handleWin() : this.handleLoss();
+            return this.resultIsWin ? this.handleWin(tradeResult) : this.handleLoss(tradeResult);
         } catch (error) {
             logger.error(error, "Error processing trade result");
             this.enterSafetyMode("processing_error");
@@ -172,13 +171,15 @@ export class VolatilityRiskManager {
         
     }
 
-    private handleWin(): NextTradeParams {
+    private handleWin(tradeResult: ITradeData): NextTradeParams {
         this.consecutiveLosses = 0;
         this.winningTrades++;
         this.recoveryAttempts = 0;
 
         if (this.totalLossAmount > 0) {
-            const recoveredAmount = this.calculateRecoveredAmount();
+
+            const recoveredAmount = this.calculateRecoveredAmount(tradeResult);
+
             this.totalLossAmount = Math.max(0, this.totalLossAmount - recoveredAmount);
 
             if (this.totalLossAmount === 0) {
@@ -192,32 +193,38 @@ export class VolatilityRiskManager {
         }
 
         return this.getNextTradeParams();
+
     }
 
-    private handleLoss(): NextTradeParams {
+    private handleLoss(tradeResult: ITradeData): NextTradeParams {
         this.consecutiveLosses++;
         this.losingTrades++;
         this.recoveryAttempts++;
 
-        const lossAmount = this.calculateLossAmount();
+        const lossAmount = this.calculateLossAmount(tradeResult);
+
         this.totalLossAmount += lossAmount;
 
-        logger.warn(`Loss recorded. Total loss: ${this.totalLossAmount}, Consecutive: ${this.consecutiveLosses}`);
+        logger.warn(`Loss recorded. Trade loss: ${lossAmount}, Total loss: ${this.totalLossAmount}, Consecutive: ${this.consecutiveLosses}`);
 
         if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
             this.enterSafetyMode("max_recovery_attempts");
         }
 
         return this.getNextTradeParams();
+
     }
 
     public getNextTradeParams(): NextTradeParams {
         try {
+
             const strategyConfig = this.strategyParser.getStrategyConfig();
+
             const steps = this.strategyParser.getAllSteps();
 
             // Get the appropriate step based on consecutive losses
             const stepIndex = Math.min(this.consecutiveLosses, steps.length - 1);
+            
             const step = steps[stepIndex];
 
             return {
@@ -271,20 +278,12 @@ export class VolatilityRiskManager {
         }
     }
 
-    private calculateRecoveredAmount(): number {
-        const strategyConfig = this.strategyParser.getStrategyConfig();
-        const currentStep = this.getCurrentStep();
-
-        const stake = currentStep.amount;
-        const profitPercentage = this.strategyParser.getStrategyMetrics().averageRewardToRiskRatio * 100;
-        return stake * (1 + profitPercentage / 100);
+    private calculateRecoveredAmount(tradeResult: ITradeData): number {
+        return tradeResult.safeProfit;
     }
 
-    private calculateLossAmount(): number {
-        const currentStep = this.getCurrentStep();
-        const stake = currentStep.amount;
-        const profitPercentage = this.strategyParser.getStrategyMetrics().averageRewardToRiskRatio * 100;
-        return stake * (1 + profitPercentage / 100);
+    private calculateLossAmount(tradeResult: ITradeData): number {
+        return tradeResult.buy_price_value;
     }
 
     private getCurrentStep(): StrategyStepOutput {
@@ -293,7 +292,7 @@ export class VolatilityRiskManager {
         return steps[stepIndex];
     }
 
-    private shouldEnterSafetyMode(tradeResult: IPreviousTradeResult): boolean {
+    private shouldEnterSafetyMode(tradeResult: ITradeData): boolean {
         if (this.inSafetyMode && this.safetyModeUntil > Date.now()) {
             return true;
         }
@@ -317,6 +316,7 @@ export class VolatilityRiskManager {
         }
 
         return false;
+
     }
 
     private getSafetyExitResult(reason: string): NextTradeParams {
@@ -336,12 +336,53 @@ export class VolatilityRiskManager {
         };
     }
 
-    private validateTradeResult(data: IPreviousTradeResult): boolean {
-        if (!data || typeof data !== 'object') return false;
-        if (!data.strategyParams || typeof data.strategyParams !== 'object') return false;
-        if (typeof data.resultIsWin !== 'boolean') return false;
-        if (typeof data.baseStake !== 'number' || data.baseStake <= 0) return false;
-        if (!data.userAccount || typeof data.userAccount.balance !== 'number') return false;
+    private validateTradeResult(data: ITradeData): boolean {
+        // Basic type checks for required fields
+        if (typeof data !== 'object' || data === null) return false;
+
+        const requiredFields = [
+            'symbol_short', 'symbol_full', 'start_time', 'expiry_time', 'purchase_time',
+            'entry_spot_value', 'entry_spot_time', 'exit_spot_value', 'exit_spot_time',
+            'ask_price_currency', 'ask_price_value', 'buy_price_currency', 'buy_price_value',
+            'buy_transaction', 'bid_price_currency', 'bid_price_value', 'sell_price_currency',
+            'sell_price_value', 'sell_spot', 'sell_spot_time', 'sell_transaction',
+            'payout', 'payout_currency', 'profit_value', 'profit_currency',
+            'profit_percentage', 'profit_is_win', 'profit_sign', 'status',
+            'longcode', 'proposal_id', 'userAccount', 'audit_details', 'ticks'
+        ];
+
+        for (const field of requiredFields) {
+            if (!(field in data)) {
+                console.error(`Missing required field: ${field}`);
+                return false;
+            }
+        }
+
+        // Validate nested userAccount
+        if (typeof data.userAccount !== 'object' || data.userAccount === null) return false;
+        const requiredUserFields = ['email', 'country', 'currency', 'loginid', 'user_id', 'fullname', 'token'];
+        for (const field of requiredUserFields) {
+            if (!(field in data.userAccount)) {
+                console.error(`Missing required userAccount field: ${field}`);
+                return false;
+            }
+        }
+
+        // Validate audit_details array
+        if (!Array.isArray(data.audit_details)) return false;
+        for (const detail of data.audit_details) {
+            if (typeof detail !== 'object' || detail === null) return false;
+            if (!('epoch' in detail) || typeof detail.epoch !== 'number') return false;
+            if (!('tick' in detail) || typeof detail.tick !== 'number') return false;
+        }
+
+        // Basic type checks for other fields
+        if (typeof data.symbol_short !== 'string') return false;
+        if (typeof data.symbol_full !== 'string') return false;
+        if (typeof data.start_time !== 'number') return false;
+        if (typeof data.expiry_time !== 'number') return false;
+        // Add more type checks as needed...
+
         return true;
     }
 

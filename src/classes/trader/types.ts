@@ -519,14 +519,9 @@ export interface ContractParams {
     duration?: number | string;
     duration_unit?: ContractDurationUnitType;
     barrier?: number | string;
-    predictedDigit?: number;
 }
 
-export interface ContractOptionsParams extends ContractParams {
-    contractType?: ContractType;
-    market: MarketType;
-    durationUnit: ContractDurationUnitType;
-}
+export interface ContractOptionsParams extends ContractParams {}
 
 export interface ContractProps {
     status: string;
@@ -843,11 +838,11 @@ export interface ITradeData {
     profit_percentage: number; // Percentage of the profit
     profit_is_win: boolean; // Indicates if the trade is a win
     profit_sign: number; // Sign of the profit (e.g., 1 for positive, -1 for negative)
+    safeProfit: number;
     status: StatusType; // Status of the trade
     longcode: string; // Long code of the trade
     proposal_id: string; // Proposal ID of the trade
-    balance_currency: string; // Currency of the balance
-    balance_value: number | string; // Value of the balance
+    userAccount: IDerivUserAccount; // Value of the balance
     audit_details: Array<{ // Array of audit details
         epoch: number; // Epoch time of the audit
         tick?: number; // Optional tick value
