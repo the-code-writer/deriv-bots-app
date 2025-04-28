@@ -96,7 +96,7 @@ export abstract class TradeStrategy {
      * @abstract
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    abstract execute(userAccountToken: string): Promise<ITradeData>;
+    abstract execute(): Promise<ITradeData>;
 
     protected initializeVolatilityRiskManager(strategyName: string): void {
 
@@ -124,7 +124,7 @@ export abstract class TradeStrategy {
         logger.info({
             action: 'initializeVolatilityRiskManager',
             strategyJson: strategyJson,
-            strategyParser: this.strategyParser.getFormattedOutput()
+            // strategyParser: this.strategyParser.getFormattedOutput() 
         });
 
 
@@ -168,7 +168,7 @@ export abstract class TradeStrategy {
         }
 
         if (result.status === StatusTypeEnum.Blocked) {
-            console.log(`Trade blocked due to: ${result.message}`);
+            console.log(`Trade blocked due to: ${result.message}`); 
             if (result.metadata?.cooldownRemaining > 0) {
                 console.log(`Wait ${result.metadata.cooldownRemaining}ms before retrying`);
             }
@@ -486,7 +486,7 @@ export class DigitDiffStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(userAccountToken: string): Promise<ITradeData> {
+    async execute(): Promise<ITradeData | void> {
         try {
             return await this.executeTrade(userAccountToken);
         } catch (error) {
@@ -509,7 +509,7 @@ export class DigitEvenStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(userAccountToken: string): Promise<ITradeData> {
+    async execute(): Promise<ITradeData | void> {
         try {
             return await this.executeTrade(userAccountToken);
         } catch (error) {
@@ -532,7 +532,7 @@ export class DigitOddStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(userAccountToken: string): Promise<ITradeData> {
+    async execute(): Promise<ITradeData | void> {
         try {
             return await this.executeTrade(userAccountToken);
         } catch (error) {
@@ -555,7 +555,7 @@ export class CallStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(userAccountToken: string): Promise<ITradeData> {
+    async execute(): Promise<ITradeData | void> {
         try {
             return await this.executeTrade(userAccountToken);
         } catch (error) {
@@ -578,7 +578,7 @@ export class PutStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(userAccountToken: string): Promise<ITradeData> {
+    async execute(): Promise<ITradeData | void> {
         try {
             return await this.executeTrade(userAccountToken);
         } catch (error) {
@@ -601,7 +601,7 @@ export class DigitUnderStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(userAccountToken: string): Promise<ITradeData> {
+    async execute(): Promise<ITradeData | void> {
         try {
             return await this.executeTrade(userAccountToken);
         } catch (error) {
@@ -624,7 +624,7 @@ export class DigitOverStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(userAccountToken: string): Promise<ITradeData> {
+    async execute(): Promise<ITradeData | void> {
         try {
             return await this.executeTrade(userAccountToken);
         } catch (error) {

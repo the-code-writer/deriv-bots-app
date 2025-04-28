@@ -5,7 +5,7 @@
  */
 
 import { pino } from "pino";
-import { BotConfig, ITradeData, MarketType, ContractType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, ContractTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType, IPreviousTradeResult, ContractDurationUnitType, TradingModeType, StatusTypeEnum, BasisTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum } from './types';
+import { BotConfig, ITradeData, MarketType, ContractType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, ContractTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType, IPreviousTradeResult, ContractDurationUnitType, TradingModeType, StatusTypeEnum, BasisTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, UserAccount } from './types';
 import { TradeManager } from './trade-manager';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
@@ -56,7 +56,6 @@ export class DerivTradingBot {
     private userAccountToken: string = "";
     private userAccount: IDerivUserAccount = {} as IDerivUserAccount;
     private userBalance: number = 0;
-    private previousTradeResultData: IPreviousTradeResult = {} as IPreviousTradeResult;
     private auditTrail: Array<any> = [];
 
     private botConfig: BotConfig;
@@ -83,7 +82,7 @@ export class DerivTradingBot {
 
         const mergedConfig: BotConfig = { ...this.botConfig, ...config };
 
-        this.tradeManager = new TradeManager(config);
+        this.tradeManager = {} as TradeManager;
         this.accountType = {} as AccountType;
         this.tradingType = mergedConfig.tradingType || TradingTypeEnum.Default;
         this.market = mergedConfig.market || MarketTypeEnum.Default;
@@ -117,7 +116,6 @@ export class DerivTradingBot {
         this.userAccountToken = "";
         this.userAccount = {} as IDerivUserAccount;
         this.userBalance = 0;
-        this.previousTradeResultData = {} as IPreviousTradeResult
         this.auditTrail = [];
 
         // Clear any remaining intervals or timeouts
@@ -170,7 +168,7 @@ export class DerivTradingBot {
             }
 
             // Initialize trading session
-            const sessionData: TradingSessionDataType = await this.initializeTradingSession(session);
+            const sessionData: TradingSessionDataType = await this.initializeTradingSession(session, userAccountToken);
 
             this.userAccountToken = userAccountToken;
 
@@ -213,7 +211,7 @@ export class DerivTradingBot {
                     // Start the main trading loop
                     this.isTrading = true;
 
-                    await this.executeTradeSequence(userAccountToken);
+                    await this.executeTradeSequence();
 
                 } else {
 
@@ -435,7 +433,8 @@ export class DerivTradingBot {
      * @param {object} session - Trading session configuration
      */
     private async initializeTradingSession(
-        session: BotSessionDataType
+        session: BotSessionDataType,
+        userAccountToken: string
     ): Promise<TradingSessionDataType> {
 
         console.log("SESSION RAW", session);
@@ -509,9 +508,8 @@ export class DerivTradingBot {
             maxRecoveryTrades: this.maxRecoveryTrades,
             maxStake: this.maxStake,
             minStake: this.minStake,
+            userAccountToken: userAccountToken
         };
-
-        console.log("***********************  XXXXXXXX ******", config);
 
         this.tradeManager = new TradeManager(config);
 
@@ -529,13 +527,13 @@ export class DerivTradingBot {
     /**
      * Main trade execution flow without while loops
      */
-    private async executeTradeSequence(userAccountToken: string): Promise<void> {
+    private async executeTradeSequence(): Promise<void> {
 
         if (!this.isTrading) return;
 
         try {
 
-            const tradeResult: ITradeData | undefined = await this.tradeManager.executeTrade(userAccountToken) as ITradeData;
+            const tradeResult: ITradeData | undefined = await this.tradeManager.executeTrade() as ITradeData;
 
             await this.processTradeResult(tradeResult);
 
@@ -545,7 +543,7 @@ export class DerivTradingBot {
             }
 
             // Next trade in a loop until halted by internal mechanisms
-            await this.executeTradeSequence(userAccountToken);
+            await this.executeTradeSequence();
 
         } catch (error) {
 

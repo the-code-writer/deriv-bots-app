@@ -29,8 +29,6 @@ export class TradeManager {
 
         this.config = config;
 
-        console.log("***********************  config ******", config);
-
         this.currentContractType = this.initializeContractTypeClass();
 
     }
@@ -41,10 +39,9 @@ export class TradeManager {
      * @param {ContractType} contractType - Type of trade to execute
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async executeTrade(userAccountToken:string): Promise<ITradeData | undefined> {
+    async executeTrade(): Promise<ITradeData | undefined> {
 
         logger.warn({
-            userAccountToken,
             config : this.config,
             //currentContractType: this.currentContractType
         })
@@ -60,7 +57,7 @@ export class TradeManager {
         try {
 
             // Execute the trade using current strategy
-            const response = await this.currentContractType.execute(userAccountToken);
+            const response = await this.currentContractType.execute();
 
             // Validate and process trade result
             return response;
@@ -84,8 +81,6 @@ export class TradeManager {
      * @private
      */
     private initializeContractTypeClass(): TradeStrategy {
-
-        console.error('&&&&&&&&&&&&&&&&&&&&& initializeContractTypeClass', this.config);
 
         switch (this.config.contractType) {
             case ContractTypeEnum.DigitDiff:

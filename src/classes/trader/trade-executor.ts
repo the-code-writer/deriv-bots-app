@@ -144,7 +144,7 @@ export class TradeExecutor {
     private validateContractParameters(params: ContractParams): void {
 
         logger.warn({
-            params
+            //params
         })
 
         const requiredFields = ['amount', 'contract_type', 'currency', 'symbol'];
