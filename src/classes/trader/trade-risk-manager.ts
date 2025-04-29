@@ -282,7 +282,7 @@ export class VolatilityRiskManager {
                 logger.info("Full recovery achieved");
                 this.resetRecoveryState();
             } else {
-                logger.info(`Partial recovery: ${recoveredAmount} recovered, ${this.totalLossAmount} remaining`);
+                logger.info(`Partial Recovery: ${this.currency} ${roundToTwoDecimals(recoveredAmount)}, Remaining: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}`);
                 this.isEmergencyRecovery = true;
             }
         } else {
@@ -303,7 +303,7 @@ export class VolatilityRiskManager {
         this.totalLossAmount += lossAmount;
         this.dailyLossAmount += lossAmount;
 
-        logger.warn(`Loss recorded. Trade loss: ${lossAmount}, Total loss: ${this.totalLossAmount}, Consecutive: ${this.consecutiveLosses}`);
+        logger.warn(`Loss: ${this.currency} ${roundToTwoDecimals(lossAmount)}, Total Loss: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}, Consecutive: ${this.consecutiveLosses}`);
 
         if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
             this.enterSafetyMode("max_recovery_attempts");
