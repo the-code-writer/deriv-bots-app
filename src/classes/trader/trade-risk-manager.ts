@@ -264,7 +264,7 @@ export class VolatilityRiskManager {
         }
 
         return this.getNextTradeParams();
-        
+
     }
 
     private handleWin(tradeResult: ITradeData): NextTradeParams {
@@ -327,7 +327,9 @@ export class VolatilityRiskManager {
             const step = steps[stepIndex];
 
             if (this.isEmergencyRecovery) {
+
                 this.isEmergencyRecovery = false;
+
                 return {
                     basis: BasisTypeEnum.Default,
                     symbol: MarketTypeEnum.Default,
@@ -345,25 +347,26 @@ export class VolatilityRiskManager {
                     winningTrades: this.winningTrades,
                     losingTrades: this.losingTrades
                 };
+
             } else {
-                
-            return {
-                basis: step.basis || strategyConfig.basis,
-                symbol: step.symbol || this.market,
-                amount: roundToTwoDecimals(step.amount),
-                barrier: step.barrier || this.getBarrier(step.contract_type),
-                currency: step.currency || strategyConfig.currency,
-                contractType: step.contract_type || this.contractType,
-                contractDurationValue: step.duration || this.contractDurationValue,
-                contractDurationUnits: step.duration_unit || this.contractDurationUnits,
-                previousResultStatus: this.resultIsWin,
-                consecutiveLosses: this.consecutiveLosses,
-                totalAmountToRecover: this.totalLossAmount,
-                maximumStakeValue: this.maximumStakeValue,
-                minimumStakeValue: this.minimumStakeValue,
-                winningTrades: this.winningTrades,
-                losingTrades: this.losingTrades
-            };
+
+                return {
+                    basis: step.basis || strategyConfig.basis,
+                    symbol: step.symbol || this.market,
+                    amount: roundToTwoDecimals(step.amount),
+                    barrier: step.barrier || this.getBarrier(step.contract_type),
+                    currency: step.currency || strategyConfig.currency,
+                    contractType: step.contract_type || this.contractType,
+                    contractDurationValue: step.duration || this.contractDurationValue,
+                    contractDurationUnits: step.duration_unit || this.contractDurationUnits,
+                    previousResultStatus: this.resultIsWin,
+                    consecutiveLosses: this.consecutiveLosses,
+                    totalAmountToRecover: this.totalLossAmount,
+                    maximumStakeValue: this.maximumStakeValue,
+                    minimumStakeValue: this.minimumStakeValue,
+                    winningTrades: this.winningTrades,
+                    losingTrades: this.losingTrades
+                };
 
             }
 
@@ -737,9 +740,9 @@ export class VolatilityRiskManager {
      * @returns boolean indicating if any circuit breaker was triggered
      */
     public checkCircuitBreakers(account: IDerivUserAccount): boolean {
-        const now:number = Date.now();
-        let triggered:boolean = false;
-        let reason:string = '';
+        const now: number = Date.now();
+        let triggered: boolean = false;
+        let reason: string = '';
         const reasons: string[] = [];
 
         // Check daily loss limit
