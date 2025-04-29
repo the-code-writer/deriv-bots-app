@@ -119,7 +119,9 @@ export class TradeExecutor {
 
                 console.log(error)
 
-                logger.warn(`Attempt ${attempt} of ${this.maxRetryAttempts} failed:::: ${error.message}`);
+                logger.warn(`Attempt ${attempt} of ${this.maxRetryAttempts}`);
+
+                logger.error(`Code: ${error.error.code} :: Message: ${error.error.message}`);
 
                 if (attempt < this.maxRetryAttempts) {
                     const delay = this.calculateRetryDelay(attempt);

@@ -1,6 +1,6 @@
 import { getRandomDigit } from '@/common/utils/snippets';
 import { IDerivUserAccount } from './deriv-user-account';
-import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult, ITradeData } from './types';
+import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult, ITradeData, MarketTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, CurrencyType, ContractDurationUnitType, MarketType } from './types';
 import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
 import { StrategyConfig, StrategyStepOutput, StrategyMetrics, StrategyMeta, StrategyVisualization } from './trader-strategy-parser';
@@ -18,7 +18,7 @@ const logger = pino({
 // Constants
 const MAX_RECOVERY_ATTEMPTS = 5;
 
-interface CircuitBreakerConfig {
+export interface CircuitBreakerConfig {
     // Existing properties
     maxAbsoluteLoss: number;
     maxDailyLoss: number;
@@ -38,7 +38,7 @@ interface CircuitBreakerConfig {
     cooldownPeriod: number;
 }
 
-interface RapidLossState {
+export interface RapidLossState {
     recentLosses: Array<{
         timestamp: number;
         amount: number;
@@ -49,7 +49,26 @@ interface RapidLossState {
     isActive: boolean;
 }
 
-interface CircuitBreakerState {
+// Interface for the current trade manager state
+export interface TradeManagerState {
+    basis: string;
+    symbol: string;
+    amount: number;
+    barrier: number | string | null;
+    currency: string;
+    contractType: string;
+    contractDurationValue: number;
+    contractDurationUnits: string;
+    previousResultStatus: boolean;
+    consecutiveLosses: number;
+    totalAmountToRecover: number;
+    winningTrades: number;
+    losingTrades: number;
+    inSafetyMode: boolean;
+    recoveryAttempts: number;
+}
+
+export interface CircuitBreakerState {
     triggered: boolean;
     lastTriggered: number;
     lastReason: string;
@@ -58,15 +77,45 @@ interface CircuitBreakerState {
     safetyModeUntil: number;
 }
 
-interface NextTradeParams {
+interface RapidLossEvent {
+    event: 'RAPID_LOSS_DETECTED';
+    lossesCount: number;
+    totalAmount: number;
+    triggerCount: number;
+    currentCooldown: number;
+    message: string;
+    // Optional timestamp for when the event occurred
+    timestamp?: number;
+    // Optional details about individual losses
+    recentLosses?: Array<{
+        timestamp: number;
+        amount: number;
+    }>;
+}
+
+
+// Interface for the safety mode response
+export interface SafetyModeResponse {
+    status: string;
+    message: string;
+    timestamp: number;
+    metadata: {
+        rapidLosses?: RapidLossEvent,
+        currentState?: TradeManagerState;
+        circuitBreakerState?: CircuitBreakerState;
+        cooldownRemaining?: number;
+    };
+}
+
+export interface NextTradeParams {
     basis: BasisType;
-    symbol: string;
+    symbol: MarketType;
     amount: number;
     barrier: string | number;
-    currency: string;
+    currency: CurrencyType;
     contractType: ContractType;
     contractDurationValue: number;
-    contractDurationUnits: string;
+    contractDurationUnits: ContractDurationUnitType;
     previousResultStatus: boolean;
     consecutiveLosses: number;
     totalAmountToRecover: number;
@@ -103,6 +152,8 @@ export class VolatilityRiskManager {
     private inSafetyMode: boolean = false;
     private safetyModeUntil: number = 0;
     private dailyLossAmount: number = 0;
+
+    private emergencyRecovery: boolean = false;
 
     constructor(
         baseStake: number,
@@ -210,6 +261,9 @@ export class VolatilityRiskManager {
                 this.resetRecoveryState();
             } else {
                 logger.info(`Partial recovery: ${recoveredAmount} recovered, ${this.totalLossAmount} remaining`);
+
+                // TODO: - If aggressive
+                return this.getEmergencyTradeParams();
             }
         } else {
             this.resetRecoveryState();
@@ -240,6 +294,7 @@ export class VolatilityRiskManager {
     }
 
     public getNextTradeParams(): NextTradeParams {
+
         try {
 
             const strategyConfig = this.strategyParser.getStrategyConfig();
@@ -266,6 +321,33 @@ export class VolatilityRiskManager {
                 winningTrades: this.winningTrades,
                 losingTrades: this.losingTrades
             };
+
+        } catch (error) {
+            logger.error("Error getting next trade params, using fallback", error);
+            return this.getBaseTradeParams();
+        }
+    }
+
+    public getEmergencyTradeParams(): NextTradeParams {
+
+        try {
+
+            return {
+                basis: BasisTypeEnum.Default,
+                symbol: MarketTypeEnum.Default,
+                amount: roundToTwoDecimals(this.totalLossAmount * 12),
+                barrier: getRandomDigit(),
+                currency: CurrenciesEnum.Default,
+                contractType: ContractTypeEnum.DigitDiff,
+                contractDurationValue: 1,
+                contractDurationUnits: ContractDurationUnitTypeEnum.Default,
+                previousResultStatus: this.resultIsWin,
+                consecutiveLosses: this.consecutiveLosses,
+                totalAmountToRecover: this.totalLossAmount,
+                winningTrades: this.winningTrades,
+                losingTrades: this.losingTrades
+            };
+
         } catch (error) {
             logger.error("Error getting next trade params, using fallback", error);
             return this.getBaseTradeParams();
@@ -739,6 +821,27 @@ export class VolatilityRiskManager {
             lastReason: reason
         };
         logger.warn(`Entered safety mode: ${reason}`);
+    }
+
+    public resetSafetyMode(): void {
+
+        this.circuitBreakerState = {
+            triggered: false,
+            lastTriggered: 0,
+            lastReason: '',
+            reasons: [],
+            inSafetyMode: false,
+            safetyModeUntil: 0
+        };
+
+        this.rapidLossState = {
+            recentLosses: [],
+            lastTriggerTime: 0,
+            triggerCount: 0,
+            currentCooldownMs: 0,
+            isActive: false,
+        };
+
     }
 
 }

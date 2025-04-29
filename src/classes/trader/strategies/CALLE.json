@@ -11,18 +11,36 @@
         },
         {
           "symbol": "R_75",
-          "contractType": "DIGITUNDER_5",
+          "contractType": "CALLE",
+          "contractDurationValue": 2,
+          "contractDurationUnits": "t"
+        },
+        {
+          "symbol": "R_75",
+          "contractType": "CALLE",
+          "contractDurationValue": 3,
+          "contractDurationUnits": "t"
+        },
+        {
+          "symbol": "R_75",
+          "contractType": "DIGITUNDER_4",
           "contractDurationValue": 1,
           "contractDurationUnits": "t"
         },
         {
           "symbol": "R_50",
-          "contractType": "DIGITUNDER_7",
+          "contractType": "DIGITUNDER_5",
           "contractDurationValue": 1,
           "contractDurationUnits": "t"
         },
         {
           "symbol": "R_25",
+          "contractType": "DIGITUNDER_7",
+          "contractDurationValue": 1,
+          "contractDurationUnits": "t"
+        },
+        {
+          "symbol": "R_100",
           "contractType": "DIGITUNDER_9",
           "contractDurationValue": 1,
           "contractDurationUnits": "t"
@@ -30,12 +48,6 @@
         {
           "symbol": "R_10",
           "contractType": "DIGITDIFF",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_100",
-          "contractType": "DIGITUNDER_2",
           "contractDurationValue": 1,
           "contractDurationUnits": "t"
         }

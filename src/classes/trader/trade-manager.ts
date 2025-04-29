@@ -39,7 +39,7 @@ export class TradeManager {
      * @param {ContractType} contractType - Type of trade to execute
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async executeTrade(): Promise<ITradeData | void> {
+    async executeTrade(): Promise<ITradeData | null> {
 
         if (!this.config.contractType) {
             throw new Error('TradeManager can not execute trade : Missing Contract Type');

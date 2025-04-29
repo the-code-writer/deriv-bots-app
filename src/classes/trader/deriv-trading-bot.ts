@@ -13,6 +13,7 @@ import { convertTimeStringToSeconds } from '@/common/utils/snippets';
 import { sanitizeContractDurationUnit, sanitizeAccountType, sanitizeTradingType, sanitizeMarketType, sanitizeContractType, sanitizeAmount, sanitizeTradingMode, sanitizeString } from '@/common/utils/snippets';
 import { DerivUserAccount, IDerivUserAccount } from "./deriv-user-account";
 import { roundToTwoDecimals } from '../../common/utils/snippets';
+import { TradeStorageService } from "./trade-storage-service";
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 
@@ -65,6 +66,8 @@ export class DerivTradingBot {
 
     private botConfig: BotConfig;
 
+    private tradeStorageService: TradeStorageService;
+
     /**
      * Constructs a new DerivTradingBot instance
      * @param {BotConfig} config - Configuration object for the trading bot
@@ -73,6 +76,8 @@ export class DerivTradingBot {
     constructor(config: BotConfig = {}) {
         // Save the config for future use
         this.botConfig = config;
+
+        this.tradeStorageService = new TradeStorageService();
 
         // Call the resetState function to initialize all properties
         this.resetState();
@@ -83,12 +88,14 @@ export class DerivTradingBot {
      * Constructs a new DerivTradingBot instance
      * @param {BotConfig} config - Configuration object for the trading bot
      */
-    resetState(config: BotConfig = {}) {
+    async resetState(config: BotConfig = {}) {
+
 
         const mergedConfig: BotConfig = { ...this.botConfig, ...config };
 
         this.tradeManager = {} as TradeManager;
         this.accountType = {} as AccountType;
+        this.tradeStorageService.init();
         this.tradingType = mergedConfig.tradingType || TradingTypeEnum.Default;
         this.market = mergedConfig.market || MarketTypeEnum.Default;
         this.contractType = mergedConfig.contractType || ContractTypeEnum.Default;
@@ -717,7 +724,7 @@ export class DerivTradingBot {
             data: data.audit
         });
 
-        // await tradeStorageManager.saveTradeResult(data.tradeResult);
+        this.tradeStorageService.insertTrade(data.tradeResult);
 
     }
 

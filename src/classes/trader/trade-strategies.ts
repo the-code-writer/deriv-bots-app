@@ -21,13 +21,13 @@ import {
     StatusTypeEnum
 } from './types';
 import { TradeExecutor } from './trade-executor';
-import { VolatilityRiskManager } from './trade-risk-manager';
+import { RapidLossState, SafetyModeResponse, VolatilityRiskManager } from './trade-risk-manager';
 import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "./deriv-user-account";
 import { StrategyParser } from './trader-strategy-parser';
 import { BotConfig } from './types';
-import { getRandomDigit } from "@/common/utils/snippets";
+import { getRandomDigit, sleep } from "@/common/utils/snippets";
 
 const logger = pino({
     name: "TradeStrategy",
@@ -97,7 +97,7 @@ export abstract class TradeStrategy {
      * @abstract
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    abstract execute(): Promise<ITradeData | void>;
+    abstract execute(): Promise<ITradeData | null>;
 
     protected initializeVolatilityRiskManager(strategyName: string): void {
 
@@ -109,18 +109,18 @@ export abstract class TradeStrategy {
         const circuitBreakerConfig = {
             maxAbsoluteLoss: 1000,
             maxDailyLoss: 500,
-            maxConsecutiveLosses: 5,
+            maxConsecutiveLosses: 4,
             maxBalancePercentageLoss: 0.5,
 
             rapidLoss: {
-                timeWindowMs: 30000,     // 30 second window
-                threshold: 7,            // 2 losses in 30s triggers
-                initialCooldownMs: 30000, // 30s initial cooldown
+                timeWindowMs: 40000,     // 30 second window
+                threshold: 4,            // 2 losses in 30s triggers
+                initialCooldownMs: 15000, // 30s initial cooldown
                 maxCooldownMs: 300000,   // 5min maximum cooldown
                 cooldownMultiplier: 2    // Double cooldown each time
             },
 
-            cooldownPeriod: 60000        // 1min for other circuit breakers
+            cooldownPeriod: 15000        // 1min for other circuit breakers
         };
 
         // Initialize strategy parser
@@ -148,16 +148,78 @@ export abstract class TradeStrategy {
         );
     }
 
-    protected async executeTrade(): Promise<ITradeData> {
+    protected async executeTrade(): Promise<ITradeData | null> {
 
-        const checksOK:boolean = await this.preContractPurchaseChecks(this.contractType);
+        const response: SafetyModeResponse = await this.preContractPurchaseChecks(this.contractType);
 
-        if (!checksOK) {
-            return;
+        let params: ContractParams = {} as ContractParams;
+
+        if (response?.status === 'SAFETY_MODE') {
+
+            console.error({
+                message: "SAFETY_MODE",
+                response: response
+            });
+
+            const remainingCooldown = this.getRemainingCooldown(response);
+
+            logger.error(`*** In safety mode. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
+
+            // Wait for the cooldown period plus a small buffer
+            await sleep(remainingCooldown + 1000);
+
+            // Reset or refresh your trade manager if needed
+            this.resetSafetyMode();
+
+        } else if (response?.status === 'TRADE_BLOCKED' || response?.status === 'BLOCKED' ) {
+
+            console.error({
+                message: "TRADE_BLOCKED",
+                response: response
+            });
+
+            const remainingCooldown = this.getRemainingCooldown(response);
+
+            logger.error(`*** Trade currently blocked. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
+
+            // Wait for the cooldown period plus a small buffer
+            await sleep(remainingCooldown + 1000);
+
+            // Reset or refresh your trade manager if needed
+            this.resetSafetyMode();
+
+        } else if (response?.status === 'RAPID_LOSS_DETECTED') {
+
+            console.error({
+                message: "RAPID_LOSS_DETECTED",
+                response: response
+            });
+
+            const remainingCooldown = this.getRemainingCooldown(response);
+
+            logger.error(`*** Rapid loss detected. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
+
+            // Wait for the cooldown period plus a small buffer
+            await sleep(remainingCooldown + 1000);
+
+            // Reset or refresh your trade manager if needed
+            this.resetSafetyMode();
+
+        } else if (response?.status === 'OK') {
+
+            // PASS
+
+        } else {
+
+            console.error({
+                message: "UNKNOWN",
+                response: response
+            });
+
         }
+            
+        params = this.getNextContractParams(this.config);
 
-        const params: ContractParams = this.getNextContractParams(this.config);
-        
         this.validateParameters(params);
 
         const result: ITradeData = await this.executor.purchaseContract(params, this.config);
@@ -171,24 +233,61 @@ export abstract class TradeStrategy {
     protected handleTradeResult(params: any, result: ITradeData): void {
         if (this.volatilityRiskManager) {
             this.volatilityRiskManager.processTradeResult(result);
-
-            if (!result.profit_is_win) {
-                // Record the loss and check for rapid losses
-                this.volatilityRiskManager.checkRapidLosses(result.buy_price_value);
-
-                if (this.volatilityRiskManager.isInRapidLossCooldown()) {
-                    const remaining = this.volatilityRiskManager.getRapidLossCooldownRemaining();
-                    logger.info(`In rapid loss cooldown: ${Math.round(remaining / 1000)}s remaining`);
-                    return this.getSafetyExitResult('rapid_loss_cooldown');
-                }
-            }
         }
     }
 
-    private getSafetyExitResult(reason?: string): any {
+    private getRemainingCooldown(response: SafetyModeResponse): number {
+
+        const safetyModeUntil: number = response.metadata.circuitBreakerState?.safetyModeUntil || 0;
+
+        const currentTimestamp: number = Date.now();
+
+        console.log([
+            safetyModeUntil,
+            currentTimestamp,
+            (safetyModeUntil - currentTimestamp)
+        ])
+
+        return Math.max(0, safetyModeUntil - currentTimestamp);
+        
+    }
+
+    private getDefaultExitResult(): SafetyModeResponse {
+        return {
+            status: 'OK',
+            message: `Checks passed!`,
+            timestamp: Date.now(),
+            metadata: {}
+        };
+    }
+
+    private getSafetyRapidLossResult(state?: any): SafetyModeResponse {
+
+        return {
+            status: 'RAPID_LOSS_DETECTED',
+            message: `Rapid loss threshold exceeded`,
+            timestamp: Date.now(),
+            metadata: {
+                rapidLosses: {
+                    event: 'RAPID_LOSS_DETECTED',
+                    lossesCount: state.recentLosses.length,  // Changed from recentLossTimestamps
+                    totalAmount: state.recentLosses.reduce((sum:number, loss:any) => sum + loss.amount, 0), // Changed from recentLossAmounts
+                    triggerCount: state.triggerCount,  // Added trigger count
+                    currentCooldown: state.currentCooldownMs,  // Added cooldown info
+                    message: `Rapid loss threshold exceeded. Cooldown active for ${state.currentCooldownMs}ms`,
+                },
+                circuitBreakerState: state,
+                cooldownRemaining: state?.lastTriggered
+                    ? (state.lastTriggered + this.volatilityRiskManager!.getCircuitBreakerConfig().cooldownPeriod) - Date.now()
+                    : 0
+            }
+        };
+    }
+
+    private getSafetyExitResult(reason?: string): SafetyModeResponse {
         const state = this.volatilityRiskManager?.getCircuitBreakerState();
         return {
-            status: 'blocked',
+            status: 'BLOCKED',
             message: `Trade blocked: ${reason}`,
             timestamp: Date.now(),
             metadata: {
@@ -200,22 +299,40 @@ export abstract class TradeStrategy {
         };
     }
 
+    private getSafetyModeResult(): SafetyModeResponse {
+        const currentState = this.volatilityRiskManager?.getCurrentState();
+        const circuitBreakerState = this.volatilityRiskManager?.getCircuitBreakerState();
+        return {
+            status: 'SAFETY_MODE',
+            message: `The state is in safety mode`,
+            timestamp: Date.now(),
+            metadata: {
+                currentState: currentState,
+                circuitBreakerState: circuitBreakerState,
+            }
+        };
+    }
+
     protected recordAndCheckLoss(amount: number): void {
         if (!this.volatilityRiskManager) {
             logger.warn('VolatilityRiskManager not initialized - skipping loss recording');
             return;
         }
 
+        // Record the loss
         this.volatilityRiskManager.recordRapidLoss(amount);
 
+        // Check for rapid loss condition
         const rapidLossDetected = this.volatilityRiskManager.checkRapidLosses(amount);
         if (rapidLossDetected) {
-            const state = this.volatilityRiskManager.getRapidLossState();
+            const state: RapidLossState = this.volatilityRiskManager.getRapidLossState();
             logger.warn({
                 event: 'RAPID_LOSS_DETECTED',
-                lossesCount: state.recentLossTimestamps.length,
-                totalAmount: state.recentLossAmounts.reduce((a, b) => a + b, 0),
-                message: 'Rapid loss threshold exceeded'
+                lossesCount: state.recentLosses.length,  // Changed from recentLossTimestamps
+                totalAmount: state.recentLosses.reduce((sum, loss) => sum + loss.amount, 0), // Changed from recentLossAmounts
+                triggerCount: state.triggerCount,  // Added trigger count
+                currentCooldown: state.currentCooldownMs,  // Added cooldown info
+                message: `Rapid loss threshold exceeded. Cooldown active for ${state.currentCooldownMs}ms`
             });
             this.enterSafetyMode('rapid_loss_detected');
         }
@@ -226,12 +343,14 @@ export abstract class TradeStrategy {
     }
 
     protected checkCircuitBreakers(): { shouldBlock: boolean; reason?: string } {
+
         if (!this.volatilityRiskManager) {
             logger.debug('Risk manager not available - skipping circuit breaker check');
-            return { shouldBlock: false };
+            return { shouldBlock: false, reason: '' };
         }
 
         const shouldBlock = this.volatilityRiskManager.checkCircuitBreakers(this.getCurrentAccount());
+
         if (shouldBlock) {
             const state = this.volatilityRiskManager.getCircuitBreakerState();
             return {
@@ -240,12 +359,19 @@ export abstract class TradeStrategy {
             };
         }
 
-        return { shouldBlock: false };
+        return { shouldBlock: false, reason: '' };
+
     }
 
     protected checkCircuitBreakersOnFailure(): void {
         if (this.volatilityRiskManager?.checkCircuitBreakers(this.getCurrentAccount())) {
             this.enterSafetyMode('post_trade_circuit_breaker');
+        }
+    }
+
+    public resetSafetyMode(): void {
+        if (this.volatilityRiskManager) {
+            this.volatilityRiskManager.resetSafetyMode();
         }
     }
 
@@ -302,26 +428,28 @@ export abstract class TradeStrategy {
         }
     }
 
-    protected async preContractPurchaseChecks(contractType: ContractType): Promise<boolean> {
+    protected async preContractPurchaseChecks(contractType: ContractType): Promise<SafetyModeResponse> {
 
         if (this.volatilityRiskManager?.getCurrentState().inSafetyMode) {
-            return false;
+            return this.getSafetyModeResult();
             //throw new Error('Cannot execute trade while in safety mode');
         }
 
         const circuitCheck = this.checkCircuitBreakers();
-
         if (circuitCheck.shouldBlock) {
-            logger.warn({
-                event: 'TRADE_BLOCKED',
-                reason: circuitCheck.reason,
-                action: 'Entering safety mode'
-            });
             this.enterSafetyMode(circuitCheck.reason!);
             return this.getSafetyExitResult(circuitCheck.reason!);
         }
 
-        return true;
+        // Check for rapid loss condition
+        const rapidLossDetected = this.volatilityRiskManager.checkRapidLosses();
+        if (rapidLossDetected) {
+            const state: RapidLossState = this.volatilityRiskManager.getRapidLossState();
+            this.enterSafetyMode('rapid_loss_detected');
+            return this.getSafetyRapidLossResult(state);
+        }
+
+        return this.getDefaultExitResult();
 
     }
 
@@ -331,17 +459,34 @@ export abstract class TradeStrategy {
 
             const nextParams = this.volatilityRiskManager.getNextTradeParams();
 
-            return this.createParamsFromFactory(
-                config.contractType as ContractType,
+            console.error("nextParams", nextParams);
+
+            const contractParams = this.createParamsFromFactory(
+                nextParams.contractType,
                 nextParams.amount,
-                nextParams.barrier
+                nextParams.basis,
+                nextParams.currency,
+                nextParams.contractDurationValue,
+                nextParams.contractDurationUnits,
+                nextParams.symbol,
+                nextParams.barrier,
             );
+
+            console.error("contractParams", contractParams);
+
+            return contractParams;
 
         }
 
         return this.createParamsFromFactory(
             config.contractType as ContractType,
-            this.baseStake
+            this.baseStake,
+            this.basis,
+            this.currency,
+            this.contractDurationValue,
+            this.contractDurationUnits,
+            this.market,
+            this.barrier,
         );
 
     }
@@ -349,31 +494,22 @@ export abstract class TradeStrategy {
     private createParamsFromFactory(
         contractType: ContractType,
         amount: number,
+        basis: BasisType,
+        currency: CurrencyType,
+        duration: number,
+        durationUnit: ContractDurationUnitType,
+        market: MarketType,
         barrier?: number | string
     ): ContractParams {
 
-        /*
-        const commonParams = this.contractFactory.createParams(
-            amount,
-            this.basis,
-            contractType,
-            this.currency,
-            this.contractDurationValue,
-            this.contractDurationUnits,
-            this.market,
-        );
-        */
-
         const commonParams = {
             amount: amount,
-            basis: this.basis,
-            currency: this.currency,
-            duration: this.contractDurationValue,
-            duration_unit: this.contractDurationUnits,
-            symbol: this.market,
+            basis: basis || this.basis,
+            currency: currency || this.currency,
+            duration: duration  || this.contractDurationValue,
+            duration_unit: durationUnit || this.contractDurationUnits,
+            symbol: market || this.market,
             contract_type: contractType,
-            // market: this.market, // Ensure market is included
-            // durationUnit: this.contractDurationUnits // Ensure durationUnit is included
         };
 
         switch (contractType) {
@@ -410,11 +546,7 @@ export abstract class TradeStrategy {
             case ContractTypeEnum.Call:
             case ContractTypeEnum.Put:
             default:
-                return {
-                    ...commonParams,
-                    contract_type: contractType,
-                    symbol: this.market
-                };
+                return commonParams;
         }
         
     }
@@ -498,7 +630,7 @@ export class DigitDiffStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData | void> {
+    async execute(): Promise<ITradeData | null> {
         try {
             return await this.executeTrade();
         } catch (error) {
@@ -509,6 +641,7 @@ export class DigitDiffStrategy extends TradeStrategy {
             });
             this.checkCircuitBreakersOnFailure();
             //throw error;
+            return null;
         }
     }
 }
@@ -521,7 +654,7 @@ export class DigitEvenStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData | void> {
+    async execute(): Promise<ITradeData | null> {
         try {
             return await this.executeTrade();
         } catch (error) {
@@ -532,6 +665,7 @@ export class DigitEvenStrategy extends TradeStrategy {
             });
             this.checkCircuitBreakersOnFailure();
             //throw error;
+            return null;
         }
     }
 }
@@ -544,7 +678,7 @@ export class DigitOddStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData | void> {
+    async execute(): Promise<ITradeData | null> {
         try {
             return await this.executeTrade();
         } catch (error) {
@@ -555,6 +689,7 @@ export class DigitOddStrategy extends TradeStrategy {
             });
             this.checkCircuitBreakersOnFailure();
             //throw error;
+            return null;
         }
     }
 }
@@ -567,7 +702,7 @@ export class CallStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData | void> {
+    async execute(): Promise<ITradeData | null> {
         try {
             return await this.executeTrade();
         } catch (error) {
@@ -578,6 +713,7 @@ export class CallStrategy extends TradeStrategy {
             });
             this.checkCircuitBreakersOnFailure();
             //throw error;
+            return null;
         }
     }
 }
@@ -590,7 +726,7 @@ export class PutStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData | void> {
+    async execute(): Promise<ITradeData | null> {
         try {
             return await this.executeTrade();
         } catch (error) {
@@ -601,6 +737,7 @@ export class PutStrategy extends TradeStrategy {
             });
             this.checkCircuitBreakersOnFailure();
             //throw error;
+            return null;
         }
     }
 }
@@ -613,7 +750,7 @@ export class DigitUnderStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData | void> {
+    async execute(): Promise<ITradeData | null> {
         try {
             return await this.executeTrade();
         } catch (error) {
@@ -624,6 +761,7 @@ export class DigitUnderStrategy extends TradeStrategy {
             });
             this.checkCircuitBreakersOnFailure();
             //throw error;
+            return null;
         }
     }
 }
@@ -636,7 +774,7 @@ export class DigitOverStrategy extends TradeStrategy {
         this.initializeVolatilityRiskManager(this.contractType);
     }
 
-    async execute(): Promise<ITradeData | void> {
+    async execute(): Promise<ITradeData | null> {
         try {
             return await this.executeTrade();
         } catch (error) {
@@ -647,6 +785,7 @@ export class DigitOverStrategy extends TradeStrategy {
             });
             this.checkCircuitBreakersOnFailure();
             //throw error;
+            return null;
         }
     }
 }
