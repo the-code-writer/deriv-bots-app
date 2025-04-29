@@ -62,6 +62,8 @@ export interface TradeManagerState {
     previousResultStatus: boolean;
     consecutiveLosses: number;
     totalAmountToRecover: number;
+    maximumStakeValue: number;
+    minimumStakeValue: number;
     winningTrades: number;
     losingTrades: number;
     inSafetyMode: boolean;
@@ -119,6 +121,8 @@ export interface NextTradeParams {
     previousResultStatus: boolean;
     consecutiveLosses: number;
     totalAmountToRecover: number;
+    maximumStakeValue: number;
+    minimumStakeValue: number;
     winningTrades: number;
     losingTrades: number;
     metadata?: {
@@ -144,6 +148,8 @@ export class VolatilityRiskManager {
     private resultIsWin: boolean = false;
     private consecutiveLosses: number = 0;
     private totalLossAmount: number = 0;
+    private maximumStakeValue: number = 0;
+    private minimumStakeValue: number = 0;
     private winningTrades: number = 0;
     private losingTrades: number = 0;
     private totalTrades: number = 0;
@@ -230,6 +236,22 @@ export class VolatilityRiskManager {
         this.totalTrades++;
         this.resultIsWin = tradeResult.profit_is_win;
         this.lastTradeTimestamp = Date.now();
+
+        if (this.minimumStakeValue === 0) {
+            this.minimumStakeValue = tradeResult.buy_price_value;
+        }
+
+        if (this.maximumStakeValue === 0) {
+            this.maximumStakeValue = tradeResult.buy_price_value;
+        }
+
+        if (tradeResult.buy_price_value > this.maximumStakeValue) {
+            this.maximumStakeValue = tradeResult.buy_price_value;
+        }
+
+        if (tradeResult.buy_price_value < this.minimumStakeValue) {
+            this.minimumStakeValue = tradeResult.buy_price_value;
+        }
 
         try {
             if (this.shouldEnterSafetyMode(tradeResult)) {
@@ -318,6 +340,8 @@ export class VolatilityRiskManager {
                     previousResultStatus: this.resultIsWin,
                     consecutiveLosses: this.consecutiveLosses,
                     totalAmountToRecover: this.totalLossAmount,
+                    maximumStakeValue: this.maximumStakeValue,
+                    minimumStakeValue: this.minimumStakeValue,
                     winningTrades: this.winningTrades,
                     losingTrades: this.losingTrades
                 };
@@ -335,6 +359,8 @@ export class VolatilityRiskManager {
                 previousResultStatus: this.resultIsWin,
                 consecutiveLosses: this.consecutiveLosses,
                 totalAmountToRecover: this.totalLossAmount,
+                maximumStakeValue: this.maximumStakeValue,
+                minimumStakeValue: this.minimumStakeValue,
                 winningTrades: this.winningTrades,
                 losingTrades: this.losingTrades
             };
@@ -360,6 +386,8 @@ export class VolatilityRiskManager {
             previousResultStatus: this.resultIsWin,
             consecutiveLosses: this.consecutiveLosses,
             totalAmountToRecover: this.totalLossAmount,
+            maximumStakeValue: this.maximumStakeValue,
+            minimumStakeValue: this.minimumStakeValue,
             winningTrades: this.winningTrades,
             losingTrades: this.losingTrades
         };
@@ -502,6 +530,8 @@ export class VolatilityRiskManager {
             previousResultStatus: this.resultIsWin,
             consecutiveLosses: this.consecutiveLosses,
             totalAmountToRecover: this.totalLossAmount,
+            maximumStakeValue: this.maximumStakeValue,
+            minimumStakeValue: this.minimumStakeValue,
             winningTrades: this.winningTrades,
             losingTrades: this.losingTrades,
             inSafetyMode: this.inSafetyMode,
