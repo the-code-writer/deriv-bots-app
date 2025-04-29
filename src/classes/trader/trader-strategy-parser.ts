@@ -1,4 +1,4 @@
-import { ContractType, MarketType, ContractDurationUnitType, BasisType, CurrencyType, BasisTypeEnum, ContractTypeEnum, CurrenciesEnum } from './types';
+import { ContractType, MarketType, ContractDurationUnitType, BasisType, CurrencyType, BasisTypeEnum, ContractTypeEnum, CurrenciesEnum, BotConfig } from './types';
 import { TradeRewardStructures } from './trade-reward-structures';
 import { ContractParamsFactory } from './contract-factory';
 import { getRandomDigit } from '@/common/utils/snippets';
@@ -121,17 +121,17 @@ export class StrategyParser {
         aggressive: OptimizationPreset;
     };
 
-    constructor(strategyJson: any, strategyIndex: number | null = null, baseStake: number) {
+    constructor(strategyJson: any, strategyIndex: number | null = null, baseStake: number, botConfig: BotConfig) {
         this.rewardCalculator = new TradeRewardStructures();
         this.strategyConfig = this.validateAndCompleteStrategyJson(strategyJson, strategyIndex);
-        this.baseStake = baseStake || (Array.isArray(this.strategyConfig)
+        this.baseStake = botConfig?.baseStake || baseStake || (Array.isArray(this.strategyConfig)
             ? this.strategyConfig[0].baseStake
             : this.strategyConfig.baseStake);
 
         if (Array.isArray(this.strategyConfig)) {
             this.computeAllStrategies();
         } else {
-            this.computeAllSteps();
+            this.computeAllSteps(botConfig);
         }
 
         this.OPTIMIZATION_PRESETS = {
@@ -250,7 +250,7 @@ export class StrategyParser {
         return strategy;
     }
 
-    private computeAllSteps(): void {
+    private computeAllSteps(botConfig?: BotConfig): void {
         let cumulativeLoss = 0;
         this.computedSteps = [];
 
@@ -264,14 +264,38 @@ export class StrategyParser {
             let anticipatedProfit: number;
 
             if (i === 0) {
-                // First step uses base stake
-                currentAmount = this.baseStake;
-                profitPercentage = this.rewardCalculator.calculateProfitPercentage(
-                    currentStepInput.contractType,
-                    currentAmount
-                );
-                anticipatedProfit = currentAmount * (profitPercentage / 100);
-                formula = `Base Stake: ${currentAmount.toFixed(2)} (${profitPercentage.toFixed(2)}%)`;
+                // First step - use config settings if available
+                if (botConfig) {
+                    currentAmount = botConfig.baseStake || this.baseStake;
+                    const contractType = botConfig.contractType || currentStepInput.contractType;
+                    const market = botConfig.market || currentStepInput.symbol;
+
+                    profitPercentage = this.rewardCalculator.calculateProfitPercentage(
+                        contractType,
+                        currentAmount
+                    );
+                    anticipatedProfit = currentAmount * (profitPercentage / 100);
+                    formula = `Config-based Stake: ${currentAmount.toFixed(2)} (${profitPercentage.toFixed(2)}%)`;
+
+                    // Override step values with config if available
+                    currentStepInput.contractType = contractType;
+                    currentStepInput.symbol = market;
+                    if (botConfig.contractDurationValue) {
+                        currentStepInput.contractDurationValue = botConfig.contractDurationValue;
+                    }
+                    if (botConfig.contractDurationUnits) {
+                        currentStepInput.contractDurationUnits = botConfig.contractDurationUnits;
+                    }
+                } else {
+                    // Fall back to JSON strategy first step
+                    currentAmount = this.baseStake;
+                    profitPercentage = this.rewardCalculator.calculateProfitPercentage(
+                        currentStepInput.contractType,
+                        currentAmount
+                    );
+                    anticipatedProfit = currentAmount * (profitPercentage / 100);
+                    formula = `Base Stake: ${currentAmount.toFixed(2)} (${profitPercentage.toFixed(2)}%)`;
+                }
             } else {
                 // Calculate profit percentage based on cumulativeLoss (or baseStake if 0)
                 const amountForPercentage = cumulativeLoss > 0 ? cumulativeLoss : this.baseStake;

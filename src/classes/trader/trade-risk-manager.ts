@@ -131,11 +131,11 @@ export interface NextTradeParams {
 export class VolatilityRiskManager {
     private strategyParser: StrategyParser;
     private baseStake: number;
-    private market: string;
-    private currency: string;
+    private market: MarketType;
+    private currency: CurrencyType;
     private contractType: ContractType;
     private contractDurationValue: number;
-    private contractDurationUnits: string;
+    private contractDurationUnits: ContractDurationUnitType;
     private circuitBreakerConfig: CircuitBreakerConfig;
     private rapidLossState: RapidLossState;
     private circuitBreakerState: CircuitBreakerState;
@@ -153,15 +153,15 @@ export class VolatilityRiskManager {
     private safetyModeUntil: number = 0;
     private dailyLossAmount: number = 0;
 
-    private emergencyRecovery: boolean = false;
+    private isEmergencyRecovery: boolean = false;
 
     constructor(
         baseStake: number,
-        market: string,
-        currency: string,
+        market: MarketType,
+        currency: CurrencyType,
         contractType: ContractType,
         contractDurationValue: number,
-        contractDurationUnits: string,
+        contractDurationUnits: ContractDurationUnitType,
         strategyParser: StrategyParser,
         circuitBreakerConfig?: CircuitBreakerConfig
     ) {
@@ -261,9 +261,7 @@ export class VolatilityRiskManager {
                 this.resetRecoveryState();
             } else {
                 logger.info(`Partial recovery: ${recoveredAmount} recovered, ${this.totalLossAmount} remaining`);
-
-                // TODO: - If aggressive
-                return this.getEmergencyTradeParams();
+                this.isEmergencyRecovery = true;
             }
         } else {
             this.resetRecoveryState();
@@ -306,6 +304,25 @@ export class VolatilityRiskManager {
 
             const step = steps[stepIndex];
 
+            if (this.isEmergencyRecovery) {
+                this.isEmergencyRecovery = false;
+                return {
+                    basis: BasisTypeEnum.Default,
+                    symbol: MarketTypeEnum.Default,
+                    amount: roundToTwoDecimals(this.totalLossAmount * 12),
+                    barrier: getRandomDigit(),
+                    currency: CurrenciesEnum.Default,
+                    contractType: ContractTypeEnum.DigitDiff,
+                    contractDurationValue: 1,
+                    contractDurationUnits: ContractDurationUnitTypeEnum.Default,
+                    previousResultStatus: this.resultIsWin,
+                    consecutiveLosses: this.consecutiveLosses,
+                    totalAmountToRecover: this.totalLossAmount,
+                    winningTrades: this.winningTrades,
+                    losingTrades: this.losingTrades
+                };
+            } else {
+                
             return {
                 basis: step.basis || strategyConfig.basis,
                 symbol: step.symbol || this.market,
@@ -322,31 +339,7 @@ export class VolatilityRiskManager {
                 losingTrades: this.losingTrades
             };
 
-        } catch (error) {
-            logger.error("Error getting next trade params, using fallback", error);
-            return this.getBaseTradeParams();
-        }
-    }
-
-    public getEmergencyTradeParams(): NextTradeParams {
-
-        try {
-
-            return {
-                basis: BasisTypeEnum.Default,
-                symbol: MarketTypeEnum.Default,
-                amount: roundToTwoDecimals(this.totalLossAmount * 12),
-                barrier: getRandomDigit(),
-                currency: CurrenciesEnum.Default,
-                contractType: ContractTypeEnum.DigitDiff,
-                contractDurationValue: 1,
-                contractDurationUnits: ContractDurationUnitTypeEnum.Default,
-                previousResultStatus: this.resultIsWin,
-                consecutiveLosses: this.consecutiveLosses,
-                totalAmountToRecover: this.totalLossAmount,
-                winningTrades: this.winningTrades,
-                losingTrades: this.losingTrades
-            };
+            }
 
         } catch (error) {
             logger.error("Error getting next trade params, using fallback", error);

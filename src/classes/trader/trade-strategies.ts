@@ -126,7 +126,7 @@ export abstract class TradeStrategy {
         // Initialize strategy parser
         const strategyJson = require(`./strategies/${strategyName}.json`);
 
-        this.strategyParser = new StrategyParser(strategyJson, 0, this.baseStake);
+        this.strategyParser = new StrategyParser(strategyJson, 0, this.baseStake, this.config);
 
 
         logger.info({
@@ -506,48 +506,22 @@ export abstract class TradeStrategy {
             amount: amount,
             basis: basis || this.basis,
             currency: currency || this.currency,
-            duration: duration  || this.contractDurationValue,
+            duration: duration || this.contractDurationValue,
             duration_unit: durationUnit || this.contractDurationUnits,
             symbol: market || this.market,
-            contract_type: contractType,
+            contract_type: contractType || this.contractType,
+            barrier: barrier
         };
 
-        switch (contractType) {
-            case ContractTypeEnum.DigitDiff:
-                return this.contractFactory.createDigitDiffParams({
-                    ...commonParams,
-                    barrier: (barrier !== undefined ? barrier : getRandomDigit())
-                });
-
-            case ContractTypeEnum.DigitOver:
-                return this.contractFactory.createDigitOverParams({
-                    ...commonParams,
-                    barrier: barrier !== undefined ? barrier as number : this.barrier as number
-                });
-
-            case ContractTypeEnum.DigitUnder:
-                return this.contractFactory.createDigitUnderParams({
-                    ...commonParams,
-                    barrier: barrier !== undefined ? barrier as number : this.barrier as number
-                });
-
-            case ContractTypeEnum.DigitEven:
-                return this.contractFactory.createDigitEvenParams({
-                    ...commonParams,
-                    barrier: ContractTypeEnum.DigitEven
-                });
-
-            case ContractTypeEnum.DigitOdd:
-                return this.contractFactory.createDigitOddParams({
-                    ...commonParams,
-                    barrier: ContractTypeEnum.DigitOdd
-                });
-
-            case ContractTypeEnum.Call:
-            case ContractTypeEnum.Put:
-            default:
-                return commonParams;
+        if (!commonParams.barrier || commonParams.barrier === null || commonParams.barrier === undefined || typeof commonParams.barrier === undefined) {
+            delete commonParams.barrier;
         }
+
+        if ([ContractTypeEnum.Call, ContractTypeEnum.Put, ContractTypeEnum.DigitEven, ContractTypeEnum.DigitOdd].includes(commonParams.contract_type)) {
+            delete commonParams.barrier;
+        }
+
+        return commonParams;
         
     }
 
