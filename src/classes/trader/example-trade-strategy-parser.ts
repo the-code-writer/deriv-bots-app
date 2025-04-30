@@ -1,13 +1,11 @@
 import { StrategyParser } from './trader-strategy-parser';
 
 try {
-
     const strategyName: string = "CALLE";
-
     const strategyJson = require(`./strategies/${strategyName}.json`);
 
-    // Example with single strategy
-    const parser = new StrategyParser(strategyJson, 0, 0.35);
+    // Example with single strategy - simplified constructor call
+    const parser = new StrategyParser(strategyJson, 0.35, {});
 
     const formattedOutput = parser.getFormattedOutput();
 
@@ -42,43 +40,4 @@ try {
 
 } catch (error) {
     console.error("Error processing strategy:", error);
-}
-
-try {
-
-    const strategyName: string = "CALLE";
-
-    const strategyJson = require(`./strategies/${strategyName}.json`);
-
-    // Example with all strategies
-    console.log("\n\n=== Processing All Strategies ===");
-    const multiParser = new StrategyParser(strategyJson, null, 0.35);
-
-    const strategyCount = Array.isArray(multiParser.strategyConfig)
-        ? multiParser.strategyConfig.length
-        : 1;
-
-    console.log(`Processing ${strategyCount} strategies:`);
-
-    console.log("Strategies:", multiParser.getAll())
-
-    for (let i = 0; i < strategyCount; i++) {
-        const strategy = multiParser.getFormattedOutput(i);
-        console.log(`\nStrategy ${i + 1}: ${strategy.configuration.strategyName}`);
-
-        console.log("First step:");
-        const firstStep = strategy.steps[0];
-        console.log(`- Type: ${firstStep.contract_type}`);
-        console.log(`- Amount: ${firstStep.amount.toFixed(2)}`);
-        console.log(`- Expected Profit: ${firstStep.anticipatedProfit.toFixed(2)}`);
-
-        if (strategy.steps.length > 1) {
-            console.log("First recovery step:");
-            const recoveryStep = strategy.steps[1];
-            console.log(`- Amount: ${recoveryStep.amount.toFixed(2)}`);
-            console.log(`- Needed to recover: ${(recoveryStep.amount - recoveryStep.anticipatedProfit).toFixed(2)}`);
-        }
-    }
-} catch (error) {
-    console.error("Error processing multiple strategies:", error);
 }

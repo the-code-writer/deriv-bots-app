@@ -220,7 +220,16 @@ export abstract class TradeStrategy {
             
         params = this.getNextContractParams(this.config);
 
-        this.validateParameters(params);
+        const validParams:boolean = this.validateParameters(params);
+
+        if (!validParams) {
+            console.error({
+                message: "INVALID_PARAMS",
+                params: validParams
+            });
+
+            // TODO : Stop Trades
+        }
 
         const result: ITradeData = await this.executor.purchaseContract(params, this.config);
 
@@ -373,7 +382,7 @@ export abstract class TradeStrategy {
 
     private getCurrentAccount(): IDerivUserAccount {
         return {
-            balance: 1000,
+            balance: 5000,
             email: "",
             country: "",
             currency: "USD",
@@ -383,7 +392,7 @@ export abstract class TradeStrategy {
         };
     }
 
-    protected validateParameters(params: ContractParams): void {
+    protected validateParameters(params: ContractParams): boolean {
         if (!params) throw new Error('Trade parameters are required');
         if (Number(params.amount) <= 0) throw new Error('Stake amount must be positive');
         if (!params.basis) throw new Error('Basis type must be specified');
@@ -400,28 +409,32 @@ export abstract class TradeStrategy {
                 validationMetrics: validation.metrics,
                 strategy: this.constructor.name
             });
-            throw new Error(errorMsg);
+            console.error(errorMsg);
+            return false;
         }
 
         if (this.volatilityRiskManager?.checkRapidLosses()) {
             this.getSafetyExitResult();
-            throw new Error('Many rapid losses');
+            console.error('Many rapid losses');
+            return false;
         }
 
-        this.validateContractTypeSpecificParams(params);
+        return this.validateContractTypeSpecificParams(params);
+
     }
 
-    protected validateContractTypeSpecificParams(params: ContractParams): void {
+    protected validateContractTypeSpecificParams(params: ContractParams): boolean {
         switch (this.contractType) {
             case ContractTypeEnum.DigitDiff:
             case ContractTypeEnum.DigitUnder:
             case ContractTypeEnum.DigitOver:
                 if (params.barrier === undefined) {
-                    throw new Error('Barrier is required for digit-based trades');
+                    logger.error('Barrier is required for digit-based trades');
+                    return false;
                 }
-                this.validateDigit(Number(params.barrier));
-                break;
+                return typeof this.validateDigit(Number(params.barrier)) === "number";
         }
+        return true;
     }
 
     protected async preContractPurchaseChecks(contractType: ContractType): Promise<SafetyModeResponse> {
@@ -532,7 +545,8 @@ export abstract class TradeStrategy {
     private validateDigit(digit: number): number {
         const validDigit = Math.round(digit);
         if (validDigit < 0 || validDigit > 9) {
-            throw new Error('Predicted digit must be between 0-9');
+            logger.error('Predicted digit must be between 0-9');
+            return getRandomDigit();
         }
         return validDigit;
     }
@@ -550,7 +564,8 @@ export abstract class TradeStrategy {
         const validBarrier = Math.round(barrier);
 
         if (validBarrier < 0 || validBarrier > 9) {
-            throw new Error('Barrier must be between 0-9');
+            logger.error('Barrier must be between 0-9');
+            return getRandomDigit();
         }
 
         return parseInt(`${validBarrier}`);

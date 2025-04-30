@@ -60,6 +60,15 @@ export class TradeRewardStructures {
      */
     private initializeRewardStructures(): StrategyRewards {
         const structures: StrategyRewards = {
+            DIGITMATCH: [
+                { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
+                { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },
+                { minStake: 0.75, maxStake: 0.99, rewardPercentage: 8.00 },
+                { minStake: 1.00, maxStake: 1.99, rewardPercentage: 9.00 },
+                { minStake: 2.00, maxStake: 2.99, rewardPercentage: 9.50 },
+                { minStake: 3.00, maxStake: 4.99, rewardPercentage: 9.67 },
+                { minStake: 5.00, maxStake: env.MAX_STAKE, rewardPercentage: 9.67 }
+            ],
             DIGITDIFF: [
                 { minStake: env.MIN_STAKE, maxStake: 0.49, rewardPercentage: 5.71 },
                 { minStake: 0.50, maxStake: 0.74, rewardPercentage: 6.00 },

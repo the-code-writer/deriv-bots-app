@@ -37,7 +37,6 @@
       "contractDurationUnits": "t"
     }
   ],
-  "id": "CALLE",
   "meta": {
     "baseStake": 1.25,
     "minStake": 0.35,
@@ -49,6 +48,7 @@
     "maxRiskExposure": 15,
     "isAggressive": false
   },
+  "id": "CALLE",
   "title": "Nduta.X Generic Strategy Collection",
   "description": "Lorem ipsum",
   "version": "1.0.0",

@@ -114,7 +114,7 @@ export interface OptimizationCriteria {
 export class StrategyParser {
     private rewardCalculator: TradeRewardStructures;
     private baseStake: number;
-    public strategyConfig: StrategyConfig | StrategyConfig[];
+    public strategyConfig: StrategyConfig;
     private computedSteps: StrategyStepOutput[] = [];
     private computedAllStrategies: Map<number, StrategyStepOutput[]> = new Map();
 
@@ -125,34 +125,27 @@ export class StrategyParser {
 
     public botConfig: BotConfig;
 
-    constructor(strategyJson: any, strategyIndex: number | null = null, baseStake: number, botConfig: BotConfig) {
+    constructor(strategyJson: any, baseStake: number, botConfig: BotConfig) {
         this.rewardCalculator = new TradeRewardStructures();
-        this.strategyConfig = this.validateAndCompleteStrategyJson(strategyJson, strategyIndex);
-        this.baseStake = botConfig?.baseStake || baseStake || (Array.isArray(this.strategyConfig)
-            ? this.strategyConfig[0].baseStake
-            : this.strategyConfig.baseStake);
-
-        if (Array.isArray(this.strategyConfig)) {
-            this.computeAllStrategies();
-        } else {
-            this.computeAllSteps(botConfig);
-        }
-
+        this.strategyConfig = this.validateAndCompleteStrategyJson(strategyJson);
+        this.baseStake = botConfig?.baseStake || baseStake || this.strategyConfig.baseStake;
         this.botConfig = botConfig;
 
+        this.computeAllSteps(botConfig);
+
         // Update OPTIMIZATION_PRESETS to use maxStake from JSON
-        const config = this.getSingleStrategyConfig();
         this.OPTIMIZATION_PRESETS = {
             conservative: {
-                maxRisk: config.maxStake * 0.5, // 50% of max stake
+                maxRisk: this.strategyConfig.maxStake * 0.5, // 50% of max stake
                 riskMultiplier: 1.1
             },
             aggressive: {
-                maxRisk: config.maxStake, // Full max stake
+                maxRisk: this.strategyConfig.maxStake, // Full max stake
                 riskMultiplier: 1.5
             }
         };
     }
+
 
     public getStrategyMetrics(): StrategyMetrics {
         if (this.computedSteps.length === 0) {
@@ -220,43 +213,46 @@ export class StrategyParser {
         return Math.min(currentAmount * riskFactor, maxAllowed);
     }
 
-    private validateAndCompleteStrategyJson(json: any, strategyIndex: number | null): StrategyConfig | StrategyConfig[] {
-        if (!json.strategies || !Array.isArray(json.strategies) || json.strategies.length === 0) {
-            throw new StrategyError('INVALID_STRATEGY', "Invalid strategy JSON: no strategies found");
+    private validateAndCompleteStrategyJson(json: any): StrategyConfig {
+        // Check if this is the new format (direct strategy object)
+        if (json.strategySteps && json.meta) {
+            return this.processSingleStrategy(json);
         }
 
-        // Validate each strategy
-        return json.strategies.map((strategy: any, index: number) => {
-            if (!strategy.strategyName || !strategy.strategySteps) {
-                throw new StrategyError('INVALID_STRATEGY', `Strategy at index ${index} is missing required fields`);
-            }
-
-            if (!isNonNegativeNumber(strategy.baseStake)) {
-                throw new StrategyError('INVALID_STRATEGY', `Invalid baseStake in strategy ${index}`);
-            }
-
-            return this.processSingleStrategy(strategy, index);
-        });
+        throw new StrategyError('INVALID_STRATEGY', "Invalid strategy JSON format");
     }
 
-    private processSingleStrategy(strategy: any, index: number): StrategyConfig {
-        strategy.currency = strategy.currency || CurrenciesEnum.Default;
-        strategy.basis = strategy.basis || BasisTypeEnum.Default;
+    private processSingleStrategy(strategy: any): StrategyConfig {
+        // Ensure required fields exist
+        if (!strategy.strategySteps) {
+            throw new StrategyError('INVALID_STRATEGY', "Strategy is missing required strategySteps field");
+        }
 
+        // Set defaults for required fields
+        strategy.strategyName = strategy.id || "UNNAMED_STRATEGY";
+        strategy.currency = strategy.meta?.currency || CurrenciesEnum.Default;
+        strategy.basis = strategy.meta?.basis || BasisTypeEnum.Default;
+        strategy.baseStake = strategy.meta?.baseStake || 1;
+        strategy.minStake = strategy.meta?.minStake || 0.35;
+        strategy.maxStake = strategy.meta?.maxStake || strategy.meta?.baseStake * 150 || 187.5;
+        strategy.isAggressive = strategy.meta?.isAggressive || false;
+        strategy.maxRiskExposure = strategy.meta?.maxRiskExposure || 15;
+
+        // Process strategy steps
         strategy.strategySteps = strategy.strategySteps.map((step: any) => ({
             ...step,
             currency: step.currency || strategy.currency,
             basis: step.basis || strategy.basis
         }));
 
-        strategy.maxSequence = strategy.maxSequence || strategy.strategySteps.length;
-        strategy.maxConsecutiveLosses = strategy.maxConsecutiveLosses || strategy.strategySteps.length - 1;
+        // Set sequence and loss defaults
+        strategy.maxSequence = strategy.meta?.maxSequence || strategy.strategySteps.length;
+        strategy.maxConsecutiveLosses = strategy.meta?.maxConsecutiveLosses || strategy.strategySteps.length - 1;
         strategy.profitPercentage = strategy.profitPercentage || 0;
         strategy.lossRecoveryPercentage = strategy.lossRecoveryPercentage || 0;
         strategy.anticipatedProfitPercentage = strategy.anticipatedProfitPercentage || 0;
-        strategy.maxRiskExposure = strategy.maxRiskExposure || 15;
 
-        return strategy;
+        return strategy as StrategyConfig;
     }
 
     private computeAllSteps(botConfig?: BotConfig): void {
@@ -355,8 +351,8 @@ export class StrategyParser {
             }
 
             const stepOutput = this.createStepOutput(stepIndex, currentAmount, formula);
-            stepOutput.profitPercentage = profitPercentage;
-            stepOutput.anticipatedProfit = anticipatedProfit;
+            stepOutput.profitPercentage = profitPercentage as Percentage;
+            stepOutput.anticipatedProfit = anticipatedProfit as NonNegativeNumber;
             this.computedSteps.push(stepOutput);
 
             if (i < config.maxSequence - 1) {
@@ -495,21 +491,6 @@ export class StrategyParser {
         }
     }
 
-    private computeAllStrategies(): void {
-        if (!Array.isArray(this.strategyConfig)) {
-            return;
-        }
-
-        this.strategyConfig.forEach((strategy, index) => {
-            const tempConfig = this.strategyConfig;
-            this.strategyConfig = strategy;
-            this.computeAllSteps();
-            this.computedAllStrategies.set(index, [...this.computedSteps]);
-            this.strategyConfig = tempConfig;
-            this.computedSteps = [];
-        });
-    }
-
     public getMetaInfo(config?: StrategyConfig): StrategyMeta {
         const strategyConfig = config || (this.strategyConfig as StrategyConfig);
         const meta = strategyConfig.meta || {};
@@ -537,10 +518,7 @@ export class StrategyParser {
         return maxAmount * maxSteps * 1.5; // 1.5x buffer
     }
 
-    public getAllSteps(strategyIndex?: number): StrategyStepOutput[] {
-        if (strategyIndex !== undefined && this.computedAllStrategies.has(strategyIndex)) {
-            return this.computedAllStrategies.get(strategyIndex) || [];
-        }
+    public getAllSteps(): StrategyStepOutput[] {
         return this.computedSteps;
     }
 
@@ -594,39 +572,17 @@ export class StrategyParser {
     }
 
     private getSingleStrategyConfig(): StrategyConfig {
-        if (Array.isArray(this.strategyConfig)) {
-            throw new Error("Strategy config is an array, use getAllStrategies() instead");
-        }
         return this.strategyConfig;
     }
 
-    private getStrategyConfigAtIndex(index: number): StrategyConfig {
-        if (!Array.isArray(this.strategyConfig)) {
-            throw new Error("Strategy config is not an array");
-        }
-        if (index < 0 || index >= this.strategyConfig.length) {
-            throw new Error(`Invalid strategy index: ${index}`);
-        }
-        return this.strategyConfig[index];
-    }
-
-    public getFormattedOutput(strategyIndex?: number): {
+    public getFormattedOutput(): {
         meta: StrategyMeta;
         configuration: Omit<StrategyConfig, 'strategySteps'>;
         steps: Array<StrategyStepOutput & { stepNumber: number }>;
     } {
-        let config: StrategyConfig;
-        let steps: StrategyStepOutput[];
+        const config = this.getSingleStrategyConfig();
+        const steps = this.computedSteps;
 
-        if (strategyIndex !== undefined) {
-            config = this.getStrategyConfigAtIndex(strategyIndex);
-            steps = this.computedAllStrategies.get(strategyIndex) || [];
-        } else {
-            config = this.getSingleStrategyConfig();
-            steps = this.computedSteps;
-        }
-
-        // Ensure all required properties are included
         const configuration: Omit<StrategyConfig, 'strategySteps'> = {
             strategyName: config.strategyName,
             isAggressive: config.isAggressive,
@@ -644,7 +600,6 @@ export class StrategyParser {
             meta: config.meta
         };
 
-        // Ensure proper type assertions for Percentage and NonNegativeNumber
         const typedSteps = steps.map((step, index) => ({
             ...step,
             profitPercentage: isPercentage(step.profitPercentage) ? step.profitPercentage : 0 as Percentage,
@@ -658,7 +613,6 @@ export class StrategyParser {
             configuration,
             steps: typedSteps
         };
-
     }
 
     public generateVisualization(): StrategyVisualization {
@@ -687,7 +641,7 @@ export class StrategyParser {
 
     public static deserialize(json: string, botConfig: BotConfig): StrategyParser {
         const data = JSON.parse(json);
-        const parser = new StrategyParser(data.config, null, data.baseStake, botConfig);
+        const parser = new StrategyParser(data.config, data.baseStake, botConfig);
         parser.computedSteps = data.computedSteps;
         return parser;
     }
@@ -704,7 +658,7 @@ export class StrategyParser {
         this.validateOptimizationCriteria(optimizationCriteria);
 
         return this.computedSteps.map((step, index) => {
-            
+
             const currentStepInput = this.strategyConfig.strategySteps[
                 Math.min(index, this.strategyConfig.strategySteps.length - 1)
             ];
@@ -755,8 +709,8 @@ export class StrategyParser {
                 duration: currentStepInput.contractDurationValue,
                 duration_unit: currentStepInput.contractDurationUnits,
                 symbol: currentStepInput.symbol,
-                basis: currentStepInput.basis || this.strategyConfig?.basis,
-                currency: currentStepInput.currency || this.strategyConfig?.currency,
+                basis: currentStepInput.basis || this.strategyConfig.basis,
+                currency: currentStepInput.currency || this.strategyConfig.currency,
                 barrier: optimizedStep.barrier ?? this.getDefaultBarrier(currentStepInput.contractType),
                 // Recalculate formula if amounts changed
                 formula: optimizedStep.formula || step.formula,

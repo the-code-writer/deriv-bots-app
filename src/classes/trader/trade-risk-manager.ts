@@ -161,6 +161,7 @@ export class VolatilityRiskManager {
     private dailyLossAmount: number = 0;
 
     private isEmergencyRecovery: boolean = false;
+    private isCriticalRecovery: boolean = false;
     private stopAfterTradeLoss: boolean = false;
 
     private minStake: number;
@@ -283,8 +284,6 @@ export class VolatilityRiskManager {
         this.winningTrades++;
         this.recoveryAttempts = 0;
 
-        this.stopAfterTradeLoss = false;
-
         if (this.totalLossAmount > 0) {
 
             const recoveredAmount = this.calculateRecoveredAmount(tradeResult);
@@ -293,13 +292,22 @@ export class VolatilityRiskManager {
 
             if (this.totalLossAmount === 0) {
 
+                this.isEmergencyRecovery = false;
+
+                this.stopAfterTradeLoss = false;
+
+                this.isCriticalRecovery = false;
+
                 logger.info("Full recovery achieved");
 
                 this.resetRecoveryState();
 
             } else {
+
                 this.isEmergencyRecovery = true;
+
                 logger.info(`Emergency ? [${this.isEmergencyRecovery}] : Partial Recovery: ${this.currency} ${roundToTwoDecimals(recoveredAmount)}, Remaining: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}`);
+            
             }
 
         } else {
@@ -326,6 +334,8 @@ export class VolatilityRiskManager {
         if (this.stopAfterTradeLoss) {
 
             this.enterSafetyMode("🔸🔸🔸🔸 CATASTROPHIC LOSS 🔸🔸🔸🔸");
+
+            this.isCriticalRecovery = true;
 
         }
 
@@ -354,13 +364,23 @@ export class VolatilityRiskManager {
 
             if (this.isEmergencyRecovery) {
 
-                this.isEmergencyRecovery = false;
-
                 this.stopAfterTradeLoss = true;
 
-                const emergencyRecoveryStake = roundToTwoDecimals(this.clampStake(this.totalLossAmount * 12));
+                let amountToRecover: number = this.clampStake((this.totalLossAmount * 12), true);
 
-                //console.error("#### CHECK : [this.totalLossAmount, emergencyRecoveryStake] #####", [this.totalLossAmount, emergencyRecoveryStake]);
+                if (this.isCriticalRecovery) {
+                    
+                    amountToRecover = this.totalLossAmount * 7 / 100;
+
+                    console.error("#### CHECK : [isCriticalRecovery][amountToRecover = this.totalLossAmount * 7 / 100;] #####", [this.totalLossAmount, amountToRecover]);
+
+                    this.isCriticalRecovery = false;
+                    
+                }
+
+                const emergencyRecoveryStake = roundToTwoDecimals(amountToRecover);
+
+                
 
                 const params: NextTradeParams = {
                     basis: BasisTypeEnum.Default,
@@ -432,7 +452,10 @@ export class VolatilityRiskManager {
         };
     }
 
-    private clampStake(stake: number): number {
+    private clampStake(stake: number, ignoreClampingUpperLimit: boolean = false): number {
+        if (ignoreClampingUpperLimit) {
+            return Math.min(Math.max(stake, this.minStake), Infinity);
+        }
         return Math.min(Math.max(stake, this.minStake), this.maxStake);
     }
 

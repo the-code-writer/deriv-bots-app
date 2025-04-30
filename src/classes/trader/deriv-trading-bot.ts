@@ -656,7 +656,6 @@ ${tradeResult.proposal_id}
 
 this.generateTelemetry();
 
-logger.info(this.lastTradeSummary);
 
     }
 

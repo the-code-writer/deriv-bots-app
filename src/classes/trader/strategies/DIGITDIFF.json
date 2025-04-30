@@ -1,38 +1,46 @@
 {
-  "strategies": [
+  "strategySteps": [
     {
-      "strategyName": "DIGITDIFF",
-      "strategySteps": [
-        {
-          "symbol": "R_75",
-          "contractType": "DIGITDIFF",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_100",
-          "contractType": "DIGITDIFF",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        }
-      ],
-      "baseStake": 1.25,
-      "minStake": 0.35,
-      "maxStake": 187.5,
-      "basis": "stake",
-      "currency": "USD",
-      "maxSequence": 0,
-      "maxConsecutiveLosses": 2,
-      "maxRiskExposure": 15,
-      "isAggressive": false,
-      "meta": {}
+      "symbol": "R_25",
+      "contractType": "DIGITMATCH",
+      "contractDurationValue": 1,
+      "contractDurationUnits": "t"
+    },
+    {
+      "symbol": "R_100",
+      "contractType": "DIGITDIFF",
+      "contractDurationValue": 1,
+      "contractDurationUnits": "t"
+    },
+    {
+      "symbol": "R_10",
+      "contractType": "DIGITMATCH",
+      "contractDurationValue": 1,
+      "contractDurationUnits": "t"
+    },
+    {
+      "symbol": "R_10",
+      "contractType": "DIGITDIFF",
+      "contractDurationValue": 1,
+      "contractDurationUnits": "t"
     }
   ],
+  "meta": {
+    "baseStake": 100,
+    "minStake": 11.88,
+    "maxStake": 99.99,
+    "basis": "stake",
+    "currency": "USD",
+    "maxSequence": 0,
+    "maxConsecutiveLosses": 4,
+    "maxRiskExposure": 15,
+    "isAggressive": false
+  },
+  "id": "DIGITDIFF",
   "title": "Nduta.X Generic Strategy Collection",
   "description": "Lorem ipsum",
   "version": "1.0.0",
   "publisher": "@ndutax",
   "timestamp": 14785653311221,
-  "signature": "hash",
-  "id": "hash"
+  "signature": "hash"
 }

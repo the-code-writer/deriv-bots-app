@@ -41,6 +41,7 @@ export const StepType = {
 } as const;
 
 export type ContractType =
+    | "DIGITMATCH"
     | "DIGITDIFF"
     | "DIGITOVER"
     | "DIGITOVER_0"
@@ -76,6 +77,7 @@ export type ContractType =
 export const ContractTypeEnum = {
     Default: "DIGITDIFF" as ContractType,
     DigitDiff: "DIGITDIFF" as ContractType,
+    DigitMatch: "DIGITMATCH" as ContractType,
     DigitOver: "DIGITOVER" as ContractType,
     DigitUnder: "DIGITUNDER" as ContractType,
     DigitOver0: "DIGITOVER_0" as ContractType,
@@ -127,11 +129,11 @@ export const MarketTypeEnum = {
     R_50: "R_50" as MarketType,
     R_25: "R_25" as MarketType,
     R_10: "R_10" as MarketType,
-    R_100_1s: "R_100 (1s)" as MarketType,
-    R_75_1s: "R_75 (1s)" as MarketType,
-    R_50_1s: "R_50 (1s)" as MarketType,
-    R_25_1s: "R_25 (1s)" as MarketType,
-    R_10_1s: "R_10 (1s)" as MarketType,
+    R_100_1s: "1HZ100V" as MarketType,
+    R_75_1s: "1HZ75V" as MarketType,
+    R_50_1s: "1HZ50V" as MarketType,
+    R_25_1s: "1HZ25V" as MarketType,
+    R_10_1s: "1HZ10V" as MarketType,
 } as const;
 
 export type TradingModeType = "MANUAL" | "AUTO";

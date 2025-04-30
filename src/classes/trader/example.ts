@@ -12,9 +12,9 @@ const tradingSession = {
     "step": "TRADE_CONFIRMATION",
     "accountType": "VRTC1605087 ( USD )",
     "tradingType": "Derivatives 📊",
-    "market": "Volatility 50 📈",
+    "market": "Volatility 75(1s) 📈",
     "contractType": "Digit NOT Random 🎲", //Rise ⬆️
-    "stake": 12,
+    "stake": 100,
     "takeProfit": "USD5,000.34",
     "stopLoss": 10000,
     "tradeDuration": "15min ⏱️",
