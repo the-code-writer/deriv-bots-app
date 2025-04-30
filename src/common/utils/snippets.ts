@@ -773,7 +773,7 @@ export const roundToPrecision = (value: number, precision: number, padding:boole
 }
 
 export const getRandomDigit = () => {
-  return Math.ceil(Math.random() * 10);
+  return Math.min(Math.max(Math.ceil(Math.random() * 9), 0), 9);
 }
 
 export const isValidObject = (obj:any) : boolean => {
@@ -789,6 +789,10 @@ export const isNonNegativeNumber = (value: number): any => { // value is NonNega
   return value >= 0;
 }
 
-export const roundToTwoDecimals = (num: number): number => {
-  return Math.round((num + Number.EPSILON) * 100) / 100;
+export const roundToTwoDecimals = (num: number, float:boolean=false): number | string => {
+  let amount: number = Math.round((num + Number.EPSILON) * 100) / 100;
+  if (float) {
+    return amount.toFixed(2);
+  }
+  return amount;
 }

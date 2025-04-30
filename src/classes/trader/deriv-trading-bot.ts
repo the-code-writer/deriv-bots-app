@@ -636,18 +636,27 @@ export class DerivTradingBot {
 
         this.lastTradeSummary = `
 
-        ${tradeResult.longcode}\n
-        STATUS      : ${resultIsWin ? 'WON' : 'LOST'}
-        BUY         : ${tradeResult.buy_price_currency} ${roundToTwoDecimals(tradeResult.buy_price_value)}
-        SELL        : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(tradeResult.sell_price_value)}
-        PROFIT      : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(profit)}
-        TOTAL PROFIT: ${tradeResult.sell_price_currency} ${roundToTwoDecimals(this.totalProfit)}
+${tradeResult.longcode}\n
 
-        ${moment().format('MMMM Do YYYY, h:mm:ss a')}
-        `;
+Entry Spot    : ${tradeResult.entry_spot_value}
+Exit Spot     : ${tradeResult.exit_spot_value}
 
-        // Log trade details
-        logger.info(this.lastTradeSummary);
+Status        : ${resultIsWin ? '🔹 WON 🔹' : '🔸 LOST 🔸'}
+Buy           : ${tradeResult.buy_price_currency} ${roundToTwoDecimals(tradeResult.buy_price_value, true)}
+Sell          : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(tradeResult.sell_price_value, true)}
+Profit        : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(profit, true)}
+
+Total Profit  : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(this.totalProfit, true)}
+
+${moment(tradeResult.sell_spot_time*1000).format('MMMM Do YYYY, h:mm:ss a')}
+
+${tradeResult.proposal_id}
+
+`;
+
+this.generateTelemetry();
+
+logger.info(this.lastTradeSummary);
 
     }
 
@@ -693,7 +702,6 @@ export class DerivTradingBot {
 
             // Generate final statistics if requested
             if (generateStatistics) {
-                await this.generateTelemetry();
                 await this.generateTradingSummary();
             }
 
@@ -733,6 +741,8 @@ export class DerivTradingBot {
      * Generates comprehensive telemetry data about the trading session
      */
     private async generateTelemetry(): Promise<void> {
+
+        logger.info(this.lastTradeSummary);
 
         parentPort?.postMessage({ action: "lastTradeSummary", text: this.lastTradeSummary, meta: { user: this.userAccount, audit: {} } });
 
@@ -784,11 +794,14 @@ Wins:           ${this.winningTrades.toString().padEnd(20)}
 Losses:         ${this.losingTrades.toString().padEnd(20)} 
 Runs:           ${this.totalNumberOfRuns.toString().padEnd(20)} 
          
-Total Payout:   $${totalPayout.toFixed(2).padEnd(20)} 
-Total Stake:    $${totalStake.toFixed(2).padEnd(20)} 
-Total Profit:   $${totalProfit.toFixed(2).padEnd(20)} 
-Avg Profit/Run: $${averageProfitPerRun.toFixed(2).padEnd(20)} 
-Total Balance:  $${totalBalance.padEnd(20)} 
+Total Payout:   ${currency} ${totalPayout.toFixed(2).padEnd(20)} 
+Total Stake:    ${currency} ${totalStake.toFixed(2).padEnd(20)} 
+Total Profit:   ${currency} ${totalProfit.toFixed(2).padEnd(20)} 
+Avg Profit/Run: ${currency} ${averageProfitPerRun.toFixed(2).padEnd(20)} 
+Total Balance:  ${currency} ${totalBalance.padEnd(20)} 
+
+Base Stake:     ${currency} 1.00
+Maximum Stake:  ${currency} 15.98
 
 Win Rate %:     ${winRate.toFixed(2)}%${" ".padEnd(17)} 
 
@@ -798,7 +811,9 @@ Start Time:     ${startTimeFormatted.padEnd(20)}
 Stop Date:      ${stopDate.padEnd(20)} 
 Stop Time:      ${stopTimeFormatted.padEnd(20)} 
 
-Duration:       ${duration.padEnd(20)} 
+Duration:       ${duration.padEnd(20)}
+
+Session ID:     this.tradingSessionID
 `;
 
             // Calculate total profit

@@ -1,70 +1,28 @@
 {
   "strategies": [
     {
-      "strategyName": "CALLE",
+      "strategyName": "DIGITDIFF",
       "strategySteps": [
         {
-          "symbol": "R_100",
-          "contractType": "CALLE",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_100",
-          "contractType": "CALLE",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_100",
-          "contractType": "CALLE",
-          "contractDurationValue": 3,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_100",
-          "contractType": "CALLE",
-          "contractDurationValue": 5,
-          "contractDurationUnits": "t"
-        },
-        {
           "symbol": "R_75",
-          "contractType": "DIGITUNDER_5",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_50",
-          "contractType": "DIGITUNDER_7",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_25",
-          "contractType": "DIGITUNDER_9",
-          "contractDurationValue": 1,
-          "contractDurationUnits": "t"
-        },
-        {
-          "symbol": "R_10",
           "contractType": "DIGITDIFF",
           "contractDurationValue": 1,
           "contractDurationUnits": "t"
         },
         {
           "symbol": "R_100",
-          "contractType": "DIGITUNDER_2",
+          "contractType": "DIGITDIFF",
           "contractDurationValue": 1,
           "contractDurationUnits": "t"
         }
       ],
-      "baseStake": 3.25,
-      "minStake": 3.25,
-      "maxStake": 10000,
+      "baseStake": 1.25,
+      "minStake": 0.35,
+      "maxStake": 187.5,
       "basis": "stake",
       "currency": "USD",
       "maxSequence": 0,
-      "maxConsecutiveLosses": 0,
+      "maxConsecutiveLosses": 2,
       "maxRiskExposure": 15,
       "isAggressive": false,
       "meta": {}

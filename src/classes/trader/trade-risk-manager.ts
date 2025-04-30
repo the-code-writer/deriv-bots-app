@@ -77,6 +77,7 @@ export interface CircuitBreakerState {
     reasons: string[];
     inSafetyMode: boolean;
     safetyModeUntil: number;
+    lastTradeTimestamp: number;
 }
 
 interface RapidLossEvent {
@@ -160,6 +161,11 @@ export class VolatilityRiskManager {
     private dailyLossAmount: number = 0;
 
     private isEmergencyRecovery: boolean = false;
+    private stopAfterTradeLoss: boolean = false;
+
+    private minStake: number;
+
+    private maxStake: number;
 
     constructor(
         baseStake: number,
@@ -172,6 +178,8 @@ export class VolatilityRiskManager {
         circuitBreakerConfig?: CircuitBreakerConfig
     ) {
         this.baseStake = baseStake;
+        this.minStake = baseStake;
+        this.maxStake = baseStake * 12 * 12;
         this.market = market;
         this.currency = currency;
         this.contractType = contractType;
@@ -212,6 +220,7 @@ export class VolatilityRiskManager {
             reasons: [],
             inSafetyMode: false,
             safetyModeUntil: 0,
+            lastTradeTimestamp: 0,
         };
 
         this.validateInitialization();
@@ -226,11 +235,12 @@ export class VolatilityRiskManager {
         }
     }
 
-    public processTradeResult(tradeResult: ITradeData): NextTradeParams {
+    public processTradeResult(tradeResult: ITradeData): void {
+
         if (!this.validateTradeResult(tradeResult)) {
             logger.warn(
                 { message: "Invalid trade result received", tradeResult });
-            return this.getSafetyExitResult("invalid_trade_data");
+            // TODO : Why reurn ??? this.getSafetyExitResult("invalid_trade_data");
         }
 
         this.totalTrades++;
@@ -254,23 +264,26 @@ export class VolatilityRiskManager {
         }
 
         try {
+
             if (this.shouldEnterSafetyMode(tradeResult)) {
                 this.enterSafetyMode("excessive_losses");
             }
-            return this.resultIsWin ? this.handleWin(tradeResult) : this.handleLoss(tradeResult);
+
+            this.resultIsWin ? this.handleWin(tradeResult) : this.handleLoss(tradeResult);
+
         } catch (error) {
             logger.error(error, "Error processing trade result");
             this.enterSafetyMode("processing_error");
         }
 
-        return this.getNextTradeParams();
-
     }
 
-    private handleWin(tradeResult: ITradeData): NextTradeParams {
+    private handleWin(tradeResult: ITradeData): void {
         this.consecutiveLosses = 0;
         this.winningTrades++;
         this.recoveryAttempts = 0;
+
+        this.stopAfterTradeLoss = false;
 
         if (this.totalLossAmount > 0) {
 
@@ -279,21 +292,26 @@ export class VolatilityRiskManager {
             this.totalLossAmount = Math.max(0, this.totalLossAmount - recoveredAmount);
 
             if (this.totalLossAmount === 0) {
-                logger.info("Full recovery achieved");
-                this.resetRecoveryState();
-            } else {
-                logger.info(`Partial Recovery: ${this.currency} ${roundToTwoDecimals(recoveredAmount)}, Remaining: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}`);
-                this.isEmergencyRecovery = true;
-            }
-        } else {
-            this.resetRecoveryState();
-        }
 
-        return this.getNextTradeParams();
+                logger.info("Full recovery achieved");
+
+                this.resetRecoveryState();
+
+            } else {
+                this.isEmergencyRecovery = true;
+                logger.info(`Emergency ? [${this.isEmergencyRecovery}] : Partial Recovery: ${this.currency} ${roundToTwoDecimals(recoveredAmount)}, Remaining: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}`);
+            }
+
+        } else {
+
+            this.resetRecoveryState();
+
+        }
 
     }
 
-    private handleLoss(tradeResult: ITradeData): NextTradeParams {
+    private handleLoss(tradeResult: ITradeData): void {
+
         this.consecutiveLosses++;
         this.losingTrades++;
         this.recoveryAttempts++;
@@ -305,11 +323,17 @@ export class VolatilityRiskManager {
 
         logger.warn(`Loss: ${this.currency} ${roundToTwoDecimals(lossAmount)}, Total Loss: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}, Consecutive: ${this.consecutiveLosses}`);
 
-        if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-            this.enterSafetyMode("max_recovery_attempts");
+        if (this.stopAfterTradeLoss) {
+
+            this.enterSafetyMode("🔸🔸🔸🔸 CATASTROPHIC LOSS 🔸🔸🔸🔸");
+
         }
 
-        return this.getNextTradeParams();
+        if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+
+            this.enterSafetyMode("max_recovery_attempts");    
+
+        }
 
     }
 
@@ -326,14 +350,22 @@ export class VolatilityRiskManager {
 
             const step = steps[stepIndex];
 
+            //console.error("#### CHECK : this.isEmergencyRecovery #####", this.isEmergencyRecovery);
+
             if (this.isEmergencyRecovery) {
 
                 this.isEmergencyRecovery = false;
 
-                return {
+                this.stopAfterTradeLoss = true;
+
+                const emergencyRecoveryStake = roundToTwoDecimals(this.clampStake(this.totalLossAmount * 12));
+
+                //console.error("#### CHECK : [this.totalLossAmount, emergencyRecoveryStake] #####", [this.totalLossAmount, emergencyRecoveryStake]);
+
+                const params: NextTradeParams = {
                     basis: BasisTypeEnum.Default,
                     symbol: MarketTypeEnum.Default,
-                    amount: roundToTwoDecimals(this.totalLossAmount * 12),
+                    amount: Number(emergencyRecoveryStake),
                     barrier: getRandomDigit(),
                     currency: CurrenciesEnum.Default,
                     contractType: ContractTypeEnum.DigitDiff,
@@ -348,13 +380,17 @@ export class VolatilityRiskManager {
                     losingTrades: this.losingTrades
                 };
 
+                //console.error("#### CHECK : params #####", params);
+
+                return params;
+
             } else {
 
                 return {
                     basis: step.basis || strategyConfig.basis,
                     symbol: step.symbol || this.market,
-                    amount: roundToTwoDecimals(step.amount),
-                    barrier: step.barrier || this.getBarrier(step.contract_type),
+                    amount: Number(roundToTwoDecimals(this.clampStake(step.amount))),
+                    barrier:  this.getBarrier(step.contract_type, step.barrier),
                     currency: step.currency || strategyConfig.currency,
                     contractType: step.contract_type || this.contractType,
                     contractDurationValue: step.duration || this.contractDurationValue,
@@ -381,7 +417,7 @@ export class VolatilityRiskManager {
             basis: BasisTypeEnum.Default,
             symbol: this.market,
             amount: this.baseStake,
-            barrier: this.getBarrier(this.contractType),
+            barrier: this.getBarrier(this.contractType, null),
             currency: this.currency,
             contractType: this.contractType,
             contractDurationValue: this.contractDurationValue,
@@ -396,14 +432,22 @@ export class VolatilityRiskManager {
         };
     }
 
-    private getBarrier(contractType: ContractType): string | number {
+    private clampStake(stake: number): number {
+        return Math.min(Math.max(stake, this.minStake), this.maxStake);
+    }
+
+    private getBarrier(contractType: ContractType, barrier: string | number | null): string | number {
         switch (contractType) {
             case ContractTypeEnum.DigitEven: return "DIGITEVEN";
             case ContractTypeEnum.DigitOdd: return "DIGITODD";
-            case ContractTypeEnum.DigitDiff: return getRandomDigit();
-            case ContractTypeEnum.DigitUnder: return 5;
-            case ContractTypeEnum.DigitOver: return 5;
-            // Add other contract types as needed
+            case ContractTypeEnum.DigitDiff: {
+                if (barrier && Number(barrier) >= 0 && Number(barrier) <= 10) {
+                    return barrier;
+                }
+                return getRandomDigit();
+            }
+            case ContractTypeEnum.DigitUnder: return Math.min(Math.max(getRandomDigit(), 1), 9);
+            case ContractTypeEnum.DigitOver: return Math.min(Math.max(getRandomDigit(), 0), 8);
             default: return getRandomDigit();
         }
     }
@@ -524,8 +568,8 @@ export class VolatilityRiskManager {
         return {
             basis: BasisTypeEnum.Default,
             symbol: this.market,
-            amount: this.baseStake,
-            barrier: null,
+            amount: Number(this.baseStake),
+            barrier: -1,
             currency: this.currency,
             contractType: this.contractType,
             contractDurationValue: this.contractDurationValue,
@@ -761,6 +805,7 @@ export class VolatilityRiskManager {
 
         // Check consecutive losses
         if (this.consecutiveLosses >= this.circuitBreakerConfig.maxConsecutiveLosses) {
+            this.isEmergencyRecovery = true;
             triggered = true;
             reason = 'max_consecutive_losses';
             reasons.push(reason);
@@ -789,7 +834,8 @@ export class VolatilityRiskManager {
                 lastReason: reason,
                 reasons: reasons,
                 inSafetyMode: true,
-                safetyModeUntil: now + this.circuitBreakerConfig.cooldownPeriod
+                safetyModeUntil: now + this.circuitBreakerConfig.cooldownPeriod,
+                lastTradeTimestamp: this.lastTradeTimestamp
             };
             logger.warn(`Circuit breaker triggered: ${reason}`);
         }
@@ -844,7 +890,8 @@ export class VolatilityRiskManager {
             ...this.circuitBreakerState,
             inSafetyMode: true,
             safetyModeUntil: this.safetyModeUntil,
-            lastReason: reason
+            lastReason: reason,
+            lastTradeTimestamp: this.lastTradeTimestamp
         };
         logger.warn(`Entered safety mode: ${reason}`);
     }
@@ -857,7 +904,8 @@ export class VolatilityRiskManager {
             lastReason: '',
             reasons: [],
             inSafetyMode: false,
-            safetyModeUntil: 0
+            safetyModeUntil: 0,
+            lastTradeTimestamp: 0,
         };
 
         this.rapidLossState = {

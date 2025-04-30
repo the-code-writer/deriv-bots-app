@@ -4,7 +4,7 @@ try {
 
     const strategyName: string = "CALLE";
 
-    const strategyJson = require(`./strategies/NDTXStrategy${strategyName}.json`);
+    const strategyJson = require(`./strategies/${strategyName}.json`);
 
     // Example with single strategy
     const parser = new StrategyParser(strategyJson, 0, 0.35);
@@ -48,7 +48,7 @@ try {
 
     const strategyName: string = "CALLE";
 
-    const strategyJson = require(`./strategies/NDTXStrategy${strategyName}.json`);
+    const strategyJson = require(`./strategies/${strategyName}.json`);
 
     // Example with all strategies
     console.log("\n\n=== Processing All Strategies ===");

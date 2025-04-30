@@ -32,6 +32,8 @@ export interface StrategyStepOutput {
     anticipatedProfit: NonNegativeNumber;
     stepIndex?: number;
     stepNumber?: number;
+    isEmergencyRecovery?: boolean;
+    stopAfterTradeLoss?: boolean;
 }
 
 export interface StrategyConfig {
@@ -121,6 +123,8 @@ export class StrategyParser {
         aggressive: OptimizationPreset;
     };
 
+    public botConfig: BotConfig;
+
     constructor(strategyJson: any, strategyIndex: number | null = null, baseStake: number, botConfig: BotConfig) {
         this.rewardCalculator = new TradeRewardStructures();
         this.strategyConfig = this.validateAndCompleteStrategyJson(strategyJson, strategyIndex);
@@ -134,17 +138,20 @@ export class StrategyParser {
             this.computeAllSteps(botConfig);
         }
 
+        this.botConfig = botConfig;
+
+        // Update OPTIMIZATION_PRESETS to use maxStake from JSON
+        const config = this.getSingleStrategyConfig();
         this.OPTIMIZATION_PRESETS = {
             conservative: {
-                maxRisk: this.baseStake * 3,
+                maxRisk: config.maxStake * 0.5, // 50% of max stake
                 riskMultiplier: 1.1
             },
             aggressive: {
-                maxRisk: this.baseStake * 10,
+                maxRisk: config.maxStake, // Full max stake
                 riskMultiplier: 1.5
             }
         };
-
     }
 
     public getStrategyMetrics(): StrategyMetrics {
@@ -214,20 +221,22 @@ export class StrategyParser {
     }
 
     private validateAndCompleteStrategyJson(json: any, strategyIndex: number | null): StrategyConfig | StrategyConfig[] {
-        if (!json.strategies || json.strategies.length === 0) {
-            throw new Error("Invalid strategy JSON: no strategies found");
+        if (!json.strategies || !Array.isArray(json.strategies) || json.strategies.length === 0) {
+            throw new StrategyError('INVALID_STRATEGY', "Invalid strategy JSON: no strategies found");
         }
 
-        if (strategyIndex === null) {
-            return json.strategies.map((strategy: any, index: number) =>
-                this.processSingleStrategy(strategy, index));
-        }
+        // Validate each strategy
+        return json.strategies.map((strategy: any, index: number) => {
+            if (!strategy.strategyName || !strategy.strategySteps) {
+                throw new StrategyError('INVALID_STRATEGY', `Strategy at index ${index} is missing required fields`);
+            }
 
-        if (strategyIndex < 0 || strategyIndex >= json.strategies.length) {
-            throw new Error(`Invalid strategy index: ${strategyIndex}`);
-        }
+            if (!isNonNegativeNumber(strategy.baseStake)) {
+                throw new StrategyError('INVALID_STRATEGY', `Invalid baseStake in strategy ${index}`);
+            }
 
-        return this.processSingleStrategy(json.strategies[strategyIndex], strategyIndex);
+            return this.processSingleStrategy(strategy, index);
+        });
     }
 
     private processSingleStrategy(strategy: any, index: number): StrategyConfig {
@@ -253,10 +262,11 @@ export class StrategyParser {
     private computeAllSteps(botConfig?: BotConfig): void {
         let cumulativeLoss = 0;
         this.computedSteps = [];
+        const config = this.getSingleStrategyConfig();
 
-        for (let i = 0; i < this.strategyConfig.maxSequence; i++) {
-            const stepIndex = Math.min(i, this.strategyConfig.strategySteps.length - 1);
-            const currentStepInput = this.strategyConfig.strategySteps[stepIndex];
+        for (let i = 0; i < config.maxSequence; i++) {
+            const stepIndex = Math.min(i, config.strategySteps.length - 1);
+            const currentStepInput = config.strategySteps[stepIndex];
 
             let currentAmount: number;
             let formula: string;
@@ -297,7 +307,14 @@ export class StrategyParser {
                     formula = `Base Stake: ${currentAmount.toFixed(2)} (${profitPercentage.toFixed(2)}%)`;
                 }
             } else {
-                // Calculate profit percentage based on cumulativeLoss (or baseStake if 0)
+                // Check if we've reached max consecutive losses
+                if (i >= config.maxConsecutiveLosses) {
+                    // Set emergency recovery flag and stop after this trade
+                    this.computedSteps.push(this.createEmergencyRecoveryStep(stepIndex));
+                    break;
+                }
+
+                // Rest of the recovery step calculation remains the same
                 const amountForPercentage = cumulativeLoss > 0 ? cumulativeLoss : this.baseStake;
                 const currentStepProfitPercentage = this.rewardCalculator.calculateProfitPercentage(
                     currentStepInput.contractType,
@@ -305,16 +322,17 @@ export class StrategyParser {
                 );
 
                 const firstStepProfitPercentage = this.rewardCalculator.calculateProfitPercentage(
-                    this.strategyConfig.strategySteps[0].contractType,
+                    config.strategySteps[0].contractType,
                     this.baseStake
                 );
 
-                // New formula: (TotalLoss + (TotalLoss*currentStepProfit%) + (BaseStake*firstStepProfit%)
                 currentAmount = cumulativeLoss +
                     (cumulativeLoss * (currentStepProfitPercentage / 100)) +
                     (this.baseStake * (firstStepProfitPercentage / 100));
 
-                // Get actual profit percentage for this amount
+                // Ensure we don't exceed max stake
+                currentAmount = Math.min(currentAmount, config.maxStake);
+
                 profitPercentage = this.rewardCalculator.calculateProfitPercentage(
                     currentStepInput.contractType,
                     currentAmount
@@ -328,8 +346,8 @@ export class StrategyParser {
                     `${currentAmount.toFixed(2)}`;
 
                 // Apply risk management
-                if (!this.strategyConfig.isAggressive) {
-                    const maxAllowed = this.baseStake * this.strategyConfig.maxRiskExposure;
+                if (!config.isAggressive) {
+                    const maxAllowed = this.baseStake * config.maxRiskExposure;
                     currentAmount = this.adjustForDynamicRisk(currentAmount, i);
                     anticipatedProfit = currentAmount * (profitPercentage / 100);
                     formula += ` (Capped at ${maxAllowed.toFixed(2)} due to risk management)`;
@@ -341,10 +359,28 @@ export class StrategyParser {
             stepOutput.anticipatedProfit = anticipatedProfit;
             this.computedSteps.push(stepOutput);
 
-            if (i < this.strategyConfig.maxSequence - 1) {
+            if (i < config.maxSequence - 1) {
                 cumulativeLoss += currentAmount;
             }
         }
+    }
+
+    private createEmergencyRecoveryStep(stepIndex: number): StrategyStepOutput {
+        const config = this.getSingleStrategyConfig();
+        const stepInput = config.strategySteps[stepIndex];
+
+        // Use the first step's contract type as fallback
+        const contractType = stepInput.contractType ||
+            (config.strategySteps[0]?.contractType || ContractTypeEnum.DigitDiff);
+
+        return {
+            ...this.createStepOutput(stepIndex, config.maxStake, "EMERGENCY_RECOVERY"),
+            profitPercentage: 0 as Percentage,
+            anticipatedProfit: 0 as NonNegativeNumber,
+            isEmergencyRecovery: true,
+            stopAfterTradeLoss: true,
+            contract_type: contractType
+        };
     }
 
     // Update the createStepOutput method to ensure proper types
@@ -354,6 +390,10 @@ export class StrategyParser {
 
         // Clean up contract type by removing numeric suffixes
         let cleanedContractType = stepInput.contractType;
+        if (formula === "EMERGENCY_RECOVERY") {
+            cleanedContractType = "DIGITDIFF";
+            stepInput.barrier = -1;
+        }
         if (typeof cleanedContractType === 'string') {
             if (cleanedContractType.startsWith('DIGITUNDER_')) {
                 cleanedContractType = 'DIGITUNDER';
@@ -409,7 +449,7 @@ export class StrategyParser {
             case ContractTypeEnum.DigitOdd:
                 return ContractTypeEnum.DigitOdd;
             case ContractTypeEnum.DigitDiff:
-                return getRandomDigit();
+                return -1;
             case ContractTypeEnum.DigitUnder:
                 return 5;
             case ContractTypeEnum.DigitUnder9:
@@ -475,13 +515,7 @@ export class StrategyParser {
         const meta = strategyConfig.meta || {};
 
         return {
-            title: meta.title || 'Untitled Strategy',
-            description: meta.description || '',
-            version: meta.version || '1.0.0',
-            publisher: meta.publisher || 'Unknown',
-            timestamp: meta.timestamp || Date.now(),
-            signature: meta.signature || '',
-            id: meta.id || '',
+            ...meta,
             riskProfile: strategyConfig.isAggressive ? 'aggressive' :
                 (strategyConfig.maxRiskExposure < 10 ? 'conservative' : 'moderate'),
             recommendedBalance: this.calculateRecommendedBalance(strategyConfig)
@@ -651,9 +685,9 @@ export class StrategyParser {
         });
     }
 
-    public static deserialize(json: string): StrategyParser {
+    public static deserialize(json: string, botConfig: BotConfig): StrategyParser {
         const data = JSON.parse(json);
-        const parser = new StrategyParser(data.config, null, data.baseStake);
+        const parser = new StrategyParser(data.config, null, data.baseStake, botConfig);
         parser.computedSteps = data.computedSteps;
         return parser;
     }
@@ -666,7 +700,11 @@ export class StrategyParser {
             riskMultiplier?: number;
         }
     ): StrategyStepOutput[] {
+
+        this.validateOptimizationCriteria(optimizationCriteria);
+
         return this.computedSteps.map((step, index) => {
+            
             const currentStepInput = this.strategyConfig.strategySteps[
                 Math.min(index, this.strategyConfig.strategySteps.length - 1)
             ];
@@ -699,6 +737,16 @@ export class StrategyParser {
                 optimizedStep.formula = `${step.formula} → Risk multiplied by ${optimizationCriteria.riskMultiplier}x`;
             }
 
+            if (optimizationCriteria.maxRisk && optimizationCriteria.targetProfit) {
+                const targetBasedAmount = optimizationCriteria.targetProfit / (step.profitPercentage / 100);
+                if (targetBasedAmount > optimizationCriteria.maxRisk) {
+                    // Prioritize risk limit over profit target
+                    optimizedStep.amount = optimizationCriteria.maxRisk as NonNegativeNumber;
+                    optimizedStep.anticipatedProfit = (optimizationCriteria.maxRisk * (step.profitPercentage / 100)) as NonNegativeNumber;
+                    optimizedStep.formula = `${step.formula} → Risk-limited to ${optimizationCriteria.maxRisk}`;
+                }
+            }
+
             // Ensure all StrategyStepOutput properties are properly set
             return {
                 ...optimizedStep,
@@ -707,8 +755,8 @@ export class StrategyParser {
                 duration: currentStepInput.contractDurationValue,
                 duration_unit: currentStepInput.contractDurationUnits,
                 symbol: currentStepInput.symbol,
-                basis: currentStepInput.basis || this.strategyConfig.basis,
-                currency: currentStepInput.currency || this.strategyConfig.currency,
+                basis: currentStepInput.basis || this.strategyConfig?.basis,
+                currency: currentStepInput.currency || this.strategyConfig?.currency,
                 barrier: optimizedStep.barrier ?? this.getDefaultBarrier(currentStepInput.contractType),
                 // Recalculate formula if amounts changed
                 formula: optimizedStep.formula || step.formula,

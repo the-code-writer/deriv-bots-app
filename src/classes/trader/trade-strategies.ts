@@ -224,16 +224,12 @@ export abstract class TradeStrategy {
 
         const result: ITradeData = await this.executor.purchaseContract(params, this.config);
 
-        this.handleTradeResult(params, result);
-
-        return result;
-        
-    }
-
-    protected handleTradeResult(params: any, result: ITradeData): void {
         if (this.volatilityRiskManager) {
             this.volatilityRiskManager.processTradeResult(result);
         }
+
+        return result;
+        
     }
 
     private getRemainingCooldown(response: SafetyModeResponse): number {
@@ -459,7 +455,7 @@ export abstract class TradeStrategy {
 
             const nextParams = this.volatilityRiskManager.getNextTradeParams();
 
-            console.error("nextParams", nextParams);
+            //console.error("nextParams", nextParams);
 
             const contractParams = this.createParamsFromFactory(
                 nextParams.contractType,
