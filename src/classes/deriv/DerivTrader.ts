@@ -30,7 +30,6 @@ const {
     MIN_STAKE,
     MAX_STAKE,
     MAX_RECOVERY_TRADES,
-    MAX_RECOVERY_TRADES_X10,
 } = env;
 
 /**

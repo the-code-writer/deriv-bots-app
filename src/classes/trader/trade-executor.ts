@@ -23,11 +23,6 @@ const {
     DERIV_APP_ENDPOINT_DOMAIN,
     DERIV_APP_ENDPOINT_APP_ID,
     DERIV_APP_ENDPOINT_LANG,
-    DERIV_APP_TOKEN,
-    MIN_STAKE,
-    MAX_STAKE,
-    MAX_RECOVERY_TRADES,
-    MAX_RECOVERY_TRADES_X10,
 } = env;
 
 /**
@@ -117,7 +112,7 @@ export class TradeExecutor {
 
                 lastError = error;
 
-                console.log(error)
+                //console.log(error)
 
                 logger.warn(`Attempt ${attempt} of ${this.maxRetryAttempts}`);
 

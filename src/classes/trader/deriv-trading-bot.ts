@@ -641,7 +641,7 @@ ${tradeResult.longcode}\n
 Entry Spot    : ${tradeResult.entry_spot_value}
 Exit Spot     : ${tradeResult.exit_spot_value}
 
-Status        : ${resultIsWin ? '🔹 WON 🔹' : '🔸 LOST 🔸'}
+Status        : ${resultIsWin ? '🔹  WON' : '🔸  LOST'}
 Buy           : ${tradeResult.buy_price_currency} ${roundToTwoDecimals(tradeResult.buy_price_value, true)}
 Sell          : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(tradeResult.sell_price_value, true)}
 Profit        : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(profit, true)}

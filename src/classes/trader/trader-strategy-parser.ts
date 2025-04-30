@@ -55,15 +55,18 @@ export interface StrategyConfig {
 }
 
 export interface StrategyMeta {
-    title: string;
-    description: string;
-    version: string;
-    publisher: string;
-    timestamp: number;
-    signature: string;
-    id: string;
-    riskProfile?: 'conservative' | 'moderate' | 'aggressive';
-    recommendedBalance?: number;
+    currency: CurrencyType;
+    basis: BasisType;
+    baseStake: NonNegativeNumber;
+    minStake: NonNegativeNumber;
+    maxStake: NonNegativeNumber;
+    isAggressive: boolean;
+    maxRiskExposure: number;
+    maxSequence: number;
+    maxConsecutiveLosses: number;
+    profitPercentage: number;
+    lossRecoveryPercentage: number;
+    anticipatedProfitPercentage: number;
 }
 
 export interface StrategyMetrics {
@@ -228,31 +231,42 @@ export class StrategyParser {
             throw new StrategyError('INVALID_STRATEGY', "Strategy is missing required strategySteps field");
         }
 
-        // Set defaults for required fields
-        strategy.strategyName = strategy.id || "UNNAMED_STRATEGY";
-        strategy.currency = strategy.meta?.currency || CurrenciesEnum.Default;
-        strategy.basis = strategy.meta?.basis || BasisTypeEnum.Default;
-        strategy.baseStake = strategy.meta?.baseStake || 1;
-        strategy.minStake = strategy.meta?.minStake || 0.35;
-        strategy.maxStake = strategy.meta?.maxStake || strategy.meta?.baseStake * 150 || 187.5;
-        strategy.isAggressive = strategy.meta?.isAggressive || false;
-        strategy.maxRiskExposure = strategy.meta?.maxRiskExposure || 15;
+        // Calculate maxRiskExposure based on computed baseStake
+        const computedBaseStake = this.botConfig?.baseStake || strategy.baseStake || 1;
+        const computedMaxRiskExposure = computedBaseStake * 12;
 
-        // Process strategy steps
-        strategy.strategySteps = strategy.strategySteps.map((step: any) => ({
-            ...step,
-            currency: step.currency || strategy.currency,
-            basis: step.basis || strategy.basis
-        }));
+        // Create processed strategy with proper precedence
+        const processedStrategy: StrategyConfig = {
+            strategyName: strategy.id || "UNNAMED_STRATEGY",
+            strategySteps: strategy.strategySteps.map((step: any) => ({
+                ...step,
+                currency: step.currency || (this.botConfig?.currency || strategy.currency),
+                basis: step.basis || strategy.basis
+            })),
+            // Currency: botConfig first, then JSON
+            currency: this.botConfig?.currency || strategy.currency || CurrenciesEnum.Default,
+            // Basis: always from JSON
+            basis: strategy.basis || BasisTypeEnum.Default,
+            // BaseStake: botConfig first, then JSON
+            baseStake: this.botConfig?.baseStake || strategy.baseStake || 1,
+            // MinStake: botConfig first, then JSON
+            minStake: this.botConfig?.minStake || strategy.minStake || 0.35,
+            // MaxStake: always from JSON
+            maxStake: strategy.maxStake || 187.5,
+            // IsAggressive: botConfig first, then JSON
+            isAggressive: this.botConfig?.isAggressive ?? strategy.isAggressive ?? false,
+            // MaxRiskExposure: computed value (baseStake * 12)
+            maxRiskExposure: computedMaxRiskExposure,
+            // MaxSequence: always number of steps
+            maxSequence: strategy.strategySteps.length,
+            // MaxConsecutiveLosses: from JSON
+            maxConsecutiveLosses: strategy.maxConsecutiveLosses || strategy.strategySteps.length - 1,
+            profitPercentage: strategy.profitPercentage || 0,
+            lossRecoveryPercentage: strategy.lossRecoveryPercentage || 0,
+            anticipatedProfitPercentage: strategy.anticipatedProfitPercentage || 0
+        };
 
-        // Set sequence and loss defaults
-        strategy.maxSequence = strategy.meta?.maxSequence || strategy.strategySteps.length;
-        strategy.maxConsecutiveLosses = strategy.meta?.maxConsecutiveLosses || strategy.strategySteps.length - 1;
-        strategy.profitPercentage = strategy.profitPercentage || 0;
-        strategy.lossRecoveryPercentage = strategy.lossRecoveryPercentage || 0;
-        strategy.anticipatedProfitPercentage = strategy.anticipatedProfitPercentage || 0;
-
-        return strategy as StrategyConfig;
+        return processedStrategy;
     }
 
     private computeAllSteps(botConfig?: BotConfig): void {
@@ -387,43 +401,48 @@ export class StrategyParser {
         // Clean up contract type by removing numeric suffixes
         let cleanedContractType = stepInput.contractType;
         if (formula === "EMERGENCY_RECOVERY") {
-            cleanedContractType = "DIGITDIFF";
+            cleanedContractType = ContractTypeEnum.DigitDiff;
             stepInput.barrier = -1;
         }
+
         if (typeof cleanedContractType === 'string') {
             if (cleanedContractType.startsWith('DIGITUNDER_')) {
-                cleanedContractType = 'DIGITUNDER';
+                cleanedContractType = ContractTypeEnum.DigitUnder;
             } else if (cleanedContractType.startsWith('DIGITOVER_')) {
-                cleanedContractType = 'DIGITOVER';
+                cleanedContractType = ContractTypeEnum.DigitOver;
             }
         }
 
+        // Create contract parameters with simplified structure
         const contractParams = ContractParamsFactory.createParams(
             amount,
-            stepInput.basis as BasisType,
+            stepInput.basis || config.basis,  // Fallback to strategy basis if not specified
             cleanedContractType as ContractType,
-            stepInput.currency,
+            stepInput.currency || config.currency,  // Fallback to strategy currency
             stepInput.contractDurationValue,
             stepInput.contractDurationUnits,
             stepInput.symbol,
-            stepInput.barrier || this.getDefaultBarrier(stepInput.contractType)
+            stepInput.barrier ?? this.getDefaultBarrier(stepInput.contractType)
         );
 
-        // Ensure proper type assertions
         return {
             ...contractParams,
             formula,
             profitPercentage: 0 as Percentage,
             anticipatedProfit: 0 as NonNegativeNumber,
-            stepIndex: stepIndex,
+            stepIndex,
             stepNumber: stepIndex + 1,
-            amount: amount as NonNegativeNumber
+            amount: amount as NonNegativeNumber,
+            basis: stepInput.basis || config.basis,  // Ensure basis is always set
+            currency: stepInput.currency || config.currency  // Ensure currency is always set
         };
+
     }
 
     private getDefaultBarrier(contractType: ContractType): string | number {
         // First clean the contract type
         let cleanedType = contractType;
+
         if (typeof cleanedType === 'string') {
             if (cleanedType.startsWith('DIGITUNDER_')) {
                 cleanedType = 'DIGITUNDER';
@@ -493,13 +512,20 @@ export class StrategyParser {
 
     public getMetaInfo(config?: StrategyConfig): StrategyMeta {
         const strategyConfig = config || (this.strategyConfig as StrategyConfig);
-        const meta = strategyConfig.meta || {};
 
         return {
-            ...meta,
-            riskProfile: strategyConfig.isAggressive ? 'aggressive' :
-                (strategyConfig.maxRiskExposure < 10 ? 'conservative' : 'moderate'),
-            recommendedBalance: this.calculateRecommendedBalance(strategyConfig)
+            currency: strategyConfig.currency,
+            basis: strategyConfig.basis,
+            baseStake: strategyConfig.baseStake,
+            minStake: strategyConfig.minStake,
+            maxStake: strategyConfig.maxStake,
+            isAggressive: strategyConfig.isAggressive,
+            maxRiskExposure: strategyConfig.maxRiskExposure,
+            maxSequence: strategyConfig.maxSequence,
+            maxConsecutiveLosses: strategyConfig.maxConsecutiveLosses,
+            profitPercentage: strategyConfig.profitPercentage || 0,
+            lossRecoveryPercentage: strategyConfig.lossRecoveryPercentage || 0,
+            anticipatedProfitPercentage: strategyConfig.anticipatedProfitPercentage || 0
         };
     }
 
@@ -596,8 +622,7 @@ export class StrategyParser {
             maxConsecutiveLosses: config.maxConsecutiveLosses,
             maxRiskExposure: config.maxRiskExposure,
             basis: config.basis,
-            currency: config.currency,
-            meta: config.meta
+            currency: config.currency
         };
 
         const typedSteps = steps.map((step, index) => ({
@@ -647,86 +672,87 @@ export class StrategyParser {
     }
 
     public optimizeStrategy(
-        optimizationCriteria: {
-            maxRisk?: number;
-            targetProfit?: number;
-            maxConsecutiveLosses?: number;
-            riskMultiplier?: number;
-        }
+        optimizationCriteria: OptimizationCriteria
     ): StrategyStepOutput[] {
-
         this.validateOptimizationCriteria(optimizationCriteria);
 
         return this.computedSteps.map((step, index) => {
-
             const currentStepInput = this.strategyConfig.strategySteps[
                 Math.min(index, this.strategyConfig.strategySteps.length - 1)
             ];
 
-            // Clone the step to avoid mutating the original
-            const optimizedStep: StrategyStepOutput = { ...step };
-
-            // Apply max risk constraint
-            if (optimizationCriteria.maxRisk && step.amount > optimizationCriteria.maxRisk) {
-                optimizedStep.amount = optimizationCriteria.maxRisk as NonNegativeNumber;
-                optimizedStep.anticipatedProfit = (optimizationCriteria.maxRisk * (step.profitPercentage / 100)) as NonNegativeNumber;
-                optimizedStep.formula = `${step.formula} → Optimized to max risk ${optimizationCriteria.maxRisk}`;
-            }
-
-            // Apply target profit adjustment
-            if (optimizationCriteria.targetProfit && index > 0) {
-                const neededAmount = optimizationCriteria.targetProfit / (step.profitPercentage / 100) as NonNegativeNumber;
-                if (neededAmount < optimizedStep.amount) {
-                    optimizedStep.amount = neededAmount;
-                    optimizedStep.anticipatedProfit = optimizationCriteria.targetProfit as NonNegativeNumber;
-                    optimizedStep.formula = `${step.formula} → Optimized for target profit ${optimizationCriteria.targetProfit}`;
-                }
-            }
-
-            // Apply risk multiplier for recovery steps
-            if (optimizationCriteria.riskMultiplier && index > 0) {
-                const newAmount = step.amount * optimizationCriteria.riskMultiplier;
-                optimizedStep.amount = newAmount as NonNegativeNumber;
-                optimizedStep.anticipatedProfit = newAmount * (step.profitPercentage / 100) as NonNegativeNumber;
-                optimizedStep.formula = `${step.formula} → Risk multiplied by ${optimizationCriteria.riskMultiplier}x`;
-            }
-
-            if (optimizationCriteria.maxRisk && optimizationCriteria.targetProfit) {
-                const targetBasedAmount = optimizationCriteria.targetProfit / (step.profitPercentage / 100);
-                if (targetBasedAmount > optimizationCriteria.maxRisk) {
-                    // Prioritize risk limit over profit target
-                    optimizedStep.amount = optimizationCriteria.maxRisk as NonNegativeNumber;
-                    optimizedStep.anticipatedProfit = (optimizationCriteria.maxRisk * (step.profitPercentage / 100)) as NonNegativeNumber;
-                    optimizedStep.formula = `${step.formula} → Risk-limited to ${optimizationCriteria.maxRisk}`;
-                }
-            }
-
-            // Ensure all StrategyStepOutput properties are properly set
-            return {
-                ...optimizedStep,
-                // These would normally be preserved from the spread, but we ensure they exist
+            // Create optimized step with all required properties
+            const optimizedStep: StrategyStepOutput = {
+                ...step,
+                // Ensure these properties are always set
                 contract_type: currentStepInput.contractType,
                 duration: currentStepInput.contractDurationValue,
                 duration_unit: currentStepInput.contractDurationUnits,
                 symbol: currentStepInput.symbol,
                 basis: currentStepInput.basis || this.strategyConfig.basis,
                 currency: currentStepInput.currency || this.strategyConfig.currency,
-                barrier: optimizedStep.barrier ?? this.getDefaultBarrier(currentStepInput.contractType),
-                // Recalculate formula if amounts changed
-                formula: optimizedStep.formula || step.formula,
-                // Recalculate profit percentage based on new amount if needed
-                profitPercentage: this.rewardCalculator.calculateProfitPercentage(
-                    currentStepInput.contractType,
-                    optimizedStep.amount
-                ),
-                // Recalculate anticipated profit
-                anticipatedProfit: optimizedStep.amount *
-                    (this.rewardCalculator.calculateProfitPercentage(
-                        currentStepInput.contractType,
-                        optimizedStep.amount
-                    ) / 100)
+                barrier: step.barrier ?? this.getDefaultBarrier(currentStepInput.contractType)
             };
+
+            // Apply optimization rules
+            this.applyOptimizationRules(optimizedStep, step, optimizationCriteria, index);
+
+            // Recalculate profit values based on optimized amount
+            this.recalculateProfitValues(optimizedStep, currentStepInput);
+
+            return optimizedStep;
         });
+    }
+
+    private applyOptimizationRules(
+        optimizedStep: StrategyStepOutput,
+        originalStep: StrategyStepOutput,
+        criteria: OptimizationCriteria,
+        stepIndex: number
+    ): void {
+        // Apply max risk constraint
+        if (criteria.maxRisk && originalStep.amount > criteria.maxRisk) {
+            optimizedStep.amount = criteria.maxRisk as NonNegativeNumber;
+            optimizedStep.formula = `${originalStep.formula} → Optimized to max risk ${criteria.maxRisk}`;
+        }
+
+        // Apply target profit adjustment (only for recovery steps)
+        if (criteria.targetProfit && stepIndex > 0) {
+            const neededAmount = criteria.targetProfit / (originalStep.profitPercentage / 100);
+            if (neededAmount < optimizedStep.amount) {
+                optimizedStep.amount = neededAmount as NonNegativeNumber;
+                optimizedStep.formula = `${originalStep.formula} → Optimized for target profit ${criteria.targetProfit}`;
+            }
+        }
+
+        // Apply risk multiplier for recovery steps
+        if (criteria.riskMultiplier && stepIndex > 0) {
+            const newAmount = originalStep.amount * criteria.riskMultiplier;
+            optimizedStep.amount = newAmount as NonNegativeNumber;
+            optimizedStep.formula = `${originalStep.formula} → Risk multiplied by ${criteria.riskMultiplier}x`;
+        }
+
+        // Handle conflict between maxRisk and targetProfit
+        if (criteria.maxRisk && criteria.targetProfit) {
+            const targetBasedAmount = criteria.targetProfit / (originalStep.profitPercentage / 100);
+            if (targetBasedAmount > criteria.maxRisk) {
+                optimizedStep.amount = criteria.maxRisk as NonNegativeNumber;
+                optimizedStep.formula = `${originalStep.formula} → Risk-limited to ${criteria.maxRisk}`;
+            }
+        }
+    }
+
+    private recalculateProfitValues(
+        optimizedStep: StrategyStepOutput,
+        currentStepInput: StrategyStepInput
+    ): void {
+        optimizedStep.profitPercentage = this.rewardCalculator.calculateProfitPercentage(
+            currentStepInput.contractType,
+            optimizedStep.amount
+        ) as Percentage;
+
+        optimizedStep.anticipatedProfit = (optimizedStep.amount *
+            (optimizedStep.profitPercentage / 100)) as NonNegativeNumber;
     }
 
     private validateOptimizationCriteria(criteria: any) {

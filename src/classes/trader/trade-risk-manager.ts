@@ -5,6 +5,7 @@ import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
 import { StrategyConfig, StrategyStepOutput, StrategyMetrics, StrategyMeta, StrategyVisualization } from './trader-strategy-parser';
 import { roundToTwoDecimals } from '../../common/utils/snippets';
+import { env } from '@/common/utils/envConfig';
 
 // Initialize logger
 const logger = pino({
@@ -179,8 +180,8 @@ export class VolatilityRiskManager {
         circuitBreakerConfig?: CircuitBreakerConfig
     ) {
         this.baseStake = baseStake;
-        this.minStake = baseStake;
-        this.maxStake = baseStake * 12 * 12;
+        this.minStake = env.MIN_STAKE
+        this.maxStake = env.MAX_STAKE;
         this.market = market;
         this.currency = currency;
         this.contractType = contractType;
@@ -189,21 +190,21 @@ export class VolatilityRiskManager {
         this.strategyParser = strategyParser;
 
         // Initialize circuit breakers with defaults or provided config
-        this.circuitBreakerConfig = circuitBreakerConfig || {
-            maxAbsoluteLoss: 1000,
-            maxDailyLoss: 500,
-            maxConsecutiveLosses: 5,
-            maxBalancePercentageLoss: 0.5,
+        this.circuitBreakerConfig = {
+            maxAbsoluteLoss: env.MAX_ABSOLUTE_LOSS,
+            maxDailyLoss: env.MAX_DAILY_LOSS,
+            maxConsecutiveLosses: env.MAX_CONSECUTIVE_LOSSES,
+            maxBalancePercentageLoss: env.MAX_BALANCE_PERCENTAGE_LOSS,
 
             rapidLoss: {
-                timeWindowMs: 30000,     // 30 second window
-                threshold: 2,            // 2 losses in 30s triggers
-                initialCooldownMs: 30000, // 30s initial cooldown
-                maxCooldownMs: 300000,   // 5min maximum cooldown
-                cooldownMultiplier: 2    // Double cooldown each time
+                timeWindowMs: env.RAPID_LOSS_TIME_WINDOW_MS,
+                threshold: env.RAPID_LOSS_THRESHOLD,
+                initialCooldownMs: env.RAPID_LOSS_INITIAL_COOLDOWN_MS,
+                maxCooldownMs: env.RAPID_LOSS_MAX_COOLDOWN_MS,
+                cooldownMultiplier: env.RAPID_LOSS_COOLDOWN_MULTIPLIER,
             },
 
-            cooldownPeriod: 60000        // 1min for other circuit breakers
+            cooldownPeriod: env.COOLDOWN_PERIOD_MS
         };
 
         this.rapidLossState = {
@@ -307,7 +308,7 @@ export class VolatilityRiskManager {
                 this.isEmergencyRecovery = true;
 
                 logger.info(`Emergency ? [${this.isEmergencyRecovery}] : Partial Recovery: ${this.currency} ${roundToTwoDecimals(recoveredAmount)}, Remaining: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}`);
-            
+
             }
 
         } else {
@@ -341,7 +342,7 @@ export class VolatilityRiskManager {
 
         if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
 
-            this.enterSafetyMode("max_recovery_attempts");    
+            this.enterSafetyMode("max_recovery_attempts");
 
         }
 
@@ -369,18 +370,18 @@ export class VolatilityRiskManager {
                 let amountToRecover: number = this.clampStake((this.totalLossAmount * 12), true);
 
                 if (this.isCriticalRecovery) {
-                    
-                    amountToRecover = this.totalLossAmount * 7 / 100;
 
-                    console.error("#### CHECK : [isCriticalRecovery][amountToRecover = this.totalLossAmount * 7 / 100;] #####", [this.totalLossAmount, amountToRecover]);
+                    amountToRecover = this.clampStake(this.totalLossAmount * 100 / 7, true);
+
+                    console.error("#### CHECK : [isCriticalRecovery][this.totalLossAmount * 100 / 7] #####", [this.totalLossAmount, amountToRecover]);
 
                     this.isCriticalRecovery = false;
-                    
+
                 }
 
                 const emergencyRecoveryStake = roundToTwoDecimals(amountToRecover);
 
-                
+
 
                 const params: NextTradeParams = {
                     basis: BasisTypeEnum.Default,
@@ -410,7 +411,7 @@ export class VolatilityRiskManager {
                     basis: step.basis || strategyConfig.basis,
                     symbol: step.symbol || this.market,
                     amount: Number(roundToTwoDecimals(this.clampStake(step.amount))),
-                    barrier:  this.getBarrier(step.contract_type, step.barrier),
+                    barrier: this.getBarrier(step.contract_type),
                     currency: step.currency || strategyConfig.currency,
                     contractType: step.contract_type || this.contractType,
                     contractDurationValue: step.duration || this.contractDurationValue,
@@ -437,7 +438,7 @@ export class VolatilityRiskManager {
             basis: BasisTypeEnum.Default,
             symbol: this.market,
             amount: this.baseStake,
-            barrier: this.getBarrier(this.contractType, null),
+            barrier: this.getBarrier(this.contractType),
             currency: this.currency,
             contractType: this.contractType,
             contractDurationValue: this.contractDurationValue,
@@ -459,14 +460,12 @@ export class VolatilityRiskManager {
         return Math.min(Math.max(stake, this.minStake), this.maxStake);
     }
 
-    private getBarrier(contractType: ContractType, barrier: string | number | null): string | number {
+    private getBarrier(contractType: ContractType): string | number {
         switch (contractType) {
             case ContractTypeEnum.DigitEven: return "DIGITEVEN";
             case ContractTypeEnum.DigitOdd: return "DIGITODD";
             case ContractTypeEnum.DigitDiff: {
-                if (barrier && Number(barrier) >= 0 && Number(barrier) <= 10) {
-                    return barrier;
-                }
+                // Always return a random digit for DIGITDIFF regardless of the barrier parameter
                 return getRandomDigit();
             }
             case ContractTypeEnum.DigitUnder: return Math.min(Math.max(getRandomDigit(), 1), 9);

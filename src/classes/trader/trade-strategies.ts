@@ -126,7 +126,7 @@ export abstract class TradeStrategy {
         // Initialize strategy parser
         const strategyJson = require(`./strategies/${strategyName}.json`);
 
-        this.strategyParser = new StrategyParser(strategyJson, 0, this.baseStake, this.config);
+        this.strategyParser = new StrategyParser(strategyJson, this.baseStake, this.config);
 
 
         logger.info({
@@ -405,7 +405,7 @@ export abstract class TradeStrategy {
         if (!validation.isValid) {
             const errorMsg = `Balance validation failed: ${validation.reasons.join(', ')}`;
             logger.error({
-                error: new Error(errorMsg),
+                error: errorMsg,
                 validationMetrics: validation.metrics,
                 strategy: this.constructor.name
             });
@@ -591,7 +591,7 @@ export abstract class TradeStrategy {
         }
 
         const userAccount: IDerivUserAccount = {
-            balance: 1000,
+            balance: 5000,
             currency: this.currency,
             email: "",
             country: "",

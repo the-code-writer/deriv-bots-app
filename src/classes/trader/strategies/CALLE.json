@@ -1,31 +1,26 @@
 {
   "strategySteps": [
+    
     {
-      "symbol": "R_75",
-      "contractType": "CALLE",
+      "symbol": "1HZ25V",
+      "contractType": "DIGITDIFF",
       "contractDurationValue": 1,
       "contractDurationUnits": "t"
     },
     {
-      "symbol": "R_75",
-      "contractType": "DIGITUNDER_2",
-      "contractDurationValue": 1,
-      "contractDurationUnits": "t"
-    },
-    {
-      "symbol": "R_50",
+      "symbol": "1HZ50V",
       "contractType": "DIGITUNDER_3",
       "contractDurationValue": 1,
       "contractDurationUnits": "t"
     },
     {
-      "symbol": "R_25",
+      "symbol": "1HZ75V",
       "contractType": "DIGITUNDER_4",
       "contractDurationValue": 1,
       "contractDurationUnits": "t"
     },
     {
-      "symbol": "R_100",
+      "symbol": "1HZ100V",
       "contractType": "DIGITUNDER_5",
       "contractDurationValue": 1,
       "contractDurationUnits": "t"
@@ -38,7 +33,7 @@
     }
   ],
   "meta": {
-    "baseStake": 1.25,
+    "baseStake": 1.89,
     "minStake": 0.35,
     "maxStake": 187.5,
     "basis": "stake",
