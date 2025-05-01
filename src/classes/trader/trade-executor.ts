@@ -9,6 +9,7 @@ import { BotConfig, ContractParams, ContractResponse, CurrenciesEnum, ITradeData
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
 import { DerivUserAccount, IDerivUserAccount } from './deriv-user-account';
+import { defaultEventManager } from "@/common/utils/eventBus";
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const logger = pino({ name: "Trade Executor" });
@@ -128,7 +129,7 @@ export class TradeExecutor {
 
         logger.error('All purchase attempts failed');
 
-        throw lastError || new Error('Unknown error during contract purchase');
+        defaultEventManager.emit('STOP_TRADING', {reason: 'Unknown error during contract purchase'});
 
     }
 
@@ -149,33 +150,53 @@ export class TradeExecutor {
         // @ts-ignore
         const missingFields = requiredFields.filter(field => !params[field]);
 
+        let reason:string;
+
+        const reasons: string[] = [];
+
         if (missingFields.length > 0) {
-            throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+            reason = `Missing required fields: ${missingFields.join(', ')}`;
+            reasons.push(reason);
+            logger.error(reason);
         }
 
         if (typeof params.amount === 'number' && params.amount <= 0) {
-            throw new Error('Amount must be positive');
+            reason = 'Amount must be positive';
+            reasons.push(reason);
+            logger.error(reason);
         }
 
         if (typeof params.amount === 'string' && parseFloat(params.amount) <= 0) {
-            throw new Error('Amount must be positive');
+            reason = 'Amount must be positive';
+            reasons.push(reason);
+            logger.error(reason);
         }
 
         if (isNaN(Number(params.amount))) {
-            throw new Error('Amount must be a number');
+            reason = 'Amount must be a number';
+            reasons.push(reason);
+            logger.error(reason);
         }
 
         if (Number(params.amount) < env.MIN_STAKE) {
-            throw new Error(`Amount must be ${env.MIN_STAKE} or above`);
+            reason = `Amount must be ${env.MIN_STAKE} or above`;
+            reasons.push(reason);
+            logger.error(reason);
         }
 
         if (Number(params.amount) > env.MAX_STAKE) {
-            throw new Error(`Amount must be ${env.MAX_STAKE} or below`);
+            reason = `Amount must be ${env.MAX_STAKE} or below`;
+            reasons.push(reason);
+            logger.error(reason);
         }
 
         if (params.barrier !== undefined && isNaN(Number(params.barrier))) {
-            throw new Error('Barrier must be a number');
+            reason = 'Barrier must be a number';
+            reasons.push(reason);
+            logger.error(reason);
         }
+
+        defaultEventManager.emit('STOP_TRADING', {reason: "Contract parameters not valid", reasons});
 
     }
 

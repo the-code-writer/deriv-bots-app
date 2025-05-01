@@ -6,6 +6,7 @@ import { StrategyParser } from './trader-strategy-parser';
 import { StrategyConfig, StrategyStepOutput, StrategyMetrics, StrategyMeta, StrategyVisualization } from './trader-strategy-parser';
 import { roundToTwoDecimals } from '../../common/utils/snippets';
 import { env } from '@/common/utils/envConfig';
+import { defaultEventManager } from '@/common/utils/eventBus';
 
 // Initialize logger
 const logger = pino({
@@ -332,17 +333,33 @@ export class VolatilityRiskManager {
 
         logger.warn(`Loss: ${this.currency} ${roundToTwoDecimals(lossAmount)}, Total Loss: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}, Consecutive: ${this.consecutiveLosses}`);
 
+        if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+
+            this.enterSafetyMode("max_recovery_attempts");
+
+            defaultEventManager.emit('STOP_TRADING', {reason: "🔸🔸🔸🔸 MAX RECOVERY ATTEMPTS REACHED 🔸🔸🔸🔸"});
+
+        }
+
         if (this.stopAfterTradeLoss) {
 
-            this.enterSafetyMode("🔸🔸🔸🔸 CATASTROPHIC LOSS 🔸🔸🔸🔸");
+            this.enterSafetyMode("🔸🔸🔸🔸 CRITICAL LOSSES 🔸🔸🔸🔸");
 
             this.isCriticalRecovery = true;
 
         }
 
-        if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+        if(this.consecutiveLosses > this.circuitBreakerConfig.maxConsecutiveLosses - 1) { 
 
-            this.enterSafetyMode("max_recovery_attempts");
+            this.enterSafetyMode("🔸🔸🔸🔸 CRITICAL LOSSES - MAX CONSECUTIVE LOSSES EMINENT 🔸🔸🔸🔸");
+
+            this.isCriticalRecovery = true;
+
+        }
+
+        if(this.consecutiveLosses > this.circuitBreakerConfig.maxConsecutiveLosses) { 
+
+            defaultEventManager.emit('STOP_TRADING', {reason: "🔸🔸🔸🔸 CATASTROPHIC LOSS 🔸🔸🔸🔸"});
 
         }
 

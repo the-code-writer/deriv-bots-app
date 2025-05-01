@@ -150,11 +150,15 @@ export abstract class TradeStrategy {
 
     protected async executeTrade(): Promise<ITradeData | null> {
 
-        const response: SafetyModeResponse = await this.preContractPurchaseChecks(this.contractType);
+        const response: SafetyModeResponse = await this.preContractPurchaseChecks();
 
         let params: ContractParams = {} as ContractParams;
 
-        if (response?.status === 'SAFETY_MODE') {
+        if (response?.status === 'OK') {
+
+            // PASS
+
+        } else if (response?.status === 'SAFETY_MODE') {
 
             console.error({
                 message: "SAFETY_MODE",
@@ -204,10 +208,6 @@ export abstract class TradeStrategy {
 
             // Reset or refresh your trade manager if needed
             this.resetSafetyMode();
-
-        } else if (response?.status === 'OK') {
-
-            // PASS
 
         } else {
 
@@ -437,11 +437,10 @@ export abstract class TradeStrategy {
         return true;
     }
 
-    protected async preContractPurchaseChecks(contractType: ContractType): Promise<SafetyModeResponse> {
+    protected async preContractPurchaseChecks(): Promise<SafetyModeResponse> {
 
         if (this.volatilityRiskManager?.getCurrentState().inSafetyMode) {
             return this.getSafetyModeResult();
-            //throw new Error('Cannot execute trade while in safety mode');
         }
 
         const circuitCheck = this.checkCircuitBreakers();
@@ -771,6 +770,6 @@ export class DigitOverStrategy extends TradeStrategy {
             this.checkCircuitBreakersOnFailure();
             //throw error;
             return null;
-        }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
     }
 }

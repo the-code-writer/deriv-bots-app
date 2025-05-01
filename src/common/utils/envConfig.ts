@@ -24,6 +24,8 @@ export const env = cleanEnv(process.env, {
   CONNECTION_PING_TIMEOUT: num({ devDefault: testOnly(30000) }),
   CONNECTION_CONTRACT_CREATION_TIMEOUT: num({ devDefault: testOnly(60000) }),
   CONNECTION_RETRY_DELAY: num({ devDefault: testOnly(3000) }),
+  COMMON_RATE_LIMIT_MAX_REQUESTS: num({ devDefault: testOnly(1000) }),
+  COMMON_RATE_LIMIT_WINDOW_MS: num({ devDefault: testOnly(3600) }),
 
   // ========================
   // Security & Cryptography

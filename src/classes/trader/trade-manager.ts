@@ -9,6 +9,7 @@ import { BotConfig, CurrenciesEnum, IPreviousTradeResult, MarketTypeEnum, Contra
 import { env } from "@/common/utils/envConfig";
 import { TradeStrategy, DigitDiffStrategy, DigitEvenStrategy, DigitOddStrategy, CallStrategy, PutStrategy, DigitOverStrategy, DigitUnderStrategy } from './trade-strategies';
 import { IDerivUserAccount } from "./deriv-user-account";
+import { defaultEventManager } from '@/common/utils/eventBus';
 
 const logger = pino({ name: "TradeManager" });
 
@@ -41,16 +42,26 @@ export class TradeManager {
      */
     async executeTrade(): Promise<ITradeData | null> {
 
+        const reasons : string[] = [];
+
+        let reason: string = "";
+
         if (!this.config.contractType) {
-            throw new Error('TradeManager can not execute trade : Missing Contract Type');
+            reason = 'TradeManager can not execute trade : Missing Contract Type';
+            logger.error(reason);
+            reasons.push(reason);
         }
 
         if (!this.config.userAccountToken) {
-            throw new Error('TradeManager can not execute trade : Missing User Account Token');
+            reason = 'TradeManager can not execute trade : Missing User Account Token';
+            logger.error(reason);
+            reasons.push(reason);
         }
 
         if (!this.currentContractType) {
-            throw new Error('TradeManager can not execute trade : Contract Type not initialized');
+            reason = 'TradeManager can not execute trade : Contract Type not initialized';
+            logger.error(reason);
+            reasons.push(reason);
         }
 
         try {
@@ -63,13 +74,21 @@ export class TradeManager {
 
         } catch (error: any) {
 
-            logger.error('Trade execution failed', error);
+            reason = `Trade execution failed: ${error.message}`;
+            logger.error(reason);
+            reasons.push(reason);
 
-            console.log("# !!! ERROR TRADE EXECUTION !!! #", error);
-
-            throw new Error(`Trade execution failed: ${error.message}`);
+            logger.error(error);
 
         }
+
+        if(reasons.length>0){
+
+            defaultEventManager.emit('STOP_TRADING', {reason: "Trade execution failed", reasons});
+
+        }
+
+        return null;
 
     }
 

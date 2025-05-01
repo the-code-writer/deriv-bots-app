@@ -14,6 +14,7 @@ import { sanitizeContractDurationUnit, sanitizeAccountType, sanitizeTradingType,
 import { DerivUserAccount, IDerivUserAccount } from "./deriv-user-account";
 import { roundToTwoDecimals } from '../../common/utils/snippets';
 import { TradeStorageService } from "./trade-storage-service";
+import { defaultEventManager } from "@/common/utils/eventBus";
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 
@@ -68,6 +69,8 @@ export class DerivTradingBot {
 
     private tradeStorageService: TradeStorageService;
 
+    private eventStopTrading:any;
+
     /**
      * Constructs a new DerivTradingBot instance
      * @param {BotConfig} config - Configuration object for the trading bot
@@ -81,6 +84,12 @@ export class DerivTradingBot {
 
         // Call the resetState function to initialize all properties
         this.resetState();
+
+        this.eventStopTrading = defaultEventManager.on('STOP_TRADING', (data:any) => {
+
+            this.stopTrading(data.reason, true);
+            
+          });
 
     }
 
@@ -141,6 +150,8 @@ export class DerivTradingBot {
             clearInterval(this.updateFrequencyIntervalId);
             this.updateFrequencyIntervalId = null;
         }
+
+        //this.eventStopTrading = null;
 
     }
 
