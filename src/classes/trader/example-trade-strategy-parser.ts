@@ -47,23 +47,8 @@ try {
         console.log("\nFinal Strategy Configuration:");
         console.log(JSON.stringify(parser.strategyJson, null, 2));
     } else {
-        // If we can't access the internal strategy object, reconstruct it from the formatted output
-        const finalStrategy = {
-            strategySteps: formattedOutput.steps.map(step => ({
-                symbol: step.symbol,
-                contractType: step.contract_type,
-                contractDurationValue: step.duration,
-                contractDurationUnits: step.duration_unit,
-                amount: step.amount,
-                ...(step.barrier && { barrier: step.barrier })
-            })),
-            meta: formattedOutput.meta,
-            id: strategyName,
-            ...formattedOutput.configuration
-        };
-
         console.log("\nReconstructed Strategy Configuration:");
-        console.log(JSON.stringify(finalStrategy, null, 2));
+        console.log(JSON.stringify(formattedOutput, null, 2));
     }
 
 } catch (error) {

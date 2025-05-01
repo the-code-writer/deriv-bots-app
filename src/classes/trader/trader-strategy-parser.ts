@@ -38,21 +38,17 @@ export interface StrategyStepOutput {
 
 export interface StrategyConfig {
     strategyName: string;
-    strategySteps: StrategyStepInput[];
     isAggressive: boolean;
-    baseStake: NonNegativeNumber;
-    minStake: NonNegativeNumber;
-    maxStake: NonNegativeNumber;
-    maxSequence: number;
+    id: string;
+    title: string;
+    description: string;
+    version: string;
+    publisher: string;
+    timestamp: number;
+    signature: string;
     profitPercentage?: number;
     lossRecoveryPercentage?: number;
     anticipatedProfitPercentage?: number;
-    maxConsecutiveLosses: number;
-    maxRiskExposure: number;
-    totalPotentialLoss: number;
-    basis: BasisType;
-    currency: CurrencyType;
-    meta?: StrategyMeta;
 }
 
 export interface StrategyMeta {
@@ -252,6 +248,14 @@ export class StrategyParser {
                 currency: step.currency || (this.botConfig?.currency || strategy.currency),
                 basis: step.basis || strategy.basis
             })),
+
+            id: strategy.id,
+            title: strategy.title,
+            description: strategy.description,
+            version: strategy.version,
+            publisher: strategy.publisher,
+            timestamp: strategy.timestamp,
+            signature: strategy.signature,
 
             // Currency: botConfig first, then JSON
             currency: this.botConfig?.currency || strategy.currency || CurrenciesEnum.Default,
@@ -600,26 +604,22 @@ export class StrategyParser {
 
     public getFormattedOutput(): {
         meta: StrategyMeta;
-        configuration: Omit<StrategyConfig, 'strategySteps'>;
+        configuration: StrategyConfig;
         steps: Array<StrategyStepOutput & { stepNumber: number }>;
     } {
         const config = this.getSingleStrategyConfig();
         const steps = this.computedSteps;
 
-        const configuration: Omit<StrategyConfig, 'strategySteps'> = {
+        const configuration: StrategyConfig = {
             strategyName: config.strategyName,
             isAggressive: config.isAggressive,
-            baseStake: config.baseStake,
-            minStake: config.minStake,
-            maxStake: config.maxStake,
-            maxSequence: config.maxSequence,
-            profitPercentage: config.profitPercentage,
-            lossRecoveryPercentage: config.lossRecoveryPercentage,
-            anticipatedProfitPercentage: config.anticipatedProfitPercentage,
-            maxConsecutiveLosses: config.maxConsecutiveLosses,
-            maxRiskExposure: config.maxRiskExposure,
-            basis: config.basis,
-            currency: config.currency
+            id: config.id,
+            title: config.title,
+            description: config.description,
+            version: config.version,
+            publisher: config.publisher,
+            timestamp: config.timestamp,
+            signature: config.signature,
         };
 
         const typedSteps = steps.map((step, index) => ({
