@@ -196,7 +196,11 @@ export class TradeExecutor {
             logger.error(reason);
         }
 
-        defaultEventManager.emit('STOP_TRADING', {reason: "Contract parameters not valid", reasons});
+        if (reasons.length > 0) {
+            
+            defaultEventManager.emit('STOP_TRADING', {reason: "Contract parameters not valid", reasons});
+
+        }
 
     }
 

@@ -87,7 +87,7 @@ export class DerivTradingBot {
 
         this.eventStopTrading = defaultEventManager.on('STOP_TRADING', (data:any) => {
 
-            this.stopTrading(data.reason, true);
+            this.stopTrading(data.reason, true, data);
             
           });
 
@@ -492,9 +492,15 @@ export class DerivTradingBot {
         this.stopLoss = sessionData.stopLoss;
         this.tradeStartedAt = Date.now(); // TODO: is this supposed to be divided by / 1000;
 
+
+        logger.error(this.tradeStartedAt)
+        console.error(new Date(this.tradeStartedAt))
+        logger.error(this.tradeStartedAt)
+
+
         // Parse duration strings to seconds
-        this.tradeDuration = sessionData.tradeDuration;
-        this.updateFrequency = sessionData.updateFrequency;
+        this.tradeDuration = sessionData.tradeDuration * 1000; // Convert to milliseconds
+        this.updateFrequency = sessionData.updateFrequency * 1000; // Convert to milliseconds
 
         // Contract duration
         this.contractDurationUnits = sessionData.contractDurationUnits;
@@ -705,7 +711,18 @@ this.generateTelemetry();
      * @param {string} message - Reason for stopping
      * @param {boolean} generateStatistics - Whether to generate final statistics
      */
-    async stopTrading(message: string, generateStatistics: boolean = true): Promise<void> {
+    async stopTrading(message: string, generateStatistics: boolean = true, meta: any): Promise<void> {
+
+        if (!this.isTrading) {
+            return;
+        }
+
+        logger.error({
+            title: "STOP_TRADING",
+            message,
+            meta
+        })
+
         try {
 
             this.isTrading = false;
