@@ -5,7 +5,7 @@ try {
     const strategyJson = require(`./strategies/${strategyName}.json`);
 
     // Example with single strategy - simplified constructor call
-    const parser = new StrategyParser(strategyJson, 0.35, {});
+    const parser = new StrategyParser(strategyJson, 0.38, {});
 
     const formattedOutput = parser.getFormattedOutput();
 
@@ -36,6 +36,34 @@ try {
         console.log(`Amount needed to recover: ${recoveryStep.amount.toFixed(2)}`);
         console.log(`Expected profit from recovery: ${recoveryStep.anticipatedProfit.toFixed(2)}`);
         console.log(`Profit Percentage: ${recoveryStep.profitPercentage.toFixed(2)}%`);
+    }
+
+    // Alternative way to access the modified strategy JSON
+    // Assuming the parser stores the modified strategy in a property called 'strategy'
+    if ('strategy' in parser) {
+        console.log("\nFinal Strategy Configuration:");
+        console.log(JSON.stringify(parser.strategy, null, 2));
+    } else if ('strategyJson' in parser) {
+        console.log("\nFinal Strategy Configuration:");
+        console.log(JSON.stringify(parser.strategyJson, null, 2));
+    } else {
+        // If we can't access the internal strategy object, reconstruct it from the formatted output
+        const finalStrategy = {
+            strategySteps: formattedOutput.steps.map(step => ({
+                symbol: step.symbol,
+                contractType: step.contract_type,
+                contractDurationValue: step.duration,
+                contractDurationUnits: step.duration_unit,
+                amount: step.amount,
+                ...(step.barrier && { barrier: step.barrier })
+            })),
+            meta: formattedOutput.meta,
+            id: strategyName,
+            ...formattedOutput.configuration
+        };
+
+        console.log("\nReconstructed Strategy Configuration:");
+        console.log(JSON.stringify(finalStrategy, null, 2));
     }
 
 } catch (error) {

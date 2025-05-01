@@ -49,6 +49,7 @@ export interface StrategyConfig {
     anticipatedProfitPercentage?: number;
     maxConsecutiveLosses: number;
     maxRiskExposure: number;
+    totalPotentialLoss: number;
     basis: BasisType;
     currency: CurrencyType;
     meta?: StrategyMeta;
@@ -130,9 +131,9 @@ export class StrategyParser {
 
     constructor(strategyJson: any, baseStake: number, botConfig: BotConfig) {
         this.rewardCalculator = new TradeRewardStructures();
-        this.strategyConfig = this.validateAndCompleteStrategyJson(strategyJson);
-        this.baseStake = botConfig?.baseStake || baseStake || this.strategyConfig.baseStake;
         this.botConfig = botConfig;
+        this.baseStake = baseStake || botConfig.baseStake as number;
+        this.strategyConfig = this.validateAndCompleteStrategyJson(strategyJson);        
 
         this.computeAllSteps(botConfig);
 
@@ -232,9 +233,17 @@ export class StrategyParser {
         }
 
         // Calculate maxRiskExposure based on computed baseStake
-        const computedBaseStake = this.botConfig?.baseStake || strategy.baseStake || 1;
+        const computedBaseStake = this.baseStake;
+        const computedMinStake = this.botConfig?.minStake || strategy.minStake || computedBaseStake;
+        const computedMaxStake = strategy.maxStake || ((computedMinStake * 12) + (computedBaseStake * 4));
         const computedMaxRiskExposure = computedBaseStake * 12;
 
+        let totalPotentialLoss = 0;
+        
+            strategy.strategySteps.forEach((step:any) => {
+                totalPotentialLoss += step.amount || this.baseStake;
+            });
+        
         // Create processed strategy with proper precedence
         const processedStrategy: StrategyConfig = {
             strategyName: strategy.id || "UNNAMED_STRATEGY",
@@ -243,20 +252,23 @@ export class StrategyParser {
                 currency: step.currency || (this.botConfig?.currency || strategy.currency),
                 basis: step.basis || strategy.basis
             })),
+
             // Currency: botConfig first, then JSON
             currency: this.botConfig?.currency || strategy.currency || CurrenciesEnum.Default,
             // Basis: always from JSON
             basis: strategy.basis || BasisTypeEnum.Default,
             // BaseStake: botConfig first, then JSON
-            baseStake: this.botConfig?.baseStake || strategy.baseStake || 1,
+            baseStake: computedBaseStake,
             // MinStake: botConfig first, then JSON
-            minStake: this.botConfig?.minStake || strategy.minStake || 0.35,
+            minStake: computedMinStake,
             // MaxStake: always from JSON
-            maxStake: strategy.maxStake || 187.5,
+            maxStake: computedMaxStake,
             // IsAggressive: botConfig first, then JSON
             isAggressive: this.botConfig?.isAggressive ?? strategy.isAggressive ?? false,
             // MaxRiskExposure: computed value (baseStake * 12)
             maxRiskExposure: computedMaxRiskExposure,
+            // @ts-ignore
+            totalPotentialLoss: totalPotentialLoss,
             // MaxSequence: always number of steps
             maxSequence: strategy.strategySteps.length,
             // MaxConsecutiveLosses: from JSON
@@ -527,21 +539,6 @@ export class StrategyParser {
             lossRecoveryPercentage: strategyConfig.lossRecoveryPercentage || 0,
             anticipatedProfitPercentage: strategyConfig.anticipatedProfitPercentage || 0
         };
-    }
-
-    private calculateRecommendedBalance(config?: StrategyConfig): number {
-        const strategyConfig = config || (this.strategyConfig as StrategyConfig);
-        const steps = config
-            ? this.computedAllStrategies.get(
-                Array.isArray(this.strategyConfig)
-                    ? (this.strategyConfig as StrategyConfig[]).indexOf(config)
-                    : 0
-            ) || []
-            : this.computedSteps;
-
-        const maxSteps = strategyConfig.maxSequence;
-        const maxAmount = steps.reduce((max, step) => Math.max(max, step.amount), 0);
-        return maxAmount * maxSteps * 1.5; // 1.5x buffer
     }
 
     public getAllSteps(): StrategyStepOutput[] {

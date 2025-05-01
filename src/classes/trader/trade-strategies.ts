@@ -92,6 +92,12 @@ export abstract class TradeStrategy {
         this.contractFactory = ContractParamsFactory;
     }
 
+    checkPendingRecovery(): boolean {
+
+        return this.volatilityRiskManager.getTotalLostAmount() > 0;
+
+    }
+
     /**
      * Executes the trade strategy
      * @abstract

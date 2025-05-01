@@ -33,6 +33,7 @@ export class DerivTradingBot {
     private market!: MarketType;
     private contractType!: ContractType;
     private isTrading!: boolean;
+    private stopTradingNow: boolean = false;
     private baseStake!: number;
     private takeProfit!: number;
     private stopLoss!: number;
@@ -109,6 +110,7 @@ export class DerivTradingBot {
         this.market = mergedConfig.market || MarketTypeEnum.Default;
         this.contractType = mergedConfig.contractType || ContractTypeEnum.Default;
         this.isTrading = false;
+        this.stopTradingNow = false;
         this.baseStake = mergedConfig.baseStake || 1;
         this.takeProfit = mergedConfig.takeProfit || 10;
         this.stopLoss = mergedConfig.stopLoss || 2;
@@ -508,7 +510,12 @@ export class DerivTradingBot {
 
         // Setup trade duration timeout
         this.tradeDurationTimeoutId = setTimeout(() => {
-            this.stopTrading(`Trade duration limit reached: ${session.tradeDuration}`);
+            const pendingRecovery: boolean = this.tradeManager.checkPendingRecovery();
+            if (pendingRecovery) {
+                this.stopTradingNow = true;
+            } else {
+                this.stopTrading(`Trade duration limit reached: ${session.tradeDuration}`, true, {});
+            }
         }, this.tradeDuration);
 
         // Setup telemetry updates
@@ -636,6 +643,14 @@ export class DerivTradingBot {
                 }
             );
 
+            if (this.stopTradingNow) {
+                
+                this.stopTrading(`Stopping trading now enforced.`, true, {});
+
+                this.stopTradingNow = false;
+
+            }
+
         }else{
 
             console.error({
@@ -711,7 +726,7 @@ this.generateTelemetry();
      * @param {string} message - Reason for stopping
      * @param {boolean} generateStatistics - Whether to generate final statistics
      */
-    async stopTrading(message: string, generateStatistics: boolean = true, meta: any): Promise<void> {
+    async stopTrading(message: string, generateStatistics: boolean = true, meta: any = {}): Promise<void> {
 
         if (!this.isTrading) {
             return;

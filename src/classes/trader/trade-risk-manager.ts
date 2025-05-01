@@ -907,6 +907,10 @@ export class VolatilityRiskManager {
     public getRapidLossState(): RapidLossState {
         return this.rapidLossState;
     }
+ 
+    public getTotalLostAmount(): number {
+        return this.totalLossAmount;
+    }
 
     /**
      * Gets the circuit breaker configuration

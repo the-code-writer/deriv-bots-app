@@ -34,6 +34,12 @@ export class TradeManager {
 
     }
 
+    checkPendingRecovery() : boolean {
+
+        return this.currentContractType.checkPendingRecovery();
+
+    }
+
     /**
      * Executes a trade based on the specified purchase type
      * @param {DerivAPI} api - Type of trade to execute
