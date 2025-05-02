@@ -5,6 +5,8 @@ import { env } from "@/common/utils/envConfig";
 import { IKeyboardService } from "./KeyboardService";
 import { IUserRepository, IUser } from "../user/UserInterfaces";
 import { UserService } from "../user/UserService";
+import { SessionService } from '@/classes/sessions/SessionService';
+import { CONSTANTS } from '@/common/utils/constants';
 
 // Logger
 const logger = pino({ name: "WorkerService" });
@@ -31,11 +33,13 @@ export class WorkerService implements IWorkerService {
     private telegramBot: any;
     private keyboardService: IKeyboardService;
     private userService: UserService;
+    private sessionService: SessionService;
 
-    constructor(telegramBot: any, keyboardService: IKeyboardService, userService: UserService) {
+    constructor(telegramBot: any, keyboardService: IKeyboardService, userService: UserService, sessionService: SessionService) {
         this.telegramBot = telegramBot;
         this.keyboardService = keyboardService;
         this.userService = userService;
+        this.sessionService = sessionService;
         logger.info("Worker Service started!");
     }
 
@@ -110,8 +114,18 @@ export class WorkerService implements IWorkerService {
 
                 this.keyboardService.sendMessage(chatId, message.text);
 
+                const userSession = await this.sessionService.getUserSessionByChatId(chatId);
+
+                const userAccounts = userSession.session.bot.accounts.deriv.accountList;
+
+                userSession.session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_ACCOUNT_TYPE;
+
+                await this.sessionService.updateSessionWithChatId(chatId, userSession.session);
+
+                console.error("USER________SESSION", userAccounts);
+
                 setTimeout(() => {
-                    this.keyboardService.showAccountTypeKeyboard(chatId);
+                    this.keyboardService.showAccountTypeKeyboard(chatId, userAccounts);
                 }, 500);
 
                 break;

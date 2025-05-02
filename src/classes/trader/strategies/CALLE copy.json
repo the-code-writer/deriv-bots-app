@@ -2,7 +2,25 @@
   "strategySteps": [
     {
       "symbol": "1HZ100V",
-      "contractType": "DIGITUNDER_7",
+      "contractType": "CALLE",
+      "contractDurationValue": 1,
+      "contractDurationUnits": "t"
+    },
+    {
+      "symbol": "1HZ100V",
+      "contractType": "CALLE",
+      "contractDurationValue": 1,
+      "contractDurationUnits": "t"
+    },
+    {
+      "symbol": "1HZ100V",
+      "contractType": "DIGITUNDER_4",
+      "contractDurationValue": 1,
+      "contractDurationUnits": "t"
+    },
+    {
+      "symbol": "1HZ100V",
+      "contractType": "DIGITUNDER_5",
       "contractDurationValue": 1,
       "contractDurationUnits": "t"
     },
@@ -14,7 +32,7 @@
     },
     {
       "symbol": "1HZ100V",
-      "contractType": "DIGITUNDER_5",
+      "contractType": "DIGITDIFF",
       "contractDurationValue": 1,
       "contractDurationUnits": "t"
     }

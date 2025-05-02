@@ -801,7 +801,7 @@ export class SessionService implements ISessionService {
 
             const sessionDocumentUpdated: any = await this.getUserSessionBySessionId(sessionID);
 
-            logger.info(JSON.stringify(sessionDocumentUpdated))
+            console.log("JSON", JSON.stringify(sessionDocumentUpdated))
 
             return sessionDocumentUpdated.session;
 

@@ -35,7 +35,7 @@ const initializeServices = async (telegramBot: TelegramBot): Promise<any> => {
   const userService = UserServiceFactory.createUserService(db);
 
   const keyboardService = new KeyboardService(telegramBot);
-  const workerService = new WorkerService(telegramBot, keyboardService, userService);
+  const workerService = new WorkerService(telegramBot, keyboardService, userService, sessionService);
   const commandHandlers = new TelegramBotCommandHandlers(telegramBot, sessionService, keyboardService, workerService, userService);
   const tradingProcessFlow = new TradingProcessFlowHandlers(telegramBot, sessionService, keyboardService, workerService);
   return { sessionService, workerService, keyboardService, commandHandlers, tradingProcessFlow };

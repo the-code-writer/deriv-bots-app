@@ -240,43 +240,48 @@ export class VolatilityRiskManager {
 
     public processTradeResult(tradeResult: ITradeData): void {
 
-        if (!this.validateTradeResult(tradeResult)) {
-            logger.warn(
-                { message: "Invalid trade result received", tradeResult });
-            // TODO : Why reurn ??? this.getSafetyExitResult("invalid_trade_data");
-        }
-
-        this.totalTrades++;
-        this.resultIsWin = tradeResult.profit_is_win;
-        this.lastTradeTimestamp = Date.now();
-
-        if (this.minimumStakeValue === 0) {
-            this.minimumStakeValue = tradeResult.buy_price_value;
-        }
-
-        if (this.maximumStakeValue === 0) {
-            this.maximumStakeValue = tradeResult.buy_price_value;
-        }
-
-        if (tradeResult.buy_price_value > this.maximumStakeValue) {
-            this.maximumStakeValue = tradeResult.buy_price_value;
-        }
-
-        if (tradeResult.buy_price_value < this.minimumStakeValue) {
-            this.minimumStakeValue = tradeResult.buy_price_value;
-        }
-
         try {
 
-            if (this.shouldEnterSafetyMode(tradeResult)) {
-                this.enterSafetyMode("excessive_losses");
+            if (!this.validateTradeResult(tradeResult)) {
+                logger.warn(
+                    { message: "Invalid trade result received", tradeResult });
+                // TODO : Why reurn ??? this.getSafetyExitResult("invalid_trade_data");
+            }
+
+            this.totalTrades++;
+            this.resultIsWin = tradeResult.profit_is_win;
+            this.lastTradeTimestamp = Date.now();
+
+            if (this.minimumStakeValue === 0) {
+                this.minimumStakeValue = tradeResult.buy_price_value;
+            }
+
+            if (this.maximumStakeValue === 0) {
+                this.maximumStakeValue = tradeResult.buy_price_value;
+            }
+
+            if (tradeResult.buy_price_value > this.maximumStakeValue) {
+                this.maximumStakeValue = tradeResult.buy_price_value;
+            }
+
+            if (tradeResult.buy_price_value < this.minimumStakeValue) {
+                this.minimumStakeValue = tradeResult.buy_price_value;
+            }
+
+            const riskStatus = this.shouldEnterSafetyMode(tradeResult);
+
+            if (riskStatus.reasons.length > 0 || riskStatus.shouldEnter) {
+                this.enterSafetyMode("excessive_losses", riskStatus.reasons);
             }
 
             this.resultIsWin ? this.handleWin(tradeResult) : this.handleLoss(tradeResult);
 
         } catch (error) {
+
             logger.error(error, "Error processing trade result");
+            
             this.enterSafetyMode("processing_error");
+
         }
 
     }
@@ -505,30 +510,40 @@ export class VolatilityRiskManager {
         return steps[stepIndex];
     }
 
-    private shouldEnterSafetyMode(tradeResult: ITradeData): boolean {
+    private shouldEnterSafetyMode(tradeResult: ITradeData): any {
+
+        const reasons: string[] = [];
+
+        let shouldEnter: boolean = false;
+
         if (this.inSafetyMode && this.safetyModeUntil > Date.now()) {
-            return true;
+            shouldEnter = true;
+            reasons.push("The app is still in safety mode.");
         }
 
         const strategyConfig = this.strategyParser.getStrategyConfig();
 
         if (this.consecutiveLosses >= strategyConfig.maxConsecutiveLosses * 2) {
-            return true;
+            shouldEnter = true;
+            reasons.push("Too many consecutive losses.");
         }
 
         if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-            return true;
+            shouldEnter = true;
+            reasons.push("Maximum recovery attempts reached.");
         }
 
         if (tradeResult.userAccount.balance < this.baseStake * 3) {
-            return true;
+            reasons.push("Account balance too low.");
+            shouldEnter = true;
         }
 
         if (this.totalLossAmount > this.baseStake * strategyConfig.maxRiskExposure) {
-            return true;
+            reasons.push("Total losses are too high.");
+            shouldEnter = true;
         }
 
-        return false;
+        return { shouldEnter, reasons }
 
     }
 
@@ -933,7 +948,7 @@ export class VolatilityRiskManager {
             ...this.circuitBreakerState,
             inSafetyMode: true,
             safetyModeUntil: this.safetyModeUntil,
-            lastReason: reason,
+            lastReason: typeof reason === "string" ? reason : reason.join(", "),
             lastTradeTimestamp: this.lastTradeTimestamp
         };
         logger.warn(`Entered safety mode: ${reason}`);

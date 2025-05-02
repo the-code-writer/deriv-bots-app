@@ -567,7 +567,7 @@ export class DerivTradingBot {
         // Notify start of trading
         parentPort?.postMessage({
             action: "sendTelegramMessage",
-            text: "🟢 Trading session started!",
+            text: "🔵 Trading session started!",
             meta: { sessionData }
         });
 
