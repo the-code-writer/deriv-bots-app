@@ -24,7 +24,7 @@ import { TradeExecutor } from './trade-executor';
 import { RapidLossState, SafetyModeResponse, VolatilityRiskManager } from './trade-risk-manager';
 import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
-import { IDerivUserAccount } from "./deriv-user-account";
+import { IDerivUserAccount } from "../user/UserDerivAccount";
 import { StrategyParser } from './trader-strategy-parser';
 import { BotConfig } from './types';
 import { getRandomDigit, sleep } from "@/common/utils/snippets";
@@ -181,7 +181,7 @@ export abstract class TradeStrategy {
             // Reset or refresh your trade manager if needed
             this.resetSafetyMode();
 
-        } else if (response?.status === 'TRADE_BLOCKED' || response?.status === 'BLOCKED' ) {
+        } else if (response?.status === 'TRADE_BLOCKED' || response?.status === 'BLOCKED') {
 
             console.error({
                 message: "TRADE_BLOCKED",
@@ -223,10 +223,10 @@ export abstract class TradeStrategy {
             });
 
         }
-            
+
         params = this.getNextContractParams(this.config);
 
-        const validParams:boolean = this.validateParameters(params);
+        const validParams: boolean = this.validateParameters(params);
 
         if (!validParams) {
             console.error({
@@ -244,7 +244,7 @@ export abstract class TradeStrategy {
         }
 
         return result;
-        
+
     }
 
     private getRemainingCooldown(response: SafetyModeResponse): number {
@@ -260,7 +260,7 @@ export abstract class TradeStrategy {
         ])
 
         return Math.max(0, safetyModeUntil - currentTimestamp);
-        
+
     }
 
     private getDefaultExitResult(): SafetyModeResponse {
@@ -282,7 +282,7 @@ export abstract class TradeStrategy {
                 rapidLosses: {
                     event: 'RAPID_LOSS_DETECTED',
                     lossesCount: state.recentLosses.length,  // Changed from recentLossTimestamps
-                    totalAmount: state.recentLosses.reduce((sum:number, loss:any) => sum + loss.amount, 0), // Changed from recentLossAmounts
+                    totalAmount: state.recentLosses.reduce((sum: number, loss: any) => sum + loss.amount, 0), // Changed from recentLossAmounts
                     triggerCount: state.triggerCount,  // Added trigger count
                     currentCooldown: state.currentCooldownMs,  // Added cooldown info
                     message: `Rapid loss threshold exceeded. Cooldown active for ${state.currentCooldownMs}ms`,
@@ -536,7 +536,7 @@ export abstract class TradeStrategy {
         }
 
         return commonParams;
-        
+
     }
 
     setPrediction(predictedDigit: number): void {
@@ -776,6 +776,6 @@ export class DigitOverStrategy extends TradeStrategy {
             this.checkCircuitBreakersOnFailure();
             //throw error;
             return null;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
+        }
     }
 }

@@ -8,7 +8,7 @@ import { pino } from "pino";
 import { BotConfig, ContractParams, ContractResponse, CurrenciesEnum, ITradeData } from './types';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
-import { DerivUserAccount, IDerivUserAccount } from './deriv-user-account';
+import { DerivUserAccount, IDerivUserAccount } from '../user/UserDerivAccount';
 import { defaultEventManager } from "@/common/utils/eventBus";
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
@@ -59,7 +59,7 @@ export class TradeExecutor {
      * @param {ContractParams} contractParameters - Parameters for the contract
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async purchaseContract(contractParameters: ContractParams, config: BotConfig): Promise<ITradeData> {
+    async purchaseContract(contractParameters: ContractParams, config: BotConfig): Promise<ITradeData | undefined> {
 
         if (!contractParameters) {
             throw new Error('TradeExecutor not initialized');
@@ -68,8 +68,6 @@ export class TradeExecutor {
         this.validateContractParameters(contractParameters);
 
         let attempt = 0;
-
-        let lastError: Error | null = null;
 
         while (attempt < this.maxRetryAttempts) {
 
@@ -111,10 +109,6 @@ export class TradeExecutor {
 
             } catch (error: any) {
 
-                lastError = error;
-
-                //console.log(error)
-
                 logger.warn(`Attempt ${attempt} of ${this.maxRetryAttempts}`);
 
                 logger.error(`Code: ${error.error.code} :: Message: ${error.error.message}`);
@@ -125,11 +119,12 @@ export class TradeExecutor {
                 }
 
             }
+
         }
 
         logger.error('All purchase attempts failed');
 
-        defaultEventManager.emit('STOP_TRADING', {reason: 'Unknown error during contract purchase'});
+        defaultEventManager.emit('STOP_TRADING', { reason: 'Unknown error during contract purchase' });
 
     }
 
@@ -150,7 +145,7 @@ export class TradeExecutor {
         // @ts-ignore
         const missingFields = requiredFields.filter(field => !params[field]);
 
-        let reason:string;
+        let reason: string;
 
         const reasons: string[] = [];
 
@@ -197,8 +192,8 @@ export class TradeExecutor {
         }
 
         if (reasons.length > 0) {
-            
-            defaultEventManager.emit('STOP_TRADING', {reason: "Contract parameters not valid", reasons});
+
+            defaultEventManager.emit('STOP_TRADING', { reason: "Contract parameters not valid", reasons });
 
         }
 
@@ -220,7 +215,7 @@ export class TradeExecutor {
 
         const timeoutPromise = new Promise<never>((_, reject) =>
             setTimeout(
-                () => reject({error: 'Contract creation timed out'}),
+                () => reject({ error: 'Contract creation timed out' }),
                 this.connectionTimeout
             )
         );
@@ -311,7 +306,7 @@ export class TradeExecutor {
         const safeProfit = tradeData.sell_price_value === 0 && tradeData.buy_price_value > 0
             ? 0
             : tradeData.sell_price_value - tradeData.buy_price_value;
-        
+
         tradeData.safeProfit = safeProfit;
 
         return tradeData;

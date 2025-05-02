@@ -56,7 +56,7 @@ export class WorkerService implements IWorkerService {
     }
 
 
-    handleWorkerMessage(chatId: number, message: any): void {
+    async handleWorkerMessage(chatId: number, message: any): Promise<void> {
 
         console.log("MESSAGE_FROM_WORKER", chatId, message);
 
@@ -64,9 +64,11 @@ export class WorkerService implements IWorkerService {
 
             case "LOGIN_DERIV_ACCOUNT_READY": {
 
-                const { chatId, sessionDocument, userAccount, selectedAccount } = message.data;
+                const { sessionDocument, userAccount } = message.data;
 
-                this.userService.createUserWithCallback(chatId, sessionDocument, userAccount, selectedAccount, async (createdUser: IUser) => {
+                console.log("AGNESSSS", chatId, sessionDocument, userAccount.account)
+
+                this.userService.createUserWithCallback(chatId, sessionDocument, userAccount.account,  async (createdUser: IUser) => {
 
                     const welcomeUser: string = await this.userService.createUserWelcomeMessage(createdUser);
 
@@ -86,6 +88,31 @@ export class WorkerService implements IWorkerService {
             case "sendTelegramMessage": {
 
                 this.keyboardService.sendMessage(chatId, message.text);
+
+                break;
+            }
+
+            case "lastTradeSummary": {
+
+                this.keyboardService.sendMessage(chatId, message.text);
+
+                break;
+            }
+
+            case "generateTradingSummary": {
+
+                this.keyboardService.sendMessage(chatId, message.text);
+
+                break;
+            }
+
+            case "revertStepShowAccountTypeKeyboard": {
+
+                this.keyboardService.sendMessage(chatId, message.text);
+
+                setTimeout(() => {
+                    this.keyboardService.showAccountTypeKeyboard(chatId);
+                }, 500);
 
                 break;
             }

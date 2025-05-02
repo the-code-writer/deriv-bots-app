@@ -236,4 +236,6 @@ export interface ISessionDocument {
     updatedAt: IMongoDBDate;
     /** Whether session is active */
     isActive: boolean;
+
+    timestamp?: number;
 }

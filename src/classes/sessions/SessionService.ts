@@ -1,9 +1,11 @@
 import { v4 as uuidv4 } from 'uuid'; // For generating unique session IDs
-import { ISessionStore, ISession, IBotAccounts, ITelegramAccount } from '@/classes/sessions/SessionManagerStorageClass';
+import { ISessionStore, ISession } from '@/classes/sessions/SessionManagerStorageClass';
 import { Encryption } from '@/classes/cryptography/EncryptionClass';
 import { convertTimeStringToSeconds, getCookieValue, getEncryptedUserAgent } from '@/common/utils/snippets';
 import { env } from '@/common/utils/envConfig';
 import { pino } from "pino";
+import { TemplateData } from '../../routes/paths/OAuthRouter';
+import { ISessionDocument } from './SessionInterfaces';
 const cookie = require('cookie-signature');
 const http = require('http');
 const uap = require('ua-parser-js');
@@ -81,6 +83,8 @@ export interface ISessionService {
      * @returns A promise that resolves when the update is complete.
      */
     updateSession(req: any, _: any, key: string, value: any): Promise<void>;
+
+    updateSessionEncId(sessionID: string, encid: number | string): Promise<void>;
 
     /**
      * Updates a session identified by chat ID with new session data.
@@ -880,12 +884,16 @@ export class SessionService implements ISessionService {
 
         const now = Date.now();
 
-        const sessions: Array<ISession | any> = await this.sessionStore.getAllSessions(); //TODO : toArray()
+        const sessions: ISessionDocument[] | null = await this.sessionStore.getAllSessions(); //TODO : toArray()
 
+        if (sessions) {
+            
         for (const session of sessions) {
-            if (now - (session.timestamp || 0) > 30 * 60 * 1000) {
+            if (now - (session?.timestamp || 0) > 30 * 60 * 1000) {
                 await this.sessionStore.destroy(session.session.sessionID);
             }
+        }
+
         }
 
     }
@@ -901,5 +909,3 @@ export class SessionService implements ISessionService {
     }
 
 }
-
-export { ISession, IBotAccounts, ITelegramAccount }

@@ -2,11 +2,11 @@ import type { Message, CallbackQuery } from "node-telegram-bot-api";
 import { pino } from "pino";
 import { CONSTANTS } from "@/common/utils/constants";
 import { env } from "@/common/utils/envConfig";
-import { ISessionService, Session } from "@/classes/telegram/SessionService";
 import { IKeyboardService } from "@/classes/telegram/KeyboardService";
 import { IWorkerService } from "@/classes/telegram/WorkerService";
 import { IUserService } from "../user/UserInterfaces";
 import { Encryption } from '@/classes/cryptography/EncryptionClass';
+import { ISessionService } from '@/classes/sessions/SessionService';
 const cookie = require('cookie-signature');
 // Logger
 const logger = pino({ name: "TelegramBotCommandHandlers" });

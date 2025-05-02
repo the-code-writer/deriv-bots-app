@@ -11,31 +11,23 @@ export class UserService implements IUserService {
 
     async createUserWelcomeMessage(user: IUser): Promise<string> {
 
-        const message: string = `Account Details:\n================\nFirst Name:${user.name}`;
+        const message: string = `Welcome ${user.name}`;
 
         return message;
 
     }
 
-    async createUserWithCallback(chatId: number, sessionDocument: any, userAccount: any, selectedAccount: any, callBack: any): Promise<void> {
+    async createUserWithCallback(chatId: number, sessionDocument: any, userAccount: any, callBack: any): Promise<void> {
 
         const userData: any = {
             userId: Encryption.md5(`${chatId}`),
             chatId: chatId,
             sessionID: sessionDocument.sessionID,
-            accountID: Encryption.md5(`${userAccount._user_id}`),
-            name: userAccount._fullname,
-            username: userAccount._email.split("@")[0],
-            email: userAccount._email,
-            derivAccount: {
-                email: userAccount._email,
-                country: userAccount._country,
-                currency: userAccount._currency,
-                loginID: userAccount._loginid,
-                userID: userAccount._user_id,
-                fullname: userAccount._fullname,
-                selectedAccount: selectedAccount,
-            },
+            accountID: Encryption.md5(`${userAccount.user_id}`),
+            name: userAccount.fullname,
+            username: userAccount.email,
+            email: userAccount.email,
+            derivAccount: userAccount,
             telegramAccount: sessionDocument.bot.accounts.telegram,
         };
 
@@ -58,6 +50,7 @@ export class UserService implements IUserService {
     async create(userData: CreateUserDto): Promise<IUser> {
         // Validate required fields
         if (!userData.chatId || !userData.name || !userData.email) {
+            console.error("USER_DATA", userData)
             throw new Error('Missing required fields: chatId, name, and email are required');
         }
 
@@ -203,10 +196,10 @@ export class UserService implements IUserService {
      * @returns The user or null if not found
      */
     async getUserByChat(chatId: number): Promise<IUser | null> {
-        const users = await this.userRepository.findByQuery([
+        const user = await this.userRepository.findByQuery([
             { field: 'chatId', operator: 'eq', value: chatId }
         ]);
-        return users && users.length > 0 ? users[0] : null;
+        return user as any;
     }
 
     /**

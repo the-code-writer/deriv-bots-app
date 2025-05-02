@@ -59,7 +59,7 @@ export interface IKeyboardService {
          * @param {any} userAccounts - The user accounts from Deriv
          * @private
          */
-    showAccountTypeKeyboard(chatId: number, userAccounts: any): void;
+    showAccountTypeKeyboard(chatId: number, userAccounts?: any): void;
 
     /**
          * Show the market type keyboard
@@ -174,8 +174,11 @@ export class KeyboardService implements IKeyboardService {
 
     private telegramBot: any;
 
+    private userAccounts: any[];
+
     constructor(telegramBot: any) {
         this.telegramBot = telegramBot;
+        this.userAccounts = [];
         logger.info("Keyboard Service started!");
     }
 
@@ -194,7 +197,11 @@ export class KeyboardService implements IKeyboardService {
 
     getAccountTypeKeyboard(userAccounts: any): KeyboardButton[][] | string[][] {
 
-        const result = Object.values(userAccounts).map((item: any) => ([{
+        if (this.userAccounts.length === 0) {
+            this.userAccounts = userAccounts;
+        }
+
+        const result = Object.values(this.userAccounts).map((item: any) => ([{
             text: `${item.acct} ( ${item.cur} )`,
             callback_data: item
         }]));
@@ -393,7 +400,7 @@ export class KeyboardService implements IKeyboardService {
          * @param {any} userAccounts - The user accounts from deriv
          * @private
          */
-    showAccountTypeKeyboard(chatId: number, userAccounts: any): void {
+    showAccountTypeKeyboard(chatId: number, userAccounts?: any): void {
         this.sendKeyboard(chatId, "Select the desired account to trade with:", this.getAccountTypeKeyboard(userAccounts));
     }
 

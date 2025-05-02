@@ -8,7 +8,7 @@ import { pino } from "pino";
 import { BotConfig, CurrenciesEnum, IPreviousTradeResult, MarketTypeEnum, ContractTypeEnum, TradingTypeEnum, AccountType, TradingType, MarketType, ContractType, ITradeData, TradingModeType, TradingTypesEnum, TradingModeTypeEnum, CurrencyType, ContractDurationUnitType, BotSessionDataType, TradingSessionDataType } from './types';
 import { env } from "@/common/utils/envConfig";
 import { TradeStrategy, DigitDiffStrategy, DigitEvenStrategy, DigitOddStrategy, CallStrategy, PutStrategy, DigitOverStrategy, DigitUnderStrategy } from './trade-strategies';
-import { IDerivUserAccount } from "./deriv-user-account";
+import { IDerivUserAccount } from "../user/UserDerivAccount";
 import { defaultEventManager } from '@/common/utils/eventBus';
 
 const logger = pino({ name: "TradeManager" });
@@ -34,7 +34,7 @@ export class TradeManager {
 
     }
 
-    checkPendingRecovery() : boolean {
+    checkPendingRecovery(): boolean {
 
         return this.currentContractType.checkPendingRecovery();
 
@@ -48,7 +48,7 @@ export class TradeManager {
      */
     async executeTrade(): Promise<ITradeData | null> {
 
-        const reasons : string[] = [];
+        const reasons: string[] = [];
 
         let reason: string = "";
 
@@ -88,9 +88,9 @@ export class TradeManager {
 
         }
 
-        if(reasons.length>0){
+        if (reasons.length > 0) {
 
-            defaultEventManager.emit('STOP_TRADING', {reason: "Trade execution failed", reasons});
+            defaultEventManager.emit('STOP_TRADING', { reason: "Trade execution failed", reasons });
 
         }
 
@@ -122,7 +122,7 @@ export class TradeManager {
             case ContractTypeEnum.Put:
                 return new PutStrategy(this.config);
             default:
-                logger.warn({error: `Unknown strategy type: ${this.config.contractType}, using DigitDiffStrategy as fallback`, config: this.config});
+                logger.warn({ error: `Unknown strategy type: ${this.config.contractType}, using DigitDiffStrategy as fallback`, config: this.config });
                 return new DigitDiffStrategy(this.config);
         }
 

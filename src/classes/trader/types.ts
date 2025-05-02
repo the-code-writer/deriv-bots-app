@@ -3,7 +3,7 @@
  * @file Contains all type definitions and interfaces for the Deriv trading bot
  */
 
-import { IDerivUserAccount } from "./deriv-user-account";
+import { IDerivUserAccount } from "../user/UserDerivAccount";
 
 export type Step = "LOGIN_ACCOUNT" | "SELECT_ACCOUNT_TYPE" | "ACCOUNT_TYPE_SELECTION" | "SELECT_TRADING_TYPE" | "TRADING_TYPE_SELECTION" | "SELECT_MARKET" | "MARKET_SELECTION" | "SELECT_CONTRACT_TYPE" | "CONTRACT_TYPE_SELECTION" | "ENTER_STAKE" | "STAKE_INPUT" | "ENTER_TAKE_PROFIT" | "TAKE_PROFIT_INPUT" | "ENTER_STOP_LOSS" | "STOP_LOSS_INPUT" | "SELECT_TRADE_DURATION" | "TRADE_DURATION_SELECTION" | "SELECT_UPDATE_FREQUENCY" | "UPDATE_FREQUENCY_SELECTION" | "SELECT_TICKS_OR_MINUTES" | "UPDATE_CONTRACT_DURATION_UNIT_SSELECTION" | "SELECT_TICKS_OR_MINUTES_DURATION" | "UPDATE_CONTRACT_DURATION_VALUE_SELECTION" | "SELECT_AUTO_OR_MANUAL" | "AUTO_MANUAL_TRADING" | "CONFIRM_TRADE" | "TRADE_CONFIRMATION" | "MANUAL_TRADE" | "TRADE_MANUAL";
 
@@ -523,7 +523,7 @@ export interface ContractParams {
     barrier?: number | string;
 }
 
-export interface ContractOptionsParams extends ContractParams {}
+export interface ContractOptionsParams extends ContractParams { }
 
 export interface ContractProps {
     status: string;

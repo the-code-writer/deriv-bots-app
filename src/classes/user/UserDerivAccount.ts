@@ -1,4 +1,4 @@
-import { CurrencyType } from './types';
+import { CurrencyType } from '../trader/types';
 
 const jsan = require("jsan");
 
@@ -76,12 +76,12 @@ export class DerivUserAccount {
                     token: userAccountToken,
                 };
 
-                if(includeBalance){
+                if (includeBalance) {
 
-                    if("basic" in api){
+                    if ("basic" in api) {
                         userAccount.balance = await api.basic.balance().balance;
                     }
-                    
+
                 }
             }
         } catch (error) {
@@ -190,7 +190,7 @@ export class DerivUserAccount {
     static getDisplayName(account: IDerivUserAccount): string {
         return account.fullname.trim();
     }
-    
+
     /**
      * Extracts the email from a user account
      * @param {IDerivUserAccount} account - The user account
@@ -199,5 +199,5 @@ export class DerivUserAccount {
     static getAccountEmailAddress(account: IDerivUserAccount): string {
         return account.email.trim();
     }
-    
+
 }

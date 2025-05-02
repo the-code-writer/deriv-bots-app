@@ -1,5 +1,5 @@
 import { getRandomDigit } from '@/common/utils/snippets';
-import { IDerivUserAccount } from './deriv-user-account';
+import { IDerivUserAccount } from '../user/UserDerivAccount';
 import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult, ITradeData, MarketTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, CurrencyType, ContractDurationUnitType, MarketType } from './types';
 import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
@@ -337,7 +337,7 @@ export class VolatilityRiskManager {
 
             this.enterSafetyMode("max_recovery_attempts");
 
-            defaultEventManager.emit('STOP_TRADING', {reason: "🔸🔸🔸🔸 MAX RECOVERY ATTEMPTS REACHED 🔸🔸🔸🔸"});
+            defaultEventManager.emit('STOP_TRADING', { reason: "🔸🔸🔸🔸 MAX RECOVERY ATTEMPTS REACHED 🔸🔸🔸🔸" });
 
         }
 
@@ -349,7 +349,7 @@ export class VolatilityRiskManager {
 
         }
 
-        if(this.consecutiveLosses > this.circuitBreakerConfig.maxConsecutiveLosses - 1) { 
+        if (this.consecutiveLosses > this.circuitBreakerConfig.maxConsecutiveLosses - 1) {
 
             this.enterSafetyMode("🔸🔸🔸🔸 CRITICAL LOSSES - MAX CONSECUTIVE LOSSES EMINENT 🔸🔸🔸🔸");
 
@@ -357,9 +357,9 @@ export class VolatilityRiskManager {
 
         }
 
-        if(this.consecutiveLosses > this.circuitBreakerConfig.maxConsecutiveLosses) { 
+        if (this.consecutiveLosses > this.circuitBreakerConfig.maxConsecutiveLosses) {
 
-            defaultEventManager.emit('STOP_TRADING', {reason: "🔸🔸🔸🔸 CATASTROPHIC LOSS 🔸🔸🔸🔸"});
+            defaultEventManager.emit('STOP_TRADING', { reason: "🔸🔸🔸🔸 CATASTROPHIC LOSS 🔸🔸🔸🔸" });
 
         }
 
@@ -907,7 +907,7 @@ export class VolatilityRiskManager {
     public getRapidLossState(): RapidLossState {
         return this.rapidLossState;
     }
- 
+
     public getTotalLostAmount(): number {
         return this.totalLossAmount;
     }

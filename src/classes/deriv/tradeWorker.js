@@ -8,20 +8,11 @@ if (!action) {
   throw new Error("Invalid worker data");
 }
 
-const botConfig = {
-  tradingType: "Derivatives 📊",
-  defaultMarket: "R_100",
-  baseStake: 1,
-  maxStake: 5,
-  minStake: 0.35,
-  maxRecoveryTrades: 5,
-  takeProfit: 10,
-  stopLoss: 5,
-  contractDurationValue: 1,
-  contractDurationUnits: "t",
-};
+const botConfig = {};
 
 const derivInstance = new DerivTradingBot(botConfig);
+
+let accountToken = "";
 
 const handleLoggedIn = (
   userAction,
@@ -49,6 +40,8 @@ const handleLoggedIn = (
   );
 
   console.log("ACCOUNT_TOKEN", account);
+
+  accountToken = 'a1-28VUaap8ZFN3G4lMgf5P3S3IPtUQl';  //account.token;
 
   try {
     derivInstance.setAccount((userAccount) => {
@@ -82,6 +75,7 @@ parentPort.on("message", (message) => {
   console.log("MESSAGE_FROM_PARENT", message, [
     message.action,
     message.session,
+    message.session.bot.tradingOptions,
   ]);
 
   switch (message.action) {
@@ -89,17 +83,36 @@ parentPort.on("message", (message) => {
       if (!meta.session || !meta.session.market || !meta.session.stake) {
         throw new Error("Invalid session data");
       }
-
-      deriv.startTrading(meta.session);
+      console.error(message.session.bot.tradingOptions, false, accountToken);
+      derivInstance.startTrading(
+        message.session.bot.tradingOptions,
+        false,
+        accountToken
+      );
 
       break;
     }
-    case "CONFIRM_TRADE": {
-      deriv.startTrading(meta.session);
+    case "TRADE_CONFIRMATION": {
+      console.error(message.session.bot.tradingOptions, false, accountToken);
+      derivInstance.startTrading(
+        message.session.bot.tradingOptions,
+        false,
+        accountToken
+      );
       break;
     }
     case "CONFIRM_MANUAL_TRADE": {
-      deriv.tradeAgain(meta.session);
+      console.error(message.session.bot.tradingOptions, false, accountToken);
+      derivInstance.startTrading(
+        message.session.bot.tradingOptions,
+        false,
+        accountToken
+      );
+      break;
+    }
+    case "LOGIN_DERIV_ACCOUNT": {
+      const { action, chatId, text, session, data } = message;
+      handleLoggedIn(action, chatId, text, session, data);
       break;
     }
     case "LOGGED_IN": {

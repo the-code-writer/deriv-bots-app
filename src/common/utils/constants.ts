@@ -80,7 +80,7 @@ interface IConstants {
   TRADING_TYPES: IForex | IDerivatives | ICrypto | ICommodities | any;
   MARKETS: IForex | IDerivatives | ICrypto | ICommodities;
   CONTRACT_TYPES: IContractTypes;
-  NUMERIC_INPUTE: KeyboardButton[][] | string[][];
+  NUMERIC_INPUT: KeyboardButton[][] | string[][];
   DURATION: KeyboardButton[][] | string[][];
   TRADE_DURATION_U: KeyboardButton[][] | string[][];
   TRADE_DURATION_T: KeyboardButton[][] | string[][];
@@ -130,7 +130,7 @@ export const CONSTANTS: IConstants = {
       [DerivativeDigitsEnum.DigitNotLast, DerivativeDigitsEnum.DigitNotRandom],
     ],
   },
-  NUMERIC_INPUTE: [
+  NUMERIC_INPUT: [
     [NumericInputValuesEnum.VALUE_0_35, NumericInputValuesEnum.VALUE_0_50, NumericInputValuesEnum.VALUE_0_75],
     [NumericInputValuesEnum.VALUE_1_00, NumericInputValuesEnum.VALUE_2_00, NumericInputValuesEnum.VALUE_5_00],
     [NumericInputValuesEnum.VALUE_10_00, NumericInputValuesEnum.VALUE_15_00, NumericInputValuesEnum.VALUE_20_00],

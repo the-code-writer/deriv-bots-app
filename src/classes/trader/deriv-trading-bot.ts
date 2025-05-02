@@ -11,10 +11,17 @@ import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
 import { convertTimeStringToSeconds } from '@/common/utils/snippets';
 import { sanitizeContractDurationUnit, sanitizeAccountType, sanitizeTradingType, sanitizeMarketType, sanitizeContractType, sanitizeAmount, sanitizeTradingMode, sanitizeString } from '@/common/utils/snippets';
-import { DerivUserAccount, IDerivUserAccount } from "./deriv-user-account";
+import { DerivUserAccount, IDerivUserAccount } from "../user/UserDerivAccount";
 import { roundToTwoDecimals } from '../../common/utils/snippets';
 import { TradeStorageService } from "./trade-storage-service";
 import { defaultEventManager } from "@/common/utils/eventBus";
+
+import WebSocket from 'ws';
+
+// Polyfill WebSocket for Node.js environment
+if (typeof globalThis.WebSocket === 'undefined') {
+    globalThis.WebSocket = WebSocket as any;
+}
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 
@@ -70,7 +77,7 @@ export class DerivTradingBot {
 
     private tradeStorageService: TradeStorageService;
 
-    private eventStopTrading:any;
+    private eventStopTrading: any;
 
     /**
      * Constructs a new DerivTradingBot instance
@@ -86,11 +93,11 @@ export class DerivTradingBot {
         // Call the resetState function to initialize all properties
         this.resetState();
 
-        this.eventStopTrading = defaultEventManager.on('STOP_TRADING', (data:any) => {
+        this.eventStopTrading = defaultEventManager.on('STOP_TRADING', (data: any) => {
 
             this.stopTrading(data.reason, true, data);
-            
-          });
+
+        });
 
     }
 
@@ -220,6 +227,12 @@ export class DerivTradingBot {
                     bal.onUpdate().subscribe((balance: any) => console.log(balance))
 
                     */
+
+                    console.error([this.userAccountToken , userAccountToken])
+
+                    if (userAccountToken === "") {
+                        parentPort?.postMessage({ action: "revertStepShowAccountTypeKeyboard", text: "User account token is missing. Please select the account to use in order to resu,e your session.", meta: { cachedSession: this.cachedSession } });
+                    }
 
                     this.userAccount = await DerivUserAccount.getUserAccount(api, userAccountToken) as IDerivUserAccount;
 
@@ -520,7 +533,7 @@ export class DerivTradingBot {
 
         // Setup telemetry updates
         this.updateFrequencyIntervalId = setInterval(() => {
-            this.generateTelemetry();
+            this.generateTradingSummary();
         }, this.updateFrequency);
 
         this.tradingMode = sessionData.tradingMode;
@@ -554,7 +567,7 @@ export class DerivTradingBot {
         // Notify start of trading
         parentPort?.postMessage({
             action: "sendTelegramMessage",
-            text: "🟢 Trading session started successfully",
+            text: "🟢 Trading session started!",
             meta: { sessionData }
         });
 
@@ -644,14 +657,14 @@ export class DerivTradingBot {
             );
 
             if (this.stopTradingNow) {
-                
+
                 this.stopTrading(`Stopping trading now enforced.`, true, {});
 
                 this.stopTradingNow = false;
 
             }
 
-        }else{
+        } else {
 
             console.error({
                 title: "*************** PROFIT_IS_WIN_NOT_A_PROPERTY *****************",
@@ -659,7 +672,7 @@ export class DerivTradingBot {
             })
 
             process.exit(0);
-            
+
         }
 
     }
@@ -680,13 +693,13 @@ Profit        : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(profit, 
 
 Total Profit  : ${tradeResult.sell_price_currency} ${roundToTwoDecimals(this.totalProfit, true)}
 
-${moment(tradeResult.sell_spot_time*1000).format('MMMM Do YYYY, h:mm:ss a')}
+${moment(tradeResult.sell_spot_time * 1000).format('MMMM Do YYYY, h:mm:ss a')}
 
 ${tradeResult.proposal_id}
 
 `;
 
-this.generateTelemetry();
+        this.generateTelemetry();
 
 
     }
@@ -750,7 +763,7 @@ this.generateTelemetry();
             // Notify stop
             parentPort?.postMessage({
                 action: "sendTelegramMessage",
-                text: `🔴 Trading stopped: ${message}`,
+                text: `⛔️ Trading stopped!\n\n${message}`,
                 meta: {
                     duration: (Date.now() / 1000 - this.tradeStartedAt).toFixed(0) + 's',
                     profit: this.totalProfit.toFixed(2)
@@ -786,15 +799,15 @@ this.generateTelemetry();
 
         logger.info(this.lastTradeSummary);
 
-        parentPort?.postMessage({ action: "lastTradeSummary", text: this.lastTradeSummary, meta: { user: this.userAccount, audit: {} } });
+        parentPort?.postMessage({ action: "lastTradeSummary", text: "```"+this.lastTradeSummary+"```", meta: { user: this.userAccount, audit: {} } });
 
     }
 
     /**
      * Generates a final trading summary report
      */
-    private async generateTradingSummary(): Promise < void> {
-        
+    private async generateTradingSummary(): Promise<void> {
+
         if (this.userAccount && this.totalStake > 0) {
 
             // Retrieve account and balance information
@@ -890,8 +903,10 @@ Session ID:     this.tradingSessionID
             console.log(tradeSummary);
 
             //generateSummary
-            parentPort?.postMessage({ action: "generateTradingSummary", message: "Generating trading summary, please wait...", meta: { user: this.userAccount, audit: this.auditTrail } });
-            
+            parentPort?.postMessage({ action: "generateTradingSummary", text: "Generating trading summary, please wait...", meta: { user: this.userAccount, audit: this.auditTrail } });
+
+            parentPort?.postMessage({ action: "lastTradeSummary", text: "```" + tradeSummary + "```", meta: { user: this.userAccount, audit: {} } });
+
         }
 
     }

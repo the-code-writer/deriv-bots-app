@@ -1,5 +1,6 @@
 import { IDerivUserAccount } from '@/classes/deriv/DerivUserAccountClass';
 import { MongoDBConnection } from '../databases/mongodb/MongoDBClass';
+import { CurrencyType } from '../trader/types';
 
 MongoDBConnection
 
@@ -87,4 +88,39 @@ export interface UserUpdateDto {
     derivAccount?: Partial<IDerivUserAccount>;
     telegramAccount?: Partial<ITelegramAccount>;
     isActive?: boolean;
+}
+
+/**
+ * Interface representing a Deriv user account
+ */
+export interface IDerivUserAccount {
+    email: string;
+    country: string;
+    currency: CurrencyType;
+    loginid: string;
+    user_id: string;
+    fullname: string;
+    token?: string;
+    balance?: any;
+}
+
+/**
+ * Interface representing the Deriv API client
+ */
+export interface IDerivApiClient {
+    account: (token: string) => Promise<unknown>;
+}
+
+/**
+ * Interface representing the raw user data structure from Deriv API
+ */
+export interface IRawUserData {
+    _data: {
+        email: string;
+        country: string;
+        currency: string;
+        loginid: string;
+        user_id: string;
+        fullname: string;
+    };
 }
