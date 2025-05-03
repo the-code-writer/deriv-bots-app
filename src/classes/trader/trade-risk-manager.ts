@@ -1,12 +1,12 @@
 import { getRandomDigit } from '@/common/utils/snippets';
 import { IDerivUserAccount } from '../user/UserDerivAccount';
-import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult, ITradeData, MarketTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, CurrencyType, ContractDurationUnitType, MarketType } from './types';
+import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult, ITradeData, MarketTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, CurrencyType, ContractDurationUnitType, MarketType, EventTypeEnum, TradingEvent } from './types';
 import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
 import { StrategyConfig, StrategyStepOutput, StrategyMetrics, StrategyMeta, StrategyVisualization } from './trader-strategy-parser';
 import { roundToTwoDecimals } from '../../common/utils/snippets';
 import { env } from '@/common/utils/envConfig';
-import { defaultEventManager } from '@/common/utils/eventBus';
+import { defaultEventManager } from './trade-event-manager';
 
 // Initialize logger
 const logger = pino({
@@ -279,7 +279,7 @@ export class VolatilityRiskManager {
         } catch (error) {
 
             logger.error(error, "Error processing trade result");
-            
+
             this.enterSafetyMode("processing_error");
 
         }
@@ -342,13 +342,17 @@ export class VolatilityRiskManager {
 
             this.enterSafetyMode("max_recovery_attempts");
 
-            defaultEventManager.emit('STOP_TRADING', { reason: "🔸🔸🔸🔸 MAX RECOVERY ATTEMPTS REACHED 🔸🔸🔸🔸" });
+            defaultEventManager.emit(TradingEvent.StopTrading.type, {
+                reason: "Maximum recovery attempts reached",
+                timestamp: Date.now(),
+                profit: 1250.50
+            });
 
         }
 
         if (this.stopAfterTradeLoss) {
 
-            this.enterSafetyMode("🔸🔸🔸🔸 CRITICAL LOSSES 🔸🔸🔸🔸");
+            this.enterSafetyMode("🔸 Critical losses 🔸");
 
             this.isCriticalRecovery = true;
 
@@ -356,7 +360,7 @@ export class VolatilityRiskManager {
 
         if (this.consecutiveLosses > this.circuitBreakerConfig.maxConsecutiveLosses - 1) {
 
-            this.enterSafetyMode("🔸🔸🔸🔸 CRITICAL LOSSES - MAX CONSECUTIVE LOSSES EMINENT 🔸🔸🔸🔸");
+            this.enterSafetyMode("🔸 Critical losses : Maximum consecutive loses eminent 🔸");
 
             this.isCriticalRecovery = true;
 
@@ -364,7 +368,11 @@ export class VolatilityRiskManager {
 
         if (this.consecutiveLosses > this.circuitBreakerConfig.maxConsecutiveLosses) {
 
-            defaultEventManager.emit('STOP_TRADING', { reason: "🔸🔸🔸🔸 CATASTROPHIC LOSS 🔸🔸🔸🔸" });
+            defaultEventManager.emit(TradingEvent.StopTrading.type, {
+                reason: "🔸 Catastrophic losses 🔸",
+                timestamp: Date.now(),
+                profit: 1250.50
+            });
 
         }
 

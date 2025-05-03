@@ -5,11 +5,11 @@
  */
 
 import { pino } from "pino";
-import { BotConfig, ContractParams, ContractResponse, CurrenciesEnum, ITradeData } from './types';
+import { BotConfig, ContractParams, ContractResponse, CurrenciesEnum, ITradeData, TradingEvent } from './types';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
 import { DerivUserAccount, IDerivUserAccount } from '../user/UserDerivAccount';
-import { defaultEventManager } from "@/common/utils/eventBus";
+import { defaultEventManager } from './trade-event-manager';
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const logger = pino({ name: "Trade Executor" });
@@ -124,7 +124,11 @@ export class TradeExecutor {
 
         logger.error('All purchase attempts failed');
 
-        defaultEventManager.emit('STOP_TRADING', { reason: 'Unknown error during contract purchase' });
+        defaultEventManager.emit(TradingEvent.StopTrading.type, {
+            reason: "Unknown error during contract purchase",
+            timestamp: Date.now(),
+            profit: 1250.50
+          });
 
     }
 
@@ -193,8 +197,13 @@ export class TradeExecutor {
 
         if (reasons.length > 0) {
 
-            defaultEventManager.emit('STOP_TRADING', { reason: "Contract parameters not valid", reasons });
-
+            defaultEventManager.emit(TradingEvent.StopTrading.type, {
+                reason: "Contract parameters not valid", 
+                reasons,
+                timestamp: Date.now(),
+                profit: 1250.50
+              });
+    
         }
 
     }

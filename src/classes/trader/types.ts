@@ -361,6 +361,69 @@ export const TradeDurationUnitsOptimizedEnum = {
     Hours: "h",
 } as const;
 
+/**
+ * Base event type definitions
+ */
+export type TradingEventType = 
+  | "START_TRADING" 
+  | "STOP_TRADING" 
+  | "PAUSE_TRADING" 
+  | "RESUME_TRADING"
+  | "TRADE_EXECUTED"
+  | "PROFIT_UPDATED";
+
+/**
+ * Payload types for each event
+ */
+export type TradingEventPayloads = {
+  START_TRADING: { symbol: string; strategy: string };
+  STOP_TRADING: { reason: string; reasons?: string[], timestamp: number; profit: number };
+  PAUSE_TRADING: { timestamp: number };
+  RESUME_TRADING: { timestamp: number };
+  TRADE_EXECUTED: { symbol: string; price: number; quantity: number };
+  PROFIT_UPDATED: { currentProfit: number; delta: number };
+};
+
+/**
+ * Type-safe event object
+ */
+export type TradingEvent<T extends TradingEventType = TradingEventType> = {
+  type: T;
+  payload: TradingEventPayloads[T];
+};
+
+/**
+ * Event handler function type
+ */
+export type TradingEventHandler<T extends TradingEventType> = (
+  payload: TradingEventPayloads[T]
+) => void;
+
+/**
+ * Enhanced event type enum with payload type inference
+ */
+export const TradingEvent = {
+    StartTrading: {
+      type: "START_TRADING" as const,
+      create: (payload: TradingEventPayloads["START_TRADING"]): TradingEvent<"START_TRADING"> => ({
+        type: "START_TRADING",
+        payload
+      })
+    },
+    StopTrading: {
+      type: "STOP_TRADING" as const,
+      create: (payload: TradingEventPayloads["STOP_TRADING"]): TradingEvent<"STOP_TRADING"> => ({
+        type: "STOP_TRADING",
+        payload
+      })
+    },
+    // ... similar for other events
+  } as const;
+
+export type EventHandlersMap = {
+    [T in TradingEventType]?: TradingEventHandler<T>[];
+  };
+
 // Commands
 export const CommandsEnum = {
     START: "/start",
@@ -446,6 +509,7 @@ export type BotConfig = {
     market?: MarketType,
     contractType?: ContractType,
     isTrading?: boolean,
+    currency: CurrencyType,
     baseStake?: number,
     takeProfit?: number,
     stopLoss?: number,

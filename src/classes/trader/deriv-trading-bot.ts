@@ -5,7 +5,7 @@
  */
 
 import { pino } from "pino";
-import { BotConfig, ITradeData, MarketType, ContractType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, ContractTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType, IPreviousTradeResult, ContractDurationUnitType, TradingModeType, StatusTypeEnum, BasisTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, UserAccount } from './types';
+import { BotConfig, ITradeData, MarketType, ContractType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, ContractTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType, IPreviousTradeResult, ContractDurationUnitType, TradingModeType, StatusTypeEnum, BasisTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, UserAccount, EventTypeEnum, TradingEvent } from './types';
 import { TradeManager } from './trade-manager';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
@@ -14,9 +14,10 @@ import { sanitizeContractDurationUnit, sanitizeAccountType, sanitizeTradingType,
 import { DerivUserAccount, IDerivUserAccount } from "../user/UserDerivAccount";
 import { roundToTwoDecimals } from '../../common/utils/snippets';
 import { TradeStorageService } from "./trade-storage-service";
-import { defaultEventManager } from "@/common/utils/eventBus";
 
 import WebSocket from 'ws';
+
+import { defaultEventManager } from './trade-event-manager';
 
 // Polyfill WebSocket for Node.js environment
 if (typeof globalThis.WebSocket === 'undefined') {
@@ -77,8 +78,6 @@ export class DerivTradingBot {
 
     private tradeStorageService: TradeStorageService;
 
-    private eventStopTrading: any;
-
     /**
      * Constructs a new DerivTradingBot instance
      * @param {BotConfig} config - Configuration object for the trading bot
@@ -93,11 +92,13 @@ export class DerivTradingBot {
         // Call the resetState function to initialize all properties
         this.resetState();
 
-        this.eventStopTrading = defaultEventManager.on('STOP_TRADING', (data: any) => {
+        defaultEventManager.on(TradingEvent.StopTrading.type, (data:{ reason: string; timestamp: number; profit: number }) => {
+            // data is automatically inferred as { reason: string; timestamp: number; profit: number }
+            console.log('Trading stopped:', data.reason, data.profit);
 
             this.stopTrading(data.reason, true, data);
 
-        });
+          });
 
     }
 
@@ -228,7 +229,7 @@ export class DerivTradingBot {
 
                     */
 
-                    console.error([this.userAccountToken , userAccountToken])
+                    console.error([this.userAccountToken, userAccountToken])
 
                     if (userAccountToken === "") {
                         parentPort?.postMessage({ action: "revertStepShowAccountTypeKeyboard", text: "User account token is missing. Please select the account to use in order to resu,e your session.", meta: { cachedSession: this.cachedSession } });
@@ -799,7 +800,7 @@ ${tradeResult.proposal_id}
 
         logger.info(this.lastTradeSummary);
 
-        parentPort?.postMessage({ action: "lastTradeSummary", text: "```"+this.lastTradeSummary+"```", meta: { user: this.userAccount, audit: {} } });
+        parentPort?.postMessage({ action: "lastTradeSummary", text: "```" + this.lastTradeSummary + "```", meta: { user: this.userAccount, audit: {} } });
 
     }
 

@@ -5,11 +5,11 @@
  */
 
 import { pino } from "pino";
-import { BotConfig, CurrenciesEnum, IPreviousTradeResult, MarketTypeEnum, ContractTypeEnum, TradingTypeEnum, AccountType, TradingType, MarketType, ContractType, ITradeData, TradingModeType, TradingTypesEnum, TradingModeTypeEnum, CurrencyType, ContractDurationUnitType, BotSessionDataType, TradingSessionDataType } from './types';
+import { BotConfig, CurrenciesEnum, IPreviousTradeResult, MarketTypeEnum, ContractTypeEnum, TradingTypeEnum, AccountType, TradingType, MarketType, ContractType, ITradeData, TradingModeType, TradingTypesEnum, TradingModeTypeEnum, CurrencyType, ContractDurationUnitType, BotSessionDataType, TradingSessionDataType, EventTypeEnum, TradingEvent } from './types';
 import { env } from "@/common/utils/envConfig";
 import { TradeStrategy, DigitDiffStrategy, DigitEvenStrategy, DigitOddStrategy, CallStrategy, PutStrategy, DigitOverStrategy, DigitUnderStrategy } from './trade-strategies';
 import { IDerivUserAccount } from "../user/UserDerivAccount";
-import { defaultEventManager } from '@/common/utils/eventBus';
+import { defaultEventManager } from './trade-event-manager';
 
 const logger = pino({ name: "TradeManager" });
 
@@ -90,7 +90,12 @@ export class TradeManager {
 
         if (reasons.length > 0) {
 
-            defaultEventManager.emit('STOP_TRADING', { reason: "Trade execution failed", reasons });
+            defaultEventManager.emit(TradingEvent.StopTrading.type, {
+                reason: "Trade execution failed",
+                reasons,
+                timestamp: Date.now(),
+                profit: 1250.50
+            });
 
         }
 

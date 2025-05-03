@@ -1,21 +1,25 @@
-import { StrategyParser } from './trader-strategy-parser';
+import { StrategyParser, StrategyStepOutput } from './trader-strategy-parser';
+import { BotConfig } from './types';
 
 try {
     const strategyName: string = "CALLE";
     const strategyJson = require(`./strategies/${strategyName}.json`);
 
     // Example with single strategy - simplified constructor call
-    const parser = new StrategyParser(strategyJson, 0.38, {});
+    const parser = new StrategyParser(strategyJson, 0.38, {} as BotConfig);
 
     const formattedOutput = parser.getFormattedOutput();
 
+    console.error(formattedOutput)
+
     console.log("Strategy Configuration:");
-    console.log(`- Name: ${formattedOutput.configuration.strategyName}`);
-    console.log(`- Base Stake: ${formattedOutput.configuration.baseStake}`);
-    console.log(`- Risk Profile: ${formattedOutput.meta.riskProfile}`);
+    console.log(`- Name: ${formattedOutput.strategyName}`);
+    console.log(`- Base Stake: ${formattedOutput.meta.baseStake}`);
+    //console.log(`- Risk Profile: ${formattedOutput.riskProfile}`);
 
     console.log("\nStrategy Steps with Profit Calculations:");
-    formattedOutput.steps.forEach(step => {
+    // @ts-ignore
+    formattedOutput.strategySteps.forEach((step: StrategyStepOutput) => {
         console.log(`\nStep ${step.stepNumber}:`);
         console.log(`- Amount: ${step.currency} ${step.amount.toFixed(2)}`);
         console.log(`- Contract: ${step.contract_type}`);
@@ -30,8 +34,8 @@ try {
     });
 
     // Example of getting recovery step details
-    if (formattedOutput.steps.length > 1) {
-        const recoveryStep = formattedOutput.steps[1];
+    if (formattedOutput.strategySteps.length > 1) {
+        const recoveryStep:StrategyStepOutput = formattedOutput.strategySteps[1] as StrategyStepOutput;
         console.log("\nFirst Recovery Step Details:");
         console.log(`Amount needed to recover: ${recoveryStep.amount.toFixed(2)}`);
         console.log(`Expected profit from recovery: ${recoveryStep.anticipatedProfit.toFixed(2)}`);

@@ -8,17 +8,6 @@ type NonNegativeNumber = number & { __nonNegative: true };
 type Percentage = number & { __percentage: true };
 
 export interface StrategyStepInput {
-    amount?: NonNegativeNumber;
-    basis?: BasisType;
-    currency: CurrencyType;
-    contractType: ContractType;
-    contractDurationValue: number;
-    contractDurationUnits: ContractDurationUnitType;
-    symbol: MarketType;
-    barrier?: string | number;
-}
-
-export interface StrategyStepOutput {
     amount: NonNegativeNumber;
     basis: BasisType;
     currency: CurrencyType;
@@ -27,6 +16,9 @@ export interface StrategyStepOutput {
     duration_unit: ContractDurationUnitType;
     symbol: MarketType;
     barrier?: string | number;
+}
+
+export interface StrategyStepOutput extends StrategyStepInput {
     formula?: string;
     profitPercentage: Percentage;
     anticipatedProfit: NonNegativeNumber;
@@ -36,8 +28,24 @@ export interface StrategyStepOutput {
     stopAfterTradeLoss?: boolean;
 }
 
+export interface StrategyMeta {
+    currency: CurrencyType;
+    basis: BasisType;
+    baseStake: NonNegativeNumber;
+    minStake?: NonNegativeNumber;
+    maxStake?: NonNegativeNumber;
+    isAggressive: boolean;
+    maxRiskExposure?: number;
+    maxSequence?: number;
+    maxConsecutiveLosses?: number;
+    profitPercentage?: number;
+    lossRecoveryPercentage?: number;
+    anticipatedProfitPercentage?: number;
+}
+
 export interface StrategyConfig {
     strategyName: string;
+    strategySteps: StrategyStepInput[] | StrategyStepOutput[];
     isAggressive: boolean;
     id: string;
     title: string;
@@ -46,24 +54,10 @@ export interface StrategyConfig {
     publisher: string;
     timestamp: number;
     signature: string;
+    meta: StrategyMeta;
     profitPercentage?: number;
     lossRecoveryPercentage?: number;
     anticipatedProfitPercentage?: number;
-}
-
-export interface StrategyMeta {
-    currency: CurrencyType;
-    basis: BasisType;
-    baseStake: NonNegativeNumber;
-    minStake: NonNegativeNumber;
-    maxStake: NonNegativeNumber;
-    isAggressive: boolean;
-    maxRiskExposure: number;
-    maxSequence: number;
-    maxConsecutiveLosses: number;
-    profitPercentage: number;
-    lossRecoveryPercentage: number;
-    anticipatedProfitPercentage: number;
 }
 
 export interface StrategyMetrics {
@@ -129,18 +123,17 @@ export class StrategyParser {
         this.rewardCalculator = new TradeRewardStructures();
         this.botConfig = botConfig;
         this.baseStake = baseStake || botConfig.baseStake as number;
-        this.strategyConfig = this.validateAndCompleteStrategyJson(strategyJson);        
+        this.strategyConfig = this.validateAndCompleteStrategyJson(strategyJson);
 
         this.computeAllSteps(botConfig);
 
-        // Update OPTIMIZATION_PRESETS to use maxStake from JSON
         this.OPTIMIZATION_PRESETS = {
             conservative: {
-                maxRisk: this.strategyConfig.maxStake * 0.5, // 50% of max stake
+                maxRisk: this.strategyConfig.meta.maxStake ? this.strategyConfig.meta.maxStake * 0.5 : this.baseStake * 6,
                 riskMultiplier: 1.1
             },
             aggressive: {
-                maxRisk: this.strategyConfig.maxStake, // Full max stake
+                maxRisk: this.strategyConfig.meta.maxStake || this.baseStake * 12,
                 riskMultiplier: 1.5
             }
         };
@@ -209,7 +202,7 @@ export class StrategyParser {
 
     private adjustForDynamicRisk(currentAmount: number, consecutiveLosses: number): number {
         const riskFactor = 1 + (consecutiveLosses * 0.1); // 10% increase per loss
-        const maxAllowed = this.baseStake * this.strategyConfig.maxRiskExposure;
+        const maxAllowed = this.baseStake * this.strategyConfig.meta.maxRiskExposure!;
         return Math.min(currentAmount * riskFactor, maxAllowed);
     }
 
@@ -223,32 +216,27 @@ export class StrategyParser {
     }
 
     private processSingleStrategy(strategy: any): StrategyConfig {
-        // Ensure required fields exist
         if (!strategy.strategySteps) {
             throw new StrategyError('INVALID_STRATEGY', "Strategy is missing required strategySteps field");
         }
 
-        // Calculate maxRiskExposure based on computed baseStake
-        const computedBaseStake = this.baseStake;
-        const computedMinStake = this.botConfig?.minStake || strategy.minStake || computedBaseStake;
-        const computedMaxStake = strategy.maxStake || ((computedMinStake * 12) + (computedBaseStake * 4));
-        const computedMaxRiskExposure = computedBaseStake * 12;
+        const computedBaseStake = this.baseStake as NonNegativeNumber;
+        const computedMinStake = (this.botConfig?.minStake || strategy.meta?.minStake || computedBaseStake) as NonNegativeNumber;
+        const computedMaxStake = (strategy.meta?.maxStake || ((computedMinStake * 12) + (computedBaseStake * 4))) as NonNegativeNumber;
+        const computedMaxRiskExposure = (computedBaseStake * 12) as NonNegativeNumber;
 
         let totalPotentialLoss = 0;
-        
-            strategy.strategySteps.forEach((step:any) => {
-                totalPotentialLoss += step.amount || this.baseStake;
-            });
-        
-        // Create processed strategy with proper precedence
+        strategy.strategySteps.forEach((step: any) => {
+            totalPotentialLoss += step.amount || this.baseStake;
+        });
+
         const processedStrategy: StrategyConfig = {
             strategyName: strategy.id || "UNNAMED_STRATEGY",
             strategySteps: strategy.strategySteps.map((step: any) => ({
                 ...step,
-                currency: step.currency || (this.botConfig?.currency || strategy.currency),
-                basis: step.basis || strategy.basis
+                currency: step.currency || (this.botConfig?.currency || strategy.meta?.currency),
+                basis: step.basis || strategy.meta?.basis
             })),
-
             id: strategy.id,
             title: strategy.title,
             description: strategy.description,
@@ -256,30 +244,21 @@ export class StrategyParser {
             publisher: strategy.publisher,
             timestamp: strategy.timestamp,
             signature: strategy.signature,
-
-            // Currency: botConfig first, then JSON
-            currency: this.botConfig?.currency || strategy.currency || CurrenciesEnum.Default,
-            // Basis: always from JSON
-            basis: strategy.basis || BasisTypeEnum.Default,
-            // BaseStake: botConfig first, then JSON
-            baseStake: computedBaseStake,
-            // MinStake: botConfig first, then JSON
-            minStake: computedMinStake,
-            // MaxStake: always from JSON
-            maxStake: computedMaxStake,
-            // IsAggressive: botConfig first, then JSON
-            isAggressive: this.botConfig?.isAggressive ?? strategy.isAggressive ?? false,
-            // MaxRiskExposure: computed value (baseStake * 12)
-            maxRiskExposure: computedMaxRiskExposure,
-            // @ts-ignore
-            totalPotentialLoss: totalPotentialLoss,
-            // MaxSequence: always number of steps
-            maxSequence: strategy.strategySteps.length,
-            // MaxConsecutiveLosses: from JSON
-            maxConsecutiveLosses: strategy.maxConsecutiveLosses || strategy.strategySteps.length - 1,
-            profitPercentage: strategy.profitPercentage || 0,
-            lossRecoveryPercentage: strategy.lossRecoveryPercentage || 0,
-            anticipatedProfitPercentage: strategy.anticipatedProfitPercentage || 0
+            isAggressive: strategy.isAggressive ?? false,
+            meta: {
+                currency: this.botConfig?.currency || strategy.meta?.currency || CurrenciesEnum.Default,
+                basis: strategy.meta?.basis || BasisTypeEnum.Default,
+                baseStake: computedBaseStake,
+                minStake: computedMinStake,
+                maxStake: computedMaxStake,
+                isAggressive: strategy.isAggressive ?? false,
+                maxRiskExposure: computedMaxRiskExposure,
+                maxSequence: strategy.strategySteps.length,
+                maxConsecutiveLosses: strategy.meta?.maxConsecutiveLosses || strategy.strategySteps.length - 1,
+                profitPercentage: strategy.meta?.profitPercentage || 0,
+                lossRecoveryPercentage: strategy.meta?.lossRecoveryPercentage || 0,
+                anticipatedProfitPercentage: strategy.meta?.anticipatedProfitPercentage || 0
+            }
         };
 
         return processedStrategy;
@@ -290,7 +269,7 @@ export class StrategyParser {
         this.computedSteps = [];
         const config = this.getSingleStrategyConfig();
 
-        for (let i = 0; i < config.maxSequence; i++) {
+        for (let i = 0; i < config.meta.maxSequence!; i++) {
             const stepIndex = Math.min(i, config.strategySteps.length - 1);
             const currentStepInput = config.strategySteps[stepIndex];
 
@@ -303,7 +282,7 @@ export class StrategyParser {
                 // First step - use config settings if available
                 if (botConfig) {
                     currentAmount = botConfig.baseStake || this.baseStake;
-                    const contractType = botConfig.contractType || currentStepInput.contractType;
+                    const contractType = botConfig.contractType || currentStepInput.contract_type;
                     const market = botConfig.market || currentStepInput.symbol;
 
                     profitPercentage = this.rewardCalculator.calculateProfitPercentage(
@@ -314,19 +293,19 @@ export class StrategyParser {
                     formula = `Config-based Stake: ${currentAmount.toFixed(2)} (${profitPercentage.toFixed(2)}%)`;
 
                     // Override step values with config if available
-                    currentStepInput.contractType = contractType;
+                    currentStepInput.contract_type = contractType;
                     currentStepInput.symbol = market;
                     if (botConfig.contractDurationValue) {
-                        currentStepInput.contractDurationValue = botConfig.contractDurationValue;
+                        currentStepInput.duration = botConfig.contractDurationValue;
                     }
                     if (botConfig.contractDurationUnits) {
-                        currentStepInput.contractDurationUnits = botConfig.contractDurationUnits;
+                        currentStepInput.duration_unit = botConfig.contractDurationUnits;
                     }
                 } else {
                     // Fall back to JSON strategy first step
                     currentAmount = this.baseStake;
                     profitPercentage = this.rewardCalculator.calculateProfitPercentage(
-                        currentStepInput.contractType,
+                        currentStepInput.contract_type,
                         currentAmount
                     );
                     anticipatedProfit = currentAmount * (profitPercentage / 100);
@@ -334,7 +313,7 @@ export class StrategyParser {
                 }
             } else {
                 // Check if we've reached max consecutive losses
-                if (i >= config.maxConsecutiveLosses) {
+                if (i >= config.meta.maxConsecutiveLosses!) {
                     // Set emergency recovery flag and stop after this trade
                     this.computedSteps.push(this.createEmergencyRecoveryStep(stepIndex));
                     break;
@@ -343,12 +322,12 @@ export class StrategyParser {
                 // Rest of the recovery step calculation remains the same
                 const amountForPercentage = cumulativeLoss > 0 ? cumulativeLoss : this.baseStake;
                 const currentStepProfitPercentage = this.rewardCalculator.calculateProfitPercentage(
-                    currentStepInput.contractType,
+                    currentStepInput.contract_type,
                     amountForPercentage
                 );
 
                 const firstStepProfitPercentage = this.rewardCalculator.calculateProfitPercentage(
-                    config.strategySteps[0].contractType,
+                    config.strategySteps[0].contract_type,
                     this.baseStake
                 );
 
@@ -357,10 +336,10 @@ export class StrategyParser {
                     (this.baseStake * (firstStepProfitPercentage / 100));
 
                 // Ensure we don't exceed max stake
-                currentAmount = Math.min(currentAmount, config.maxStake);
+                currentAmount = Math.min(currentAmount, Number(config.meta.maxStake));
 
                 profitPercentage = this.rewardCalculator.calculateProfitPercentage(
-                    currentStepInput.contractType,
+                    currentStepInput.contract_type,
                     currentAmount
                 );
 
@@ -373,7 +352,7 @@ export class StrategyParser {
 
                 // Apply risk management
                 if (!config.isAggressive) {
-                    const maxAllowed = this.baseStake * config.maxRiskExposure;
+                    const maxAllowed = this.baseStake * config.meta.maxRiskExposure!;
                     currentAmount = this.adjustForDynamicRisk(currentAmount, i);
                     anticipatedProfit = currentAmount * (profitPercentage / 100);
                     formula += ` (Capped at ${maxAllowed.toFixed(2)} due to risk management)`;
@@ -385,7 +364,7 @@ export class StrategyParser {
             stepOutput.anticipatedProfit = anticipatedProfit as NonNegativeNumber;
             this.computedSteps.push(stepOutput);
 
-            if (i < config.maxSequence - 1) {
+            if (i < config.meta.maxSequence! - 1) {
                 cumulativeLoss += currentAmount;
             }
         }
@@ -396,11 +375,11 @@ export class StrategyParser {
         const stepInput = config.strategySteps[stepIndex];
 
         // Use the first step's contract type as fallback
-        const contractType = stepInput.contractType ||
-            (config.strategySteps[0]?.contractType || ContractTypeEnum.DigitDiff);
+        const contractType = stepInput.contract_type ||
+            (config.strategySteps[0]?.contract_type || ContractTypeEnum.DigitDiff);
 
         return {
-            ...this.createStepOutput(stepIndex, config.maxStake, "EMERGENCY_RECOVERY"),
+            ...this.createStepOutput(stepIndex, config.meta.maxStake!, "EMERGENCY_RECOVERY"),
             profitPercentage: 0 as Percentage,
             anticipatedProfit: 0 as NonNegativeNumber,
             isEmergencyRecovery: true,
@@ -409,13 +388,12 @@ export class StrategyParser {
         };
     }
 
-    // Update the createStepOutput method to ensure proper types
-    private createStepOutput(stepIndex: number, amount: number, formula?: string): StrategyStepOutput {
+    private createStepOutput(stepIndex: number, amount: NonNegativeNumber | number, formula?: string): StrategyStepOutput {
         const config = this.getSingleStrategyConfig();
         const stepInput = config.strategySteps[stepIndex];
 
-        // Clean up contract type by removing numeric suffixes
-        let cleanedContractType = stepInput.contractType;
+        let cleanedContractType: ContractType = stepInput.contract_type || ContractTypeEnum.DigitDiff;
+
         if (formula === "EMERGENCY_RECOVERY") {
             cleanedContractType = ContractTypeEnum.DigitDiff;
             stepInput.barrier = -1;
@@ -429,18 +407,18 @@ export class StrategyParser {
             }
         }
 
-        // Create contract parameters with simplified structure
         const contractParams = ContractParamsFactory.createParams(
             amount,
-            stepInput.basis || config.basis,  // Fallback to strategy basis if not specified
-            cleanedContractType as ContractType,
-            stepInput.currency || config.currency,  // Fallback to strategy currency
-            stepInput.contractDurationValue,
-            stepInput.contractDurationUnits,
+            stepInput.basis || config.meta.basis,
+            cleanedContractType,
+            stepInput.currency || config.meta.currency,
+            stepInput.duration,
+            stepInput.duration_unit,
             stepInput.symbol,
-            stepInput.barrier ?? this.getDefaultBarrier(stepInput.contractType)
+            stepInput.barrier ?? this.getDefaultBarrier(stepInput.contract_type)
         );
 
+        // @ts-ignore
         return {
             ...contractParams,
             formula,
@@ -449,10 +427,10 @@ export class StrategyParser {
             stepIndex,
             stepNumber: stepIndex + 1,
             amount: amount as NonNegativeNumber,
-            basis: stepInput.basis || config.basis,  // Ensure basis is always set
-            currency: stepInput.currency || config.currency  // Ensure currency is always set
+            basis: stepInput.basis || config.meta.basis,
+            currency: stepInput.currency || config.meta.currency,
+            contract_type: cleanedContractType
         };
-
     }
 
     private getDefaultBarrier(contractType: ContractType): string | number {
@@ -529,20 +507,8 @@ export class StrategyParser {
     public getMetaInfo(config?: StrategyConfig): StrategyMeta {
         const strategyConfig = config || (this.strategyConfig as StrategyConfig);
 
-        return {
-            currency: strategyConfig.currency,
-            basis: strategyConfig.basis,
-            baseStake: strategyConfig.baseStake,
-            minStake: strategyConfig.minStake,
-            maxStake: strategyConfig.maxStake,
-            isAggressive: strategyConfig.isAggressive,
-            maxRiskExposure: strategyConfig.maxRiskExposure,
-            maxSequence: strategyConfig.maxSequence,
-            maxConsecutiveLosses: strategyConfig.maxConsecutiveLosses,
-            profitPercentage: strategyConfig.profitPercentage || 0,
-            lossRecoveryPercentage: strategyConfig.lossRecoveryPercentage || 0,
-            anticipatedProfitPercentage: strategyConfig.anticipatedProfitPercentage || 0
-        };
+        return strategyConfig.meta;
+
     }
 
     public getAllSteps(): StrategyStepOutput[] {
@@ -557,7 +523,7 @@ export class StrategyParser {
     }
 
     public getNextStep(consecutiveLosses: number): StrategyStepOutput {
-        if (consecutiveLosses >= this.strategyConfig.maxConsecutiveLosses) {
+        if (consecutiveLosses >= this.strategyConfig.meta.maxConsecutiveLosses!) {
             throw new Error("Max consecutive losses reached");
         }
 
@@ -567,7 +533,7 @@ export class StrategyParser {
 
     public shouldEnterRecovery(totalLoss: number): boolean {
         return totalLoss > 0 &&
-            totalLoss < this.strategyConfig.baseStake * this.strategyConfig.maxRiskExposure;
+            totalLoss < this.strategyConfig.meta.baseStake * this.strategyConfig.meta.maxRiskExposure!;
     }
 
     public getStrategyConfig(): StrategyConfig {
@@ -580,11 +546,11 @@ export class StrategyParser {
                 if (!Array.isArray(this.strategyConfig)) {
                     return { error: "Strategy index provided but parser is in single-strategy mode" };
                 }
-                const steps = this.computedAllStrategies.get(strategyIndex);
-                if (!steps || sequenceNumber < 0 || sequenceNumber >= steps.length) {
+                const strategySteps = this.computedAllStrategies.get(strategyIndex);
+                if (!strategySteps || sequenceNumber < 0 || sequenceNumber >= strategySteps.length) {
                     return { error: `Invalid sequence number ${sequenceNumber} for strategy ${strategyIndex}` };
                 }
-                return steps[sequenceNumber];
+                return strategySteps[sequenceNumber];
             }
             return this.getStep(sequenceNumber);
         } catch (error) {
@@ -602,15 +568,19 @@ export class StrategyParser {
         return this.strategyConfig;
     }
 
-    public getFormattedOutput(): {
-        meta: StrategyMeta;
-        configuration: StrategyConfig;
-        steps: Array<StrategyStepOutput & { stepNumber: number }>;
-    } {
+    public getFormattedOutput(): StrategyConfig {
+
         const config = this.getSingleStrategyConfig();
-        const steps = this.computedSteps;
+        const strategySteps = this.computedSteps;
 
         const configuration: StrategyConfig = {
+            strategySteps: strategySteps.map((step, index) => ({
+                ...step,
+                profitPercentage: isPercentage(step.profitPercentage) ? step.profitPercentage : 0 as Percentage,
+                anticipatedProfit: isNonNegativeNumber(step.anticipatedProfit) ? step.anticipatedProfit : 0 as NonNegativeNumber,
+                amount: isNonNegativeNumber(step.amount) ? step.amount : 0 as NonNegativeNumber,
+                stepNumber: index + 1
+            })),
             strategyName: config.strategyName,
             isAggressive: config.isAggressive,
             id: config.id,
@@ -620,21 +590,11 @@ export class StrategyParser {
             publisher: config.publisher,
             timestamp: config.timestamp,
             signature: config.signature,
+            meta: config.meta
         };
 
-        const typedSteps = steps.map((step, index) => ({
-            ...step,
-            profitPercentage: isPercentage(step.profitPercentage) ? step.profitPercentage : 0 as Percentage,
-            anticipatedProfit: isNonNegativeNumber(step.anticipatedProfit) ? step.anticipatedProfit : 0 as NonNegativeNumber,
-            amount: isNonNegativeNumber(step.amount) ? step.amount : 0 as NonNegativeNumber,
-            stepNumber: index + 1
-        }));
+        return configuration;
 
-        return {
-            meta: this.getMetaInfo(config),
-            configuration,
-            steps: typedSteps
-        };
     }
 
     public generateVisualization(): StrategyVisualization {
@@ -682,13 +642,13 @@ export class StrategyParser {
             const optimizedStep: StrategyStepOutput = {
                 ...step,
                 // Ensure these properties are always set
-                contract_type: currentStepInput.contractType,
-                duration: currentStepInput.contractDurationValue,
-                duration_unit: currentStepInput.contractDurationUnits,
+                contract_type: currentStepInput.contract_type,
+                duration: currentStepInput.duration,
+                duration_unit: currentStepInput.duration_unit,
                 symbol: currentStepInput.symbol,
-                basis: currentStepInput.basis || this.strategyConfig.basis,
-                currency: currentStepInput.currency || this.strategyConfig.currency,
-                barrier: step.barrier ?? this.getDefaultBarrier(currentStepInput.contractType)
+                basis: currentStepInput.basis || this.strategyConfig.meta.basis,
+                currency: currentStepInput.currency || this.strategyConfig.meta.currency,
+                barrier: step.barrier ?? this.getDefaultBarrier(currentStepInput.contract_type)
             };
 
             // Apply optimization rules
@@ -713,7 +673,7 @@ export class StrategyParser {
             optimizedStep.formula = `${originalStep.formula} → Optimized to max risk ${criteria.maxRisk}`;
         }
 
-        // Apply target profit adjustment (only for recovery steps)
+        // Apply target profit adjustment (only for recovery strategySteps)
         if (criteria.targetProfit && stepIndex > 0) {
             const neededAmount = criteria.targetProfit / (originalStep.profitPercentage / 100);
             if (neededAmount < optimizedStep.amount) {
@@ -722,7 +682,7 @@ export class StrategyParser {
             }
         }
 
-        // Apply risk multiplier for recovery steps
+        // Apply risk multiplier for recovery strategySteps
         if (criteria.riskMultiplier && stepIndex > 0) {
             const newAmount = originalStep.amount * criteria.riskMultiplier;
             optimizedStep.amount = newAmount as NonNegativeNumber;
@@ -744,7 +704,7 @@ export class StrategyParser {
         currentStepInput: StrategyStepInput
     ): void {
         optimizedStep.profitPercentage = this.rewardCalculator.calculateProfitPercentage(
-            currentStepInput.contractType,
+            currentStepInput.contract_type,
             optimizedStep.amount
         ) as Percentage;
 

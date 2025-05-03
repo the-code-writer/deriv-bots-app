@@ -237,7 +237,7 @@ export abstract class TradeStrategy {
             // TODO : Stop Trades
         }
 
-        const result: ITradeData = await this.executor.purchaseContract(params, this.config);
+        const result: ITradeData = await this.executor.purchaseContract(params, this.config) as ITradeData;
 
         if (this.volatilityRiskManager) {
             this.volatilityRiskManager.processTradeResult(result);
@@ -485,8 +485,6 @@ export abstract class TradeStrategy {
                 nextParams.symbol,
                 nextParams.barrier,
             );
-
-            console.error("contractParams", contractParams);
 
             return contractParams;
 

@@ -113,9 +113,7 @@
     ]
   },
   "lint-staged": {
-    "*.txt": [
-      "ls -l"
-    ]
+    "*.txt": [ ]
   },
   "tsup": {
     "entry": [

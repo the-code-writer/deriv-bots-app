@@ -2,21 +2,21 @@
   "strategySteps": [
     {
       "symbol": "1HZ100V",
-      "contractType": "DIGITUNDER_7",
-      "contractDurationValue": 1,
-      "contractDurationUnits": "t"
+      "contract_type": "DIGITUNDER_7",
+      "duration": 1,
+      "duration_units": "t"
     },
     {
       "symbol": "1HZ100V",
-      "contractType": "DIGITDIFF",
-      "contractDurationValue": 1,
-      "contractDurationUnits": "t"
+      "contract_type": "DIGITDIFF",
+      "duration": 1,
+      "duration_units": "t"
     },
     {
       "symbol": "1HZ100V",
-      "contractType": "DIGITUNDER_5",
-      "contractDurationValue": 1,
-      "contractDurationUnits": "t"
+      "contract_type": "DIGITUNDER_5",
+      "duration": 1,
+      "duration_units": "t"
     }
   ],
   "meta": {
