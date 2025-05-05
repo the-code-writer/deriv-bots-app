@@ -116,8 +116,44 @@ export class TradeManager {
                 return new DigitDiffStrategy(this.config);
             case ContractTypeEnum.DigitOver:
                 return new DigitOverStrategy(this.config);
+            case ContractTypeEnum.DigitOver8:
+                return new DigitOverStrategy(this.config, 8);
+            case ContractTypeEnum.DigitOver7:
+                return new DigitOverStrategy(this.config, 7);
+            case ContractTypeEnum.DigitOver6:
+                return new DigitOverStrategy(this.config, 6);
+            case ContractTypeEnum.DigitOver5:
+                return new DigitOverStrategy(this.config, 5);
+            case ContractTypeEnum.DigitOver4:
+                return new DigitOverStrategy(this.config, 4);
+            case ContractTypeEnum.DigitOver3:
+                return new DigitOverStrategy(this.config, 3);
+            case ContractTypeEnum.DigitOver2:
+                return new DigitOverStrategy(this.config, 2);
+            case ContractTypeEnum.DigitOver1:
+                return new DigitOverStrategy(this.config, 1);
+            case ContractTypeEnum.DigitOver0:
+                return new DigitOverStrategy(this.config, 0);
             case ContractTypeEnum.DigitUnder:
                 return new DigitUnderStrategy(this.config);
+            case ContractTypeEnum.DigitUnder9:
+                return new DigitUnderStrategy(this.config, 9);
+            case ContractTypeEnum.DigitUnder8:
+                return new DigitUnderStrategy(this.config, 8);
+            case ContractTypeEnum.DigitUnder7:
+                return new DigitUnderStrategy(this.config, 7);
+            case ContractTypeEnum.DigitUnder6:
+                return new DigitUnderStrategy(this.config, 6);
+            case ContractTypeEnum.DigitUnder5:
+                return new DigitUnderStrategy(this.config, 5);
+            case ContractTypeEnum.DigitUnder4:
+                return new DigitUnderStrategy(this.config, 4);
+            case ContractTypeEnum.DigitUnder3:
+                return new DigitUnderStrategy(this.config, 3);
+            case ContractTypeEnum.DigitUnder2:
+                return new DigitUnderStrategy(this.config, 2);
+            case ContractTypeEnum.DigitUnder1:
+                return new DigitUnderStrategy(this.config, 1);
             case ContractTypeEnum.DigitEven:
                 return new DigitEvenStrategy(this.config);
             case ContractTypeEnum.DigitOdd:

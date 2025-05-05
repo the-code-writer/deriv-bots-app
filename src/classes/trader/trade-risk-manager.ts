@@ -1,6 +1,6 @@
 import { getRandomDigit } from '@/common/utils/snippets';
 import { IDerivUserAccount } from '../user/UserDerivAccount';
-import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, IPreviousTradeResult, ITradeData, MarketTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, CurrencyType, ContractDurationUnitType, MarketType, EventTypeEnum, TradingEvent } from './types';
+import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, ITradeData, MarketTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, CurrencyType, ContractDurationUnitType, MarketType, TradingEvent } from './types';
 import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
 import { StrategyConfig, StrategyStepOutput, StrategyMetrics, StrategyMeta, StrategyVisualization } from './trader-strategy-parser';
@@ -378,11 +378,11 @@ export class VolatilityRiskManager {
 
     }
 
-    public getNextTradeParams(): NextTradeParams {
+    public getNextTradeParams(barrier: string | number | null): NextTradeParams {
 
         try {
 
-            const strategyConfig = this.strategyParser.getStrategyConfig();
+            const strategyConfig:StrategyConfig = this.strategyParser.getStrategyConfig();
 
             const steps = this.strategyParser.getAllSteps();
 
@@ -438,11 +438,11 @@ export class VolatilityRiskManager {
             } else {
 
                 return {
-                    basis: step.basis || strategyConfig.basis,
+                    basis: step.basis || strategyConfig.meta.basis,
                     symbol: step.symbol || this.market,
                     amount: Number(roundToTwoDecimals(this.clampStake(step.amount))),
-                    barrier: this.getBarrier(step.contract_type),
-                    currency: step.currency || strategyConfig.currency,
+                    barrier: this.getBarrier(step.contract_type, barrier),
+                    currency: step.currency || strategyConfig.meta.currency,
                     contractType: step.contract_type || this.contractType,
                     contractDurationValue: step.duration || this.contractDurationValue,
                     contractDurationUnits: step.duration_unit || this.contractDurationUnits,
@@ -490,7 +490,10 @@ export class VolatilityRiskManager {
         return Math.min(Math.max(stake, this.minStake), this.maxStake);
     }
 
-    private getBarrier(contractType: ContractType): string | number {
+    private getBarrier(contractType: ContractType, barrier?: string | number | null): string | number {
+        if(barrier){
+            return barrier;
+        }
         switch (contractType) {
             case ContractTypeEnum.DigitEven: return "DIGITEVEN";
             case ContractTypeEnum.DigitOdd: return "DIGITODD";
@@ -529,9 +532,9 @@ export class VolatilityRiskManager {
             reasons.push("The app is still in safety mode.");
         }
 
-        const strategyConfig = this.strategyParser.getStrategyConfig();
+        const strategyConfig:StrategyConfig = this.strategyParser.getStrategyConfig();
 
-        if (this.consecutiveLosses >= strategyConfig.maxConsecutiveLosses * 2) {
+        if (this.consecutiveLosses >= strategyConfig.meta.maxConsecutiveLosses! * 2) {
             shouldEnter = true;
             reasons.push("Too many consecutive losses.");
         }
@@ -546,7 +549,7 @@ export class VolatilityRiskManager {
             shouldEnter = true;
         }
 
-        if (this.totalLossAmount > this.baseStake * strategyConfig.maxRiskExposure) {
+        if (this.totalLossAmount > this.baseStake * strategyConfig.meta.maxRiskExposure!) {
             reasons.push("Total losses are too high.");
             shouldEnter = true;
         }
@@ -948,7 +951,7 @@ export class VolatilityRiskManager {
      * @param reason Reason for entering safety mode
      * @param cooldownMs Optional cooldown period in milliseconds
      */
-    public enterSafetyMode(reason: string, cooldownMs?: number): void {
+    public enterSafetyMode(reason: string | string[], cooldownMs?: number): void {
         const now = Date.now();
         this.inSafetyMode = true;
         this.safetyModeUntil = now + (cooldownMs || this.circuitBreakerConfig.cooldownPeriod);

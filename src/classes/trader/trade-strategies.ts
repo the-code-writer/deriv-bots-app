@@ -80,8 +80,7 @@ export abstract class TradeStrategy {
     // @ts-ignore
     protected strategyParser: StrategyParser;
     protected contractFactory: typeof ContractParamsFactory;
-    protected predictedDigit: number = 0;
-    protected barrier: number | string = 0;
+    protected barrier: number | string | null = null;
 
     protected config: BotConfig;
 
@@ -224,7 +223,7 @@ export abstract class TradeStrategy {
 
         }
 
-        params = this.getNextContractParams(this.config);
+        params = this.getNextContractParams(this.config, this.barrier);
 
         const validParams: boolean = this.validateParameters(params);
 
@@ -467,11 +466,11 @@ export abstract class TradeStrategy {
 
     }
 
-    protected getNextContractParams(config: BotConfig): ContractParams {
+    protected getNextContractParams(config: BotConfig, barrier: string | number | null): ContractParams {
 
         if (this.volatilityRiskManager) {
 
-            const nextParams = this.volatilityRiskManager.getNextTradeParams();
+            const nextParams = this.volatilityRiskManager.getNextTradeParams(barrier);
 
             //console.error("nextParams", nextParams);
 
@@ -498,7 +497,7 @@ export abstract class TradeStrategy {
             this.contractDurationValue,
             this.contractDurationUnits,
             this.market,
-            this.barrier,
+            this.barrier!,
         );
 
     }
@@ -535,10 +534,6 @@ export abstract class TradeStrategy {
 
         return commonParams;
 
-    }
-
-    setPrediction(predictedDigit: number): void {
-        this.predictedDigit = this.validateDigit(predictedDigit);
     }
 
     setBarrier(barrier: number | string): void {
@@ -731,11 +726,15 @@ export class PutStrategy extends TradeStrategy {
 }
 
 export class DigitUnderStrategy extends TradeStrategy {
-    constructor(config: BotConfig) {
+    constructor(config: BotConfig, barrier?:number) {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitUnder;
         this.initializeVolatilityRiskManager(this.contractType);
+        if(barrier){
+            this.barrier = barrier;
+        }
+        
     }
 
     async execute(): Promise<ITradeData | null> {
@@ -755,11 +754,15 @@ export class DigitUnderStrategy extends TradeStrategy {
 }
 
 export class DigitOverStrategy extends TradeStrategy {
-    constructor(config: BotConfig) {
+    constructor(config: BotConfig, barrier?:number) {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitOver;
         this.initializeVolatilityRiskManager(this.contractType);
+        if(barrier){
+            this.barrier = barrier;
+        }
+
     }
 
     async execute(): Promise<ITradeData | null> {

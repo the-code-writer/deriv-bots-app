@@ -2,19 +2,13 @@
   "strategySteps": [
     {
       "symbol": "1HZ100V",
-      "contract_type": "DIGITUNDER_7",
+      "contract_type": "DIGITUNDER_3",
       "duration": 1,
       "duration_units": "t"
     },
     {
       "symbol": "1HZ100V",
       "contract_type": "DIGITDIFF",
-      "duration": 1,
-      "duration_units": "t"
-    },
-    {
-      "symbol": "1HZ100V",
-      "contract_type": "DIGITUNDER_5",
       "duration": 1,
       "duration_units": "t"
     }

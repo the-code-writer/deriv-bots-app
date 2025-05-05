@@ -40,7 +40,7 @@ const sessionDocument: any = {
         "accountType": "VRTC1605087 ( USD )",
         "tradingType": "Derivatives 📊",
         "market": "Volatility 50(1s) 📈",
-        "contractType": "Rise ⬆️",
+        "contractType": "Digits ⬇️6️⃣", //"Rise ⬆️",
         "stake": 1,
         "takeProfit": 5000,
         "stopLoss": 10000,
