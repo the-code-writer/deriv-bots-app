@@ -249,7 +249,7 @@ export class VolatilityRiskManager {
             if (!this.validateTradeResult(tradeResult)) {
                 logger.warn(
                     { message: "Invalid trade result received", tradeResult });
-                // TODO : Why reurn ??? this.getSafetyExitResult("invalid_trade_data");
+                 // TODO : Why reurn ??? this.getSafetyExitResult("invalid_trade_data");
             }
 
             this.totalTrades++;
@@ -646,10 +646,22 @@ export class VolatilityRiskManager {
         }
 
         // Basic type checks for other fields
-        if (typeof data.symbol_short !== 'string') return false;
-        if (typeof data.symbol_full !== 'string') return false;
-        if (typeof data.start_time !== 'number') return false;
-        if (typeof data.expiry_time !== 'number') return false;
+        if (typeof data.symbol_short !== 'string') {
+            console.error(`Missing required data field: symbol_short`);
+            return false;
+        }
+        if (typeof data.symbol_full !== 'string') {
+            console.error(`Missing required data field: symbol_full`);
+            return false;
+        }
+        if (typeof data.start_time !== 'number') {
+            console.error(`Missing required data field: start_time`);
+            return false;
+        }
+        if (typeof data.expiry_time !== 'number') {
+            console.error(`Missing required data field: expiry_time`);
+            return false;
+        }
 
         return true;
     }
