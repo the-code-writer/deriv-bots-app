@@ -162,6 +162,10 @@ export class VolatilityRiskManager {
     private safetyModeUntil: number = 0;
     private dailyLossAmount: number = 0;
 
+    private highestStakeInvested: number = 0;
+    private highestProfitAchieved: number = 0;
+    private totalProfit: number = 0;
+
     private isEmergencyRecovery: boolean = false;
     private isCriticalRecovery: boolean = false;
     private stopAfterTradeLoss: boolean = false;
@@ -251,6 +255,7 @@ export class VolatilityRiskManager {
             this.totalTrades++;
             this.resultIsWin = tradeResult.profit_is_win;
             this.lastTradeTimestamp = Date.now();
+            
 
             if (this.minimumStakeValue === 0) {
                 this.minimumStakeValue = tradeResult.buy_price_value;
@@ -290,6 +295,11 @@ export class VolatilityRiskManager {
         this.consecutiveLosses = 0;
         this.winningTrades++;
         this.recoveryAttempts = 0;
+        this.totalProfit += tradeResult.safeProfit;
+
+        if (this.highestProfitAchieved < this.totalProfit) {
+            this.highestProfitAchieved = this.totalProfit;
+        }
 
         if (this.totalLossAmount > 0) {
 
@@ -313,7 +323,14 @@ export class VolatilityRiskManager {
 
                 this.isEmergencyRecovery = true;
 
-                logger.info(`Emergency ? [${this.isEmergencyRecovery}] : Partial Recovery: ${this.currency} ${roundToTwoDecimals(recoveredAmount)}, Remaining: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}`);
+                logger.error(`
+                    Emergency?: ${this.isEmergencyRecovery}
+                    Partial Recovery: ${this.currency} ${roundToTwoDecimals(recoveredAmount)}
+                    Remaining: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}
+                    Total Profit: ${this.currency} ${roundToTwoDecimals(this.totalProfit)}
+                    Highest Profit: ${this.currency} ${roundToTwoDecimals(this.highestProfitAchieved)}
+                    Highest Stake: ${this.currency} ${roundToTwoDecimals(this.highestStakeInvested)}
+                `);
 
             }
 
@@ -330,6 +347,7 @@ export class VolatilityRiskManager {
         this.consecutiveLosses++;
         this.losingTrades++;
         this.recoveryAttempts++;
+        this.totalProfit -= tradeResult.buy_price_value;
 
         const lossAmount = this.calculateLossAmount(tradeResult);
 
@@ -399,6 +417,10 @@ export class VolatilityRiskManager {
 
                 let amountToRecover: number = this.clampStake((this.totalLossAmount * 12), true);
 
+                if (this.totalProfit < this.highestProfitAchieved) {
+                    amountToRecover = amountToRecover + (this.highestProfitAchieved - this.totalProfit);
+                }
+
                 if (this.isCriticalRecovery) {
 
                     amountToRecover = this.clampStake(this.totalLossAmount * 100 / 7, true);
@@ -409,14 +431,16 @@ export class VolatilityRiskManager {
 
                 }
 
-                const emergencyRecoveryStake = roundToTwoDecimals(amountToRecover);
+                const emergencyRecoveryStake = Number(roundToTwoDecimals(amountToRecover));
 
-
+                if (this.highestStakeInvested < emergencyRecoveryStake) {
+                    this.highestStakeInvested = emergencyRecoveryStake;
+                }
 
                 const params: NextTradeParams = {
                     basis: BasisTypeEnum.Default,
                     symbol: MarketTypeEnum.Default,
-                    amount: Number(emergencyRecoveryStake),
+                    amount: emergencyRecoveryStake,
                     barrier: getRandomDigit(),
                     currency: CurrenciesEnum.Default,
                     contractType: ContractTypeEnum.DigitDiff,
@@ -437,10 +461,16 @@ export class VolatilityRiskManager {
 
             } else {
 
+                const investmentStake = Number(roundToTwoDecimals(this.clampStake(step.amount)));
+
+                if (this.highestStakeInvested < investmentStake) {
+                    this.highestStakeInvested = investmentStake;
+                }
+
                 return {
                     basis: step.basis || strategyConfig.meta.basis,
                     symbol: step.symbol || this.market,
-                    amount: Number(roundToTwoDecimals(this.clampStake(step.amount))),
+                    amount: investmentStake,
                     barrier: this.getBarrier(step.contract_type, barrier),
                     currency: step.currency || strategyConfig.meta.currency,
                     contractType: step.contract_type || this.contractType,
