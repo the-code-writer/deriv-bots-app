@@ -5,7 +5,7 @@
  */
 
 import { pino } from "pino";
-import { BotConfig, ITradeData, MarketType, ContractType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, ContractTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType, IPreviousTradeResult, ContractDurationUnitType, TradingModeType, StatusTypeEnum, BasisTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, UserAccount, EventTypeEnum, TradingEvent } from './types';
+import { BotConfig, ITradeData, MarketType, ContractType, TradingType, TradingSessionDataType, TradingTypeEnum, MarketTypeEnum, ContractTypeEnum, BotSessionDataType, Step, TradingModeTypeEnum, TradeDurationUnitsOptimizedEnum, AccountType, IPreviousTradeResult, ContractDurationUnitType, TradingModeType, StatusTypeEnum, BasisTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, UserAccount, TradingEvent, CurrencyType } from './types';
 import { TradeManager } from './trade-manager';
 import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
@@ -43,6 +43,7 @@ export class DerivTradingBot {
     private isTrading!: boolean;
     private stopTradingNow: boolean = false;
     private baseStake!: number;
+    private currency!: CurrencyType;
     private takeProfit!: number;
     private stopLoss!: number;
     private tradeStartedAt!: number;
@@ -83,7 +84,7 @@ export class DerivTradingBot {
      * @param {BotConfig} config - Configuration object for the trading bot
      */
 
-    constructor(config: BotConfig = {}) {
+    constructor(config: BotConfig = {} as BotConfig) {
         // Save the config for future use
         this.botConfig = config;
 
@@ -106,7 +107,7 @@ export class DerivTradingBot {
      * Constructs a new DerivTradingBot instance
      * @param {BotConfig} config - Configuration object for the trading bot
      */
-    async resetState(config: BotConfig = {}) {
+    async resetState(config: BotConfig = {} as BotConfig) {
 
 
         const mergedConfig: BotConfig = { ...this.botConfig, ...config };
@@ -119,8 +120,9 @@ export class DerivTradingBot {
         this.contractType = mergedConfig.contractType || ContractTypeEnum.Default;
         this.isTrading = false;
         this.stopTradingNow = false;
+        this.currency = mergedConfig.currency || CurrenciesEnum.Default;
         this.baseStake = mergedConfig.baseStake || 1;
-        this.takeProfit = mergedConfig.takeProfit || 10;
+        this.takeProfit = mergedConfig.takeProfit || 5;
         this.stopLoss = mergedConfig.stopLoss || 2;
         this.tradeStartedAt = 0;
         this.tradeDuration = 0;
@@ -545,6 +547,7 @@ export class DerivTradingBot {
             market: this.market,
             contractType: this.contractType,
             isTrading: this.isTrading,
+            currency: this.currency,
             baseStake: this.baseStake,
             takeProfit: this.takeProfit,
             stopLoss: this.stopLoss,
@@ -856,8 +859,10 @@ Total Profit:   ${currency} ${totalProfit.toFixed(2).padEnd(20)}
 Avg Profit/Run: ${currency} ${averageProfitPerRun.toFixed(2).padEnd(20)} 
 Total Balance:  ${currency} ${totalBalance.padEnd(20)} 
 
-Base Stake:     ${currency} 1.00
+Contract Type:  ${this.contractType}
+Base Stake:     ${this.baseStake}
 Maximum Stake:  ${currency} 15.98
+Maximum Profit: ${currency} 15.98
 
 Win Rate %:     ${winRate.toFixed(2)}%${" ".padEnd(17)} 
 
@@ -869,7 +874,10 @@ Stop Time:      ${stopTimeFormatted.padEnd(20)}
 
 Duration:       ${duration.padEnd(20)}
 
-Session ID:     this.tradingSessionID
+Session Number: 365
+
+Session ID:     ${this.cachedSession.}
+
 `;
 
             // Calculate total profit
@@ -877,24 +885,24 @@ Session ID:     this.tradingSessionID
 
             // Define the table headers
             const header = `
-+-----+---------+----------+
-| Run |  Stake  |  Profit  |
-+-----+---------+----------+`;
++-----+----------+----------+
+| Run |  Stake   |  Profit  |
++-----+----------+----------+`;
 
             // Define the table rows
             const rows = this.auditTrail
                 .map((trade: any) => {
                     const run = String(trade.data.run).padStart(3); // Right-aligned, 3 characters
-                    const stake = `$${trade.data.stake.toFixed(2)}`.padStart(7); // Right-aligned, 7 characters
+                    const stake = `$${trade.data.stake.toFixed(2)}`.padStart(8); // Right-aligned, 7 characters
                     const profit = `${trade.data.profit >= 0 ? "+" : "-"}${Math.abs(trade.data.profit).toFixed(2)}`.padStart(8); // Right-aligned, 8 characters
                     return `| ${run} | ${stake} | ${profit} |`;
                 })
                 .join("\n");
 
             // Define the total profit row
-            const totalRow = `+-----+---------+----------+
-| TOTAL PROFIT  | ${totalProfit >= 0 ? "+" : "-"}${Math.abs(totalProfit).toFixed(2).padStart(7)} |
-+-----+---------+----------+
+            const totalRow = `+-----+----------+----------+
+| TOTAL PROFIT   | ${totalProfit >= 0 ? "+" : "-"}${Math.abs(totalProfit).toFixed(2).padStart(8)} |
++-----+----------+----------+
 `;
 
             // Combine the table
