@@ -323,43 +323,6 @@ export class DerivTradingBot {
 
     }
 
-    /**
-     * Starts the trading process with comprehensive error handling and validation
-     * @param {object} callbackFunction - Trading session configuration
-     * @param {string} userAccountToken - User account token for authentication
-     * @returns {Promise<void>} Promise that resolves when trading completes
-     * @throws {Error} If invalid parameters are provided or trading cannot start
-     */
-    async getAccountBalance(
-        callbackFunction: any,
-        userAccountToken: string
-    ): Promise<void> {
-
-        try {
-
-            const api = new DerivAPI({ endpoint: env.DERIV_APP_ENDPOINT_DOMAIN, app_id: env.DERIV_APP_ENDPOINT_APP_ID, lang: env.DERIV_APP_ENDPOINT_LANG });
-
-            const ping = await api.basic.ping();
-
-            if (ping) {
-
-                const balance = await DerivUserAccount.getUserBalance(api, userAccountToken || this.userAccountToken);
-
-                callbackFunction({ error: null, balance });
-
-            } else {
-
-                callbackFunction({ error: { code: 500, message: "Invalid ping data received" }, metadata: { ping }, balance: null });
-
-            }
-        } catch (error: any) {
-
-            callbackFunction({ error, metadata: null, balance: null });
-
-        }
-
-    }
-
     public getAccountToken(accounts: any, key: string, value: string) {
 
         // Iterate through the object
@@ -369,6 +332,7 @@ export class DerivTradingBot {
 
             // Check if the key is 'acct' or 'cur' and if the value matches
             if ((key === "acct" && entry.acct === value) || (key === "cur" && entry.cur === value) || (key === "token" && entry.token === value)) {
+                this.userAccountToken = entry;
                 return entry; // Return the matching entry
             }
         }
@@ -826,16 +790,16 @@ ${tradeResult.proposal_id}
 
             // Retrieve account and balance information
             const accountId = this.userAccount.loginid || "N/A";
-            const currency = this.userAccount.currency || "USD";
-            const totalBalance = parseFloat(`${this.userBalance}`).toFixed(2);
 
+            const { balance } = await DerivUserAccount.getUserBalance(this.userAccountToken);
+            
             // Calculate total profit, payout, and stake
             let totalProfit = this.totalProfit;
             const totalPayout = this.totalPayout;
             const totalStake = this.totalStake;
 
             // Calculate win rate and average profit per run
-            const winRate = (this.winningTrades / this.totalNumberOfRuns) * 100;
+            const winRate = (this.winningTrades / this.totalNumberOfRuns) * 100; 
             const averageProfitPerRun = totalProfit / this.totalNumberOfRuns;
 
             // Format start time, stop time, and duration
@@ -857,23 +821,23 @@ Trading Telemetry Summary
 =========================
 
 Account:        ${accountId.padEnd(20)} 
-Currency:       ${currency.padEnd(20)} 
+Currency:       ${balance.currency.padEnd(20)} 
 
 Wins:           ${this.winningTrades.toString().padEnd(20)} 
 Losses:         ${this.losingTrades.toString().padEnd(20)} 
 Runs:           ${this.totalNumberOfRuns.toString().padEnd(20)} 
          
-Total Payout:   ${currency} ${totalPayout.toFixed(2).padEnd(20)} 
-Total Stake:    ${currency} ${totalStake.toFixed(2).padEnd(20)} 
-Total Profit:   ${currency} ${totalProfit.toFixed(2).padEnd(20)} 
-Avg Profit/Run: ${currency} ${averageProfitPerRun.toFixed(2).padEnd(20)} 
-Total Balance:  ${currency} ${totalBalance.padEnd(20)} 
+Total Payout:   ${balance.currency} ${totalPayout.toFixed(2).padEnd(20)} 
+Total Stake:    ${balance.currency} ${totalStake.toFixed(2).padEnd(20)} 
+Total Profit:   ${balance.currency} ${totalProfit.toFixed(2).padEnd(20)} 
+Avg Profit/Run: ${balance.currency} ${averageProfitPerRun.toFixed(2).padEnd(20)} 
+Total Balance:  ${balance.currency} ${balance.display}
 
 Contract Type:  ${this.contractType}
-Base Stake:     ${currency} ${this.baseStake.toFixed(2).padEnd(20)} 
-Maximum Stake:  ${currency} ${this.tradeManager.getHighestStakeInvested().toFixed(2).padEnd(20)}
-Maximum Profit: ${currency} ${this.tradeManager.getHighestProfitAchieved().toFixed(2).padEnd(20)}
-Profit Loss:    ${currency} ${this.calculateTotalLoss(this.totalProfit, this.tradeManager.getHighestProfitAchieved()).toFixed(2).padEnd(20)}
+Base Stake:     ${balance.currency} ${this.baseStake.toFixed(2).padEnd(20)} 
+Maximum Stake:  ${balance.currency} ${this.tradeManager.getHighestStakeInvested().toFixed(2).padEnd(20)}
+Maximum Profit: ${balance.currency} ${this.tradeManager.getHighestProfitAchieved().toFixed(2).padEnd(20)}
+Profit Loss:    ${balance.currency} ${this.calculateTotalLoss(this.totalProfit, this.tradeManager.getHighestProfitAchieved()).toFixed(2).padEnd(20)}
 
 Win Rate %:     ${winRate.toFixed(2)}%${" ".padEnd(17)} 
 

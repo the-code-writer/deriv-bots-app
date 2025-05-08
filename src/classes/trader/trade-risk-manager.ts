@@ -1,5 +1,5 @@
 import { getRandomDigit } from '@/common/utils/snippets';
-import { IDerivUserAccount } from '../user/UserDerivAccount';
+import { DerivUserAccount, IDerivUserAccount } from '../user/UserDerivAccount';
 import { StrategyRewards, BasisType, ContractType, BasisTypeEnum, ContractTypeEnum, ITradeData, MarketTypeEnum, CurrenciesEnum, ContractDurationUnitTypeEnum, CurrencyType, ContractDurationUnitType, MarketType, TradingEvent } from './types';
 import { pino } from "pino";
 import { StrategyParser } from './trader-strategy-parser';
@@ -174,6 +174,10 @@ export class VolatilityRiskManager {
 
     private maxStake: number;
 
+    private userAccountToken: string = "";
+
+    private accountInitialBalance: number = 0;
+
     constructor(
         baseStake: number,
         market: MarketType,
@@ -182,7 +186,8 @@ export class VolatilityRiskManager {
         contractDurationValue: number,
         contractDurationUnits: ContractDurationUnitType,
         strategyParser: StrategyParser,
-        circuitBreakerConfig?: CircuitBreakerConfig
+        circuitBreakerConfig?: CircuitBreakerConfig,
+        userAccountToken?: string
     ) {
         this.baseStake = baseStake;
         this.minStake = env.MIN_STAKE
@@ -193,6 +198,8 @@ export class VolatilityRiskManager {
         this.contractDurationValue = contractDurationValue;
         this.contractDurationUnits = contractDurationUnits;
         this.strategyParser = strategyParser;
+
+        this.userAccountToken = userAccountToken;
 
         // Initialize circuit breakers with defaults or provided config
         this.circuitBreakerConfig = {
@@ -230,7 +237,34 @@ export class VolatilityRiskManager {
             lastTradeTimestamp: 0,
         };
 
+        this.checkUserBalance();
+
         this.validateInitialization();
+
+    }
+
+    private async checkUserBalance(): Promise<void>{
+
+        const userBalance =  await this.getUserBalance();
+
+        if (userBalance) {
+            
+            this.accountInitialBalance = parseFloat(userBalance.display);
+
+        }
+
+    }
+
+    private async getUserBalance(): Promise<any> {
+
+        if (this.userAccountToken) {
+
+            const { balance } = await DerivUserAccount.getUserBalance(this.userAccountToken);
+
+            return balance;
+
+        }
+
     }
 
     private validateInitialization(): void {
@@ -470,6 +504,8 @@ export class VolatilityRiskManager {
                 if (this.highestStakeInvested < investmentStake) {
                     this.highestStakeInvested = investmentStake;
                 }
+
+                
 
                 return {
                     basis: step.basis || strategyConfig.meta.basis,

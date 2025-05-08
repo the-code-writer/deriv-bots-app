@@ -146,10 +146,12 @@ export abstract class TradeStrategy {
 
 
         logger.info({
-            action: 'initializeVolatilityRiskManager',
+            action: 'initializeVolatilityRiskManager::::::' + this.userAccountToken,
             strategyJson: strategyJson,
             // strategyParser: this.strategyParser.getFormattedOutput() 
         });
+
+        
 
 
         this.volatilityRiskManager = new VolatilityRiskManager(
@@ -160,7 +162,8 @@ export abstract class TradeStrategy {
             this.contractDurationValue,
             this.contractDurationUnits,
             this.strategyParser,
-            circuitBreakerConfig
+            circuitBreakerConfig,
+            this.userAccountToken
         );
 
         this.executor = new TradeExecutor(this.volatilityRiskManager);

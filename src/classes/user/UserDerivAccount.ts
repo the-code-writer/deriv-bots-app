@@ -1,6 +1,9 @@
 import { CurrencyType } from '../trader/types';
+import { env } from '@/common/utils/envConfig';
 
 const jsan = require("jsan");
+
+const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 
 /**
  * Interface representing a Deriv user account
@@ -98,20 +101,15 @@ export class DerivUserAccount {
      * @returns {Promise<any | null>} A promise that resolves to the user account object or null if not found
      */
     static async getUserBalance(
-        api: IDerivApiClient,
         userAccountToken: string,
     ): Promise<any | null> {
 
-        try {
+        try { 
 
-            // Fetch account data from API
+            const api = new DerivAPI({ endpoint: env.DERIV_APP_ENDPOINT_DOMAIN, app_id: env.DERIV_APP_ENDPOINT_APP_ID, lang: env.DERIV_APP_ENDPOINT_LANG });
             const account = await api.account(userAccountToken);
 
-            if (account) {
-
-                return await api.basic.balance().balance;
-
-            }
+            return account;
 
         } catch (error) {
 
