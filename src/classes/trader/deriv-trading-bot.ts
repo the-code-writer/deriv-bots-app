@@ -97,8 +97,6 @@ export class DerivTradingBot {
 
         defaultEventManager.on(TradingEvent.StopTrading.type, (data:{ reason: string; timestamp: number; profit: number }) => {
             // data is automatically inferred as { reason: string; timestamp: number; profit: number }
-            console.log('Trading stopped:', data.reason, data.profit);
-
             this.stopTrading(data.reason, true, data);
 
           });
@@ -625,7 +623,7 @@ export class DerivTradingBot {
      */
     private async processTradeResult(tradeResult: ITradeData): Promise<void> {
 
-        if (tradeResult && Object.hasOwn(tradeResult, "profit_is_win")) {
+        if (tradeResult && typeof tradeResult !== undefined && Object.hasOwn(tradeResult, "profit_is_win")) {
 
             this.totalNumberOfRuns++;
 
@@ -679,12 +677,11 @@ export class DerivTradingBot {
 
         } else {
 
-            console.error({
-                title: "*************** PROFIT_IS_WIN_NOT_A_PROPERTY *****************",
-                data: tradeResult
-            })
+            // TODO: Ask the user if he wants to try vi prompts
 
-            process.exit(0);
+            // process.exit(0);
+
+            this.isTrading = false;
 
         }
 
@@ -758,6 +755,10 @@ ${tradeResult.proposal_id}
             return;
         }
 
+        let lastError: string = `⛔️ Trading stopped!\n\n${message}\n\nProfit: ${this.currency} ${roundToTwoDecimals(meta.profit, true)}`;
+
+        logger.error(lastError);
+
         logger.error({
             title: "STOP_TRADING",
             message,
@@ -776,7 +777,7 @@ ${tradeResult.proposal_id}
             // Notify stop
             parentPort?.postMessage({
                 action: "sendTelegramMessage",
-                text: `⛔️ Trading stopped!\n\n${message}`,
+                text: lastError,
                 meta: {
                     duration: (Date.now() / 1000 - this.tradeStartedAt).toFixed(0) + 's',
                     profit: this.totalProfit.toFixed(2)
@@ -869,9 +870,10 @@ Avg Profit/Run: ${currency} ${averageProfitPerRun.toFixed(2).padEnd(20)}
 Total Balance:  ${currency} ${totalBalance.padEnd(20)} 
 
 Contract Type:  ${this.contractType}
-Base Stake:     ${this.baseStake}
-Maximum Stake:  ${currency} 15.98
-Maximum Profit: ${currency} 15.98
+Base Stake:     ${currency} ${this.baseStake.toFixed(2).padEnd(20)} 
+Maximum Stake:  ${currency} ${this.tradeManager.getHighestStakeInvested().toFixed(2).padEnd(20)}
+Maximum Profit: ${currency} ${this.tradeManager.getHighestProfitAchieved().toFixed(2).padEnd(20)}
+Profit Loss:    ${currency} ${this.calculateTotalLoss(this.totalProfit, this.tradeManager.getHighestProfitAchieved()).toFixed(2).padEnd(20)}
 
 Win Rate %:     ${winRate.toFixed(2)}%${" ".padEnd(17)} 
 
@@ -886,7 +888,6 @@ Duration:       ${duration.padEnd(20)}
 Session Number: ${this.sessionNumber}
 
 Session ID:     ${this.sessionID}
-
 `;
 
             // Calculate total profit
@@ -910,7 +911,7 @@ Session ID:     ${this.sessionID}
 
             // Define the total profit row
             const totalRow = `+-----+----------+----------+
-| TOTAL PROFIT   | ${totalProfit >= 0 ? "+" : "-"}${Math.abs(totalProfit).toFixed(2).padStart(8)} |
+| TOTAL PROFIT   | ${totalProfit >= 0 ? "+" : "-"}${Math.abs(totalProfit).toFixed(2).padStart(7)} |
 +-----+----------+----------+
 `;
 
@@ -928,6 +929,18 @@ Session ID:     ${this.sessionID}
         }
 
     }
+
+    private calculateTotalLoss(totalProfit:number, highestProfitAchieved:number): number {
+    if (totalProfit >= 0) {
+        return 0; // No loss if net profitable
+    } else {
+        if (highestProfitAchieved >= 0) {
+            return totalProfit; // Full loss (e.g., fell from +100 to -50 → loss = -50)
+        } else {
+            return totalProfit - highestProfitAchieved; // Additional loss (e.g., -50 - (-10) = -40)
+        }
+    }
+}
 
     /**
      * Handles trading errors with appropriate recovery or shutdown

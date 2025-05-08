@@ -247,9 +247,15 @@ export class VolatilityRiskManager {
         try {
 
             if (!this.validateTradeResult(tradeResult)) {
-                logger.warn(
-                    { message: "Invalid trade result received", tradeResult });
-                 // TODO : Why reurn ??? this.getSafetyExitResult("invalid_trade_data");
+
+                defaultEventManager.emit(TradingEvent.StopTrading.type, {
+                    reason: "Invalid trade result received",
+                    timestamp: Date.now(),
+                    profit: this.getTotalProfit()
+                });
+
+                return;
+
             }
 
             this.totalTrades++;
@@ -257,7 +263,7 @@ export class VolatilityRiskManager {
             this.lastTradeTimestamp = Date.now();
 
             this.totalProfit += tradeResult.safeProfit;
-            
+
 
             if (this.minimumStakeValue === 0) {
                 this.minimumStakeValue = tradeResult.buy_price_value;
@@ -400,7 +406,7 @@ export class VolatilityRiskManager {
 
         try {
 
-            const strategyConfig:StrategyConfig = this.strategyParser.getStrategyConfig();
+            const strategyConfig: StrategyConfig = this.strategyParser.getStrategyConfig();
 
             const steps = this.strategyParser.getAllSteps();
 
@@ -415,20 +421,18 @@ export class VolatilityRiskManager {
 
                 this.stopAfterTradeLoss = true;
 
-                let amountToRecover: number = this.clampStake((this.totalLossAmount * 12), true);
-
-                if (this.totalProfit < this.highestProfitAchieved) {
-                    amountToRecover = amountToRecover + (this.highestProfitAchieved - this.totalProfit);
-                }
+                let amountToRecover: number = this.clampStake(this.totalLossAmount * 100 / 8, true);
 
                 if (this.isCriticalRecovery) {
 
                     amountToRecover = this.clampStake(this.totalLossAmount * 100 / 7, true);
 
-                    console.error("#### CHECK : [isCriticalRecovery][this.totalLossAmount * 100 / 7] #####", [this.totalLossAmount, amountToRecover]);
-
                     this.isCriticalRecovery = false;
 
+                }
+
+                if (this.totalProfit < this.highestProfitAchieved) {
+                    amountToRecover = amountToRecover + ((this.highestProfitAchieved - this.totalProfit) * 100 / 8);
                 }
 
                 const emergencyRecoveryStake = Number(roundToTwoDecimals(amountToRecover));
@@ -521,7 +525,7 @@ export class VolatilityRiskManager {
     }
 
     private getBarrier(contractType: ContractType, barrier?: string | number | null): string | number {
-        if(barrier){
+        if (barrier) {
             return barrier;
         }
         switch (contractType) {
@@ -562,7 +566,7 @@ export class VolatilityRiskManager {
             reasons.push("The app is still in safety mode.");
         }
 
-        const strategyConfig:StrategyConfig = this.strategyParser.getStrategyConfig();
+        const strategyConfig: StrategyConfig = this.strategyParser.getStrategyConfig();
 
         if (this.consecutiveLosses >= strategyConfig.meta.maxConsecutiveLosses! * 2) {
             shouldEnter = true;
@@ -608,6 +612,10 @@ export class VolatilityRiskManager {
     private validateTradeResult(data: ITradeData): boolean {
         // Basic type checks for required fields
         if (typeof data !== 'object' || data === null) return false;
+
+        if (!('profit_is_win' in (data || {}))) {
+            return false;
+        }
 
         const requiredFields = [
             'symbol_short', 'symbol_full', 'start_time', 'expiry_time', 'purchase_time',
@@ -978,6 +986,18 @@ export class VolatilityRiskManager {
 
     public getTotalLostAmount(): number {
         return this.totalLossAmount;
+    }
+
+    public getTotalProfit(): number {
+        return this.totalProfit;
+    }
+
+    public getHighestStakeInvested(): number {
+        return this.highestStakeInvested;
+    }
+
+    public getHighestProfitAchieved(): number {
+        return this.highestProfitAchieved;
     }
 
     /**

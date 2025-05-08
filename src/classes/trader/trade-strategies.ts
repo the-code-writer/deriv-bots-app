@@ -86,7 +86,6 @@ export abstract class TradeStrategy {
 
     constructor(config: BotConfig) {
         this.config = config;
-        this.executor = new TradeExecutor();
         this.tradeRewardStructures = new TradeRewardStructures();
         this.contractFactory = ContractParamsFactory;
     }
@@ -94,6 +93,18 @@ export abstract class TradeStrategy {
     checkPendingRecovery(): boolean {
 
         return this.volatilityRiskManager.getTotalLostAmount() > 0;
+
+    }
+
+    getHighestStakeInvested(): number {
+
+        return this.volatilityRiskManager.getHighestStakeInvested();
+
+    }
+
+    getHighestProfitAchieved(): number {
+
+        return this.volatilityRiskManager.getHighestProfitAchieved();
 
     }
 
@@ -151,6 +162,9 @@ export abstract class TradeStrategy {
             this.strategyParser,
             circuitBreakerConfig
         );
+
+        this.executor = new TradeExecutor(this.volatilityRiskManager);
+
     }
 
     protected async executeTrade(): Promise<ITradeData | null> {

@@ -40,6 +40,18 @@ export class TradeManager {
 
     }
 
+    getHighestStakeInvested(): number {
+
+        return this.currentContractType.getHighestStakeInvested();
+
+    }
+
+    getHighestProfitAchieved(): number {
+
+        return this.currentContractType.getHighestProfitAchieved();
+
+    }
+
     /**
      * Executes a trade based on the specified purchase type
      * @param {DerivAPI} api - Type of trade to execute

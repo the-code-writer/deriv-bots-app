@@ -10,8 +10,8 @@ import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
 import { DerivUserAccount, IDerivUserAccount } from '../user/UserDerivAccount';
 import { defaultEventManager } from './trade-event-manager';
-import { TradeData } from '@/classes/trader/trade-data-class';
 import { roundToTwoDecimals } from '../../common/utils/snippets';
+import { VolatilityRiskManager } from "./trade-risk-manager";
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const logger = pino({ name: "Trade Executor" });
@@ -37,6 +37,7 @@ export class TradeExecutor {
     private maxRetryAttempts: number;
     private retryDelayBase: number;
     private userAccountToken: string;
+    private volatilityRiskManager: VolatilityRiskManager;
 
     /**
      * Constructs a new TradeExecutor instance
@@ -45,10 +46,12 @@ export class TradeExecutor {
      * @param {number} [retryDelayBase=1000] - Base delay for retries in ms
      */
     constructor(
+        volatilityRiskManager: VolatilityRiskManager,
         connectionTimeout: number = 10000,
         maxRetryAttempts: number = 3,
         retryDelayBase: number = 1000
     ) {
+        this.volatilityRiskManager = volatilityRiskManager;
         this.connectionTimeout = connectionTimeout;
         this.maxRetryAttempts = maxRetryAttempts;
         this.retryDelayBase = retryDelayBase;
@@ -70,6 +73,8 @@ export class TradeExecutor {
         this.validateContractParameters(contractParameters);
 
         let attempt = 0;
+
+        let lastError: string = '';
 
         while (attempt < this.maxRetryAttempts) {
 
@@ -111,9 +116,11 @@ export class TradeExecutor {
 
             } catch (error: any) {
 
+                lastError = `Code: ${error.error.code} :: Message: ${error.error.message}`;
+
                 logger.warn(`Attempt ${attempt} of ${this.maxRetryAttempts}`);
 
-                logger.error(`Code: ${error.error.code} :: Message: ${error.error.message}`);
+                logger.error(lastError);
 
                 if (attempt < this.maxRetryAttempts) {
                     const delay = this.calculateRetryDelay(attempt);
@@ -127,9 +134,9 @@ export class TradeExecutor {
         logger.error('All purchase attempts failed');
 
         defaultEventManager.emit(TradingEvent.StopTrading.type, {
-            reason: "Unknown error during contract purchase",
+            reason: lastError || "Unknown error during contract purchase",
             timestamp: Date.now(),
-            profit: 1250.50
+            profit: this.volatilityRiskManager.getTotalProfit()
           });
 
     }
