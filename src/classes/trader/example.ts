@@ -15,7 +15,7 @@ const tradingSession = {
     "market": "Volatility 75(1s) 📈",
     "contractType": "Digits ⬇️6️⃣", //"Rise ⬆️", //Digit NOT Random 🎲
     "stake": 1,
-    "takeProfit": "USD5,000.34",
+    "takeProfit": "USD15,000.34",
     "stopLoss": 10000,
     "tradeDuration": "24hrs ⏱️",
     "updateFrequency": "15min ⏱️",
@@ -24,9 +24,9 @@ const tradingSession = {
     "tradingMode": "📈 Manual Trading"
 };
 
-const sessionNumber = "NTXSN00283";
+const sessionNumber = "N:X0016:00283";
 
-const sessionID = "wsdgdhfghnghdjtdjmyjm";
+const sessionID = "0xEC34...8BA2";
 
 // @ts-ignore
 tradingBot.startTrading(tradingSession, false, 'a1-28VUaap8ZFN3G4lMgf5P3S3IPtUQl', sessionID, sessionNumber) //DEMO
