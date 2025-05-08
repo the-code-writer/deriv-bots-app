@@ -10,6 +10,8 @@ import { parentPort } from 'worker_threads';
 import { env } from "@/common/utils/envConfig";
 import { DerivUserAccount, IDerivUserAccount } from '../user/UserDerivAccount';
 import { defaultEventManager } from './trade-event-manager';
+import { TradeData } from '@/classes/trader/trade-data-class';
+import { roundToTwoDecimals } from '../../common/utils/snippets';
 
 const DerivAPI = require("@deriv/deriv-api/dist/DerivAPI");
 const logger = pino({ name: "Trade Executor" });
@@ -312,13 +314,27 @@ export class TradeExecutor {
             ticks: ticks[0]
         };
 
-        const safeProfit = tradeData.sell_price_value === 0 && tradeData.buy_price_value > 0
-            ? 0
-            : tradeData.sell_price_value - tradeData.buy_price_value;
+        const safeProfit = this.calculateSafeProfit(tradeData);
 
         tradeData.safeProfit = safeProfit;
 
         return tradeData;
+
+    }
+
+    private calculateSafeProfit(tradeData: ITradeData): number {
+
+        const safeProfit = tradeData.sell_price_value === 0 && tradeData.buy_price_value > 0
+            ? Number(roundToTwoDecimals(-tradeData.buy_price_value))
+            : Number(roundToTwoDecimals(tradeData.sell_price_value - tradeData.buy_price_value));
+
+            const safeProfit2 = Number(roundToTwoDecimals(tradeData.buy_price_value * tradeData.profit_percentage / 100));
+
+            const safeProfit3 = Number(roundToTwoDecimals(tradeData.profit_value * tradeData.profit_sign));
+
+        const isValid:boolean = safeProfit === safeProfit2 && safeProfit2 === safeProfit3;
+
+        return isValid ? safeProfit : 0;
 
     }
 

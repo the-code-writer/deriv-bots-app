@@ -255,6 +255,8 @@ export class VolatilityRiskManager {
             this.totalTrades++;
             this.resultIsWin = tradeResult.profit_is_win;
             this.lastTradeTimestamp = Date.now();
+
+            this.totalProfit += tradeResult.safeProfit;
             
 
             if (this.minimumStakeValue === 0) {
@@ -295,7 +297,6 @@ export class VolatilityRiskManager {
         this.consecutiveLosses = 0;
         this.winningTrades++;
         this.recoveryAttempts = 0;
-        this.totalProfit += tradeResult.safeProfit;
 
         if (this.highestProfitAchieved < this.totalProfit) {
             this.highestProfitAchieved = this.totalProfit;
@@ -347,7 +348,6 @@ export class VolatilityRiskManager {
         this.consecutiveLosses++;
         this.losingTrades++;
         this.recoveryAttempts++;
-        this.totalProfit -= tradeResult.buy_price_value;
 
         const lossAmount = this.calculateLossAmount(tradeResult);
 

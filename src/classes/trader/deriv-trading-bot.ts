@@ -70,6 +70,8 @@ export class DerivTradingBot {
     private losingTrades: number = 0;
     private userAccountToken: string = "";
     private userAccount: IDerivUserAccount = {} as IDerivUserAccount;
+    private sessionID: string = "";
+    private sessionNumber: number = 0;
     private userBalance: number = 0;
     private auditTrail: Array<any> = [];
 
@@ -149,6 +151,8 @@ export class DerivTradingBot {
         this.userAccountToken = "";
         this.userAccount = {} as IDerivUserAccount;
         this.userBalance = 0;
+        this.sessionID = "";
+        this.sessionNumber = 0;
         this.auditTrail = [];
 
         this.lastTradeSummary = "";
@@ -178,7 +182,9 @@ export class DerivTradingBot {
     async startTrading(
         session: BotSessionDataType,
         retryAfterError: boolean = false,
-        userAccountToken: string = ""
+        userAccountToken: string = "",
+        sessionID: string = "",
+        sessionNumber: number = 0
     ): Promise<void> {
 
         // Reset state whenever we start a trading session
@@ -208,6 +214,9 @@ export class DerivTradingBot {
             const sessionData: TradingSessionDataType = await this.initializeTradingSession(session, userAccountToken);
 
             this.userAccountToken = userAccountToken;
+
+            this.sessionID = sessionID;
+            this.sessionNumber = sessionNumber;
 
             if (sessionData) {
 
@@ -874,9 +883,9 @@ Stop Time:      ${stopTimeFormatted.padEnd(20)}
 
 Duration:       ${duration.padEnd(20)}
 
-Session Number: 365
+Session Number: ${this.sessionNumber}
 
-Session ID:     ${this.cachedSession.}
+Session ID:     ${this.sessionID}
 
 `;
 
@@ -945,7 +954,7 @@ Session ID:     ${this.cachedSession.}
             await new Promise(resolve => setTimeout(resolve, backoffTime));
 
             // Retry with cached session
-            await this.startTrading(session, true, this.userAccountToken);
+            await this.startTrading(session, true, this.userAccountToken, this.sessionID, this.sessionNumber);
 
         } else {
             // Non-recoverable error - stop trading
