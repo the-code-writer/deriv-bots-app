@@ -24,8 +24,12 @@ const tradingSession = {
     "tradingMode": "📈 Manual Trading"
 };
 
+const sessionNumber = "NTXSN00283";
+
+const sessionID = "wsdgdhfghnghdjtdjmyjm";
+
 // @ts-ignore
-tradingBot.startTrading(tradingSession, false, 'a1-28VUaap8ZFN3G4lMgf5P3S3IPtUQl') //DEMO
+tradingBot.startTrading(tradingSession, false, 'a1-28VUaap8ZFN3G4lMgf5P3S3IPtUQl', sessionID, sessionNumber) //DEMO
 //tradingBot.startTrading(tradingSession, false, 'a1-j54R1Jof4ucqqnB2E8OeyIWoO3dIn') //USD
     .then(() => logger.info('Trading completed successfully'))
     .catch(error => logger.error('Trading failed', error));
