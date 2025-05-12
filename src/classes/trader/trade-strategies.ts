@@ -27,7 +27,7 @@ import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "../user/UserDerivAccount";
 import { StrategyParser } from './trader-strategy-parser';
 import { BotConfig, BasisTypeEnum, CurrenciesEnum } from './types';
-import { getRandomDigit, sleep } from "@/common/utils/snippets";
+import { getRandomDigit, roundToTwoDecimals, sleep } from "@/common/utils/snippets";
 import { OneThreeTwoSixStrategy } from './trade-1326-strategy';
 
 const logger = pino({
@@ -195,15 +195,15 @@ export abstract class TradeStrategy {
                 return null;
             }
 
-            let recoveryAmount = this.volatilityRiskManager.lastTradeWon ? decision.amount : (this.volatilityRiskManager.lastTradeProfit * -1 * 12.75);
+            let recoveryAmount = this.volatilityRiskManager.lastTradeWon ? decision.amount : roundToTwoDecimals(this.volatilityRiskManager.lastTradeProfit * -1 * 12.75);
 
             if (this.volatilityRiskManager.getTotalProfit() < 0) {
 
-                const nextRecoveryAmount = this.volatilityRiskManager.getTotalProfit() * -1 * 12.75;
+                const nextRecoveryAmount = roundToTwoDecimals(this.volatilityRiskManager.getTotalProfit() * -1 * 12.75);
                 if (recoveryAmount < nextRecoveryAmount) {
                     recoveryAmount = nextRecoveryAmount;
                 }
-                
+
             }
 
             const newParams = {
