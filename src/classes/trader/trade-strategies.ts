@@ -195,8 +195,19 @@ export abstract class TradeStrategy {
                 return null;
             }
 
+            let recoveryAmount = this.volatilityRiskManager.lastTradeWon ? decision.amount : (this.volatilityRiskManager.lastTradeProfit * -1 * 12.75);
+
+            if (this.volatilityRiskManager.getTotalProfit() < 0) {
+
+                const nextRecoveryAmount = this.volatilityRiskManager.getTotalProfit() * -1 * 12.75;
+                if (recoveryAmount < nextRecoveryAmount) {
+                    recoveryAmount = nextRecoveryAmount;
+                }
+                
+            }
+
             const newParams = {
-                amount: this.volatilityRiskManager.lastTradeWon ? decision.amount : (this.volatilityRiskManager.lastTradeProfit * -1 * 12.5),
+                amount: recoveryAmount,
                 currency: CurrenciesEnum.Default,
                 basis: BasisTypeEnum.Stake,
                 contract_type: decision.contractType,

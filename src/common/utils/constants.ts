@@ -121,6 +121,7 @@ export const CONSTANTS: IConstants = {
   CONTRACT_TYPES: {
     GENERAL: [[DerivativeDigitsEnum.Auto, DerivativeDigitsEnum.Rise, DerivativeDigitsEnum.Fall]],
     DERIVATIVES: [
+      [DerivativeDigitsEnum.DigitDiff1326],
       [DerivativeDigitsEnum.Auto, DerivativeDigitsEnum.Rise, DerivativeDigitsEnum.Fall],
       [DerivativeDigitsEnum.DigitsAuto, DerivativeDigitsEnum.DigitsEvens, DerivativeDigitsEnum.DigitsOdds],
       [DerivativeDigitsEnum.DigitsUnder9, DerivativeDigitsEnum.DigitsUnder8],
