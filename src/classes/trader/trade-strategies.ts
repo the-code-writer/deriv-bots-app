@@ -494,9 +494,15 @@ export abstract class TradeStrategy {
                     logger.error('Barrier is required for digit-based trades');
                     return false;
                 }
-                if (typeof this.validateDigit(Number(params.barrier)) === "number") {
-                    logger.error('Barrier is required and must be a number');
-                    return false;
+
+                // Todo - validate the digits properly
+                if (this.validateDigit(Number(params.barrier))) {
+                    //logger.error('Barrier is required and must be a number');
+                    //return false;
+                };
+                if (typeof params.barrier === "number") {
+                    //logger.error('Barrier is required and must be a number');
+                    //return false;
                 };
         }
         return true;
