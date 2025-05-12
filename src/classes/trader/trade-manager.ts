@@ -7,7 +7,7 @@
 import { pino } from "pino";
 import { BotConfig, CurrenciesEnum, IPreviousTradeResult, MarketTypeEnum, ContractTypeEnum, TradingTypeEnum, AccountType, TradingType, MarketType, ContractType, ITradeData, TradingModeType, TradingTypesEnum, TradingModeTypeEnum, CurrencyType, ContractDurationUnitType, BotSessionDataType, TradingSessionDataType, EventTypeEnum, TradingEvent } from './types';
 import { env } from "@/common/utils/envConfig";
-import { TradeStrategy, DigitDiffStrategy, DigitEvenStrategy, DigitOddStrategy, CallStrategy, PutStrategy, DigitOverStrategy, DigitUnderStrategy } from './trade-strategies';
+import { TradeStrategy, DigitDiffStrategy, DigitEvenStrategy, DigitOddStrategy, CallStrategy, PutStrategy, DigitOverStrategy, DigitUnderStrategy, DigitDiff1326Strategy } from './trade-strategies';
 import { IDerivUserAccount } from "../user/UserDerivAccount";
 import { defaultEventManager } from './trade-event-manager';
 
@@ -124,6 +124,8 @@ export class TradeManager {
     private initializeContractTypeClass(): TradeStrategy {
 
         switch (this.config.contractType) {
+            case ContractTypeEnum.DigitDiff1326:
+                return new DigitDiff1326Strategy(this.config);
             case ContractTypeEnum.DigitDiff:
                 return new DigitDiffStrategy(this.config);
             case ContractTypeEnum.DigitOver:

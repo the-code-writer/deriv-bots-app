@@ -26,8 +26,9 @@ import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "../user/UserDerivAccount";
 import { StrategyParser } from './trader-strategy-parser';
-import { BotConfig } from './types';
+import { BotConfig, BasisTypeEnum, CurrenciesEnum } from './types';
 import { getRandomDigit, sleep } from "@/common/utils/snippets";
+import { OneThreeTwoSixStrategy } from './trade-1326-strategy';
 
 const logger = pino({
     name: "TradeStrategy",
@@ -84,6 +85,8 @@ export abstract class TradeStrategy {
 
     protected config: BotConfig;
 
+    protected strategy1326: any;
+
     constructor(config: BotConfig) {
         this.config = config;
         this.tradeRewardStructures = new TradeRewardStructures();
@@ -115,7 +118,7 @@ export abstract class TradeStrategy {
      */
     abstract execute(): Promise<ITradeData | null>;
 
-    protected initializeVolatilityRiskManager(strategyName: string): void {
+    protected initializeVolatilityRiskManager(strategyName: string, config: BotConfig): void {
 
         logger.info({
             action: 'initializeVolatilityRiskManager',
@@ -168,89 +171,126 @@ export abstract class TradeStrategy {
 
         this.executor = new TradeExecutor(this.volatilityRiskManager);
 
+
+        this.strategy1326  = new OneThreeTwoSixStrategy({
+            initialStake: config.baseStake, // Custom initial stake
+            profitThreshold: config.takeProfit, // Custom profit threshold
+            lossThreshold: config.stopLoss, // Custom loss threshold,
+            market: config.market
+        });
+
+
     }
 
     protected async executeTrade(): Promise<ITradeData | null> {
 
-        const response: SafetyModeResponse = await this.preContractPurchaseChecks();
-
         let params: ContractParams = {} as ContractParams;
 
-        if (response?.status === 'OK') {
+        if (this.config.contractType === ContractTypeEnum.DigitDiff1326) {
 
-            // PASS
+            const decision = this.strategy1326.executeTrade(this.volatilityRiskManager.lastTradeWon, this.volatilityRiskManager.lastTradeProfit);
 
-        } else if (response?.status === 'SAFETY_MODE') {
+            if (!decision.shouldTrade) {
+                //TODO return with a reason
+                return null;
+            }
 
-            console.error({
-                message: "SAFETY_MODE",
-                response: response
-            });
+            const newParams = {
+                amount: this.volatilityRiskManager.lastTradeWon ? decision.amount : (this.volatilityRiskManager.lastTradeProfit * -1 * 12.5),
+                currency: CurrenciesEnum.Default,
+                basis: BasisTypeEnum.Stake,
+                contract_type: decision.contractType,
+                symbol: decision.market,
+                duration: decision.duration,
+                duration_unit: decision.durationType,
+                barrier: decision.prediction
+            }
+            
+            this.validateParameters(newParams);
 
-            const remainingCooldown = this.getRemainingCooldown(response);
-
-            logger.error(`*** In safety mode. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
-
-            // Wait for the cooldown period plus a small buffer
-            await sleep(remainingCooldown + 1000);
-
-            // Reset or refresh your trade manager if needed
-            this.resetSafetyMode();
-
-        } else if (response?.status === 'TRADE_BLOCKED' || response?.status === 'BLOCKED') {
-
-            console.error({
-                message: "TRADE_BLOCKED",
-                response: response
-            });
-
-            const remainingCooldown = this.getRemainingCooldown(response);
-
-            logger.error(`*** Trade currently blocked. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
-
-            // Wait for the cooldown period plus a small buffer
-            await sleep(remainingCooldown + 1000);
-
-            // Reset or refresh your trade manager if needed
-            this.resetSafetyMode();
-
-        } else if (response?.status === 'RAPID_LOSS_DETECTED') {
-
-            console.error({
-                message: "RAPID_LOSS_DETECTED",
-                response: response
-            });
-
-            const remainingCooldown = this.getRemainingCooldown(response);
-
-            logger.error(`*** Rapid loss detected. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
-
-            // Wait for the cooldown period plus a small buffer
-            await sleep(remainingCooldown + 1000);
-
-            // Reset or refresh your trade manager if needed
-            this.resetSafetyMode();
+            params = newParams;
 
         } else {
+          
+            const response: SafetyModeResponse = await this.preContractPurchaseChecks();
 
-            console.error({
-                message: "UNKNOWN",
-                response: response
-            });
+            if (response?.status === 'OK') {
 
-        }
+                // PASS
 
-        params = this.getNextContractParams(this.config, this.barrier);
+            } else if (response?.status === 'SAFETY_MODE') {
 
-        const validParams: boolean = this.validateParameters(params);
+                console.error({
+                    message: "SAFETY_MODE",
+                    response: response
+                });
 
-        if (!validParams) {
-            console.error({
-                message: "INVALID_PARAMS",
-                params: validParams
-            });
+                const remainingCooldown = this.getRemainingCooldown(response);
 
-            // TODO : Stop Trades
+                logger.error(`*** In safety mode. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
+
+                // Wait for the cooldown period plus a small buffer
+                await sleep(remainingCooldown + 1000);
+
+                // Reset or refresh your trade manager if needed
+                this.resetSafetyMode();
+
+            } else if (response?.status === 'TRADE_BLOCKED' || response?.status === 'BLOCKED') {
+
+                console.error({
+                    message: "TRADE_BLOCKED",
+                    response: response
+                });
+
+                const remainingCooldown = this.getRemainingCooldown(response);
+
+                logger.error(`*** Trade currently blocked. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
+
+                // Wait for the cooldown period plus a small buffer
+                await sleep(remainingCooldown + 1000);
+
+                // Reset or refresh your trade manager if needed
+                this.resetSafetyMode();
+
+            } else if (response?.status === 'RAPID_LOSS_DETECTED') {
+
+                console.error({
+                    message: "RAPID_LOSS_DETECTED",
+                    response: response
+                });
+
+                const remainingCooldown = this.getRemainingCooldown(response);
+
+                logger.error(`*** Rapid loss detected. Resuming in ${Math.ceil(remainingCooldown / 1000)} seconds...`);
+
+                // Wait for the cooldown period plus a small buffer
+                await sleep(remainingCooldown + 1000);
+
+                // Reset or refresh your trade manager if needed
+                this.resetSafetyMode();
+
+            } else {
+
+                console.error({
+                    message: "UNKNOWN",
+                    response: response
+                });
+
+            }
+
+            params = this.getNextContractParams(this.config, this.barrier);
+
+            const validParams: boolean = this.validateParameters(params);
+
+            if (!validParams) {
+                console.error({
+                    message: "INVALID_PARAMS",
+                    params: validParams
+                });
+
+                // TODO : Stop Trades
+            }
+            
         }
 
         const result: ITradeData = await this.executor.purchaseContract(params, this.config) as ITradeData;
@@ -454,7 +494,10 @@ export abstract class TradeStrategy {
                     logger.error('Barrier is required for digit-based trades');
                     return false;
                 }
-                return typeof this.validateDigit(Number(params.barrier)) === "number";
+                if (typeof this.validateDigit(Number(params.barrier)) === "number") {
+                    logger.error('Barrier is required and must be a number');
+                    return false;
+                };
         }
         return true;
     }
@@ -619,6 +662,34 @@ export abstract class TradeStrategy {
 
     }
 
+}
+// Concrete strategy implementations
+export class DigitDiff1326Strategy extends TradeStrategy {
+    constructor(config: BotConfig) {
+        super(config);
+        // Class based contract type
+        logger.error({
+            config,
+            strategy: 'CONFIG',
+        });
+        this.contractType = ContractTypeEnum.DigitDiff;
+        this.initializeVolatilityRiskManager(this.contractType, config);
+    }
+
+    async execute(): Promise<ITradeData | null> {
+        try {
+            return await this.executeTrade();
+        } catch (error) {
+            logger.error({
+                error,
+                strategy: 'DIGITDIFF',
+                message: 'Error executing DIGITDIFF strategy'
+            });
+            this.checkCircuitBreakersOnFailure();
+            //throw error;
+            return null;
+        }
+    }
 }
 
 // Concrete strategy implementations

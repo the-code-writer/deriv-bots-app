@@ -589,6 +589,11 @@ export const sanitizeContractType = (contractType: string | undefined): Contract
       break;
     }
 
+    case DerivativeDigitsEnum.DigitDiff1326: {
+      resolvedContractType = ContractTypeEnum.DigitDiff1326;
+      break;
+    }
+
     default: {
       resolvedContractType = ContractTypeEnum.Default;
       break;

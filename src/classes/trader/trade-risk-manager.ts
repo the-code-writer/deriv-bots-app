@@ -178,6 +178,10 @@ export class VolatilityRiskManager {
 
     private accountInitialBalance: number = 0;
 
+    public lastTradeWon: boolean = true;
+
+    public lastTradeProfit: number = 0;
+
     constructor(
         baseStake: number,
         market: MarketType,
@@ -342,6 +346,9 @@ export class VolatilityRiskManager {
             this.highestProfitAchieved = this.totalProfit;
         }
 
+        this.lastTradeWon = true;
+        this.lastTradeProfit = tradeResult.safeProfit;
+
         if (this.totalLossAmount > 0) {
 
             const recoveredAmount = this.calculateRecoveredAmount(tradeResult);
@@ -394,6 +401,9 @@ export class VolatilityRiskManager {
         this.totalLossAmount += lossAmount;
         this.dailyLossAmount += lossAmount;
 
+        this.lastTradeWon = false;
+        this.lastTradeProfit = tradeResult.safeProfit;
+
         logger.warn(`Loss: ${this.currency} ${roundToTwoDecimals(lossAmount)}, Total Loss: ${this.currency} ${roundToTwoDecimals(this.totalLossAmount)}, Consecutive: ${this.consecutiveLosses}`);
 
         if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
@@ -403,7 +413,7 @@ export class VolatilityRiskManager {
             defaultEventManager.emit(TradingEvent.StopTrading.type, {
                 reason: "Maximum recovery attempts reached",
                 timestamp: Date.now(),
-                profit: 1250.50
+                profit: this.totalProfit
             });
 
         }
@@ -429,7 +439,7 @@ export class VolatilityRiskManager {
             defaultEventManager.emit(TradingEvent.StopTrading.type, {
                 reason: "🔸 Catastrophic losses 🔸",
                 timestamp: Date.now(),
-                profit: 1250.50
+                profit: this.totalProfit
             });
 
         }

@@ -17,6 +17,7 @@
     "dev-trade": "tsx watch --clear-screen=false src/classes/trader/example.ts | pino-pretty",
     "dev-strategy": "tsx watch --clear-screen=false src/classes/trader/example-trade-strategy-parser.ts | pino-pretty",
     "dev-events": "tsx watch --clear-screen=false src/common/utils/eventBus.ts | pino-pretty",
+    "dev-1326": "tsx watch --clear-screen=false src/classes/trader/example-1326.ts| pino-pretty",
     "dev": "tsx watch --clear-screen=false src/index.ts | pino-pretty",
     "build": "tsup",
     "start": "node --no-deprecation dist/index.cjs",
@@ -113,7 +114,7 @@
     ]
   },
   "lint-staged": {
-    "*.txt": [ ]
+    "*.txt": []
   },
   "tsup": {
     "entry": [

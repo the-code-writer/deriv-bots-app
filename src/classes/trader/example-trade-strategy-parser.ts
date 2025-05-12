@@ -2,7 +2,7 @@ import { StrategyParser, StrategyStepOutput } from './trader-strategy-parser';
 import { BotConfig } from './types';
 
 try {
-    const strategyName: string = "CALLE";
+    const strategyName: string = "DIGITUNDER";
     const strategyJson = require(`./strategies/${strategyName}.json`);
 
     // Example with single strategy - simplified constructor call

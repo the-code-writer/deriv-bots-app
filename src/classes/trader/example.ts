@@ -13,8 +13,8 @@ const tradingSession = {
     "accountType": "VRTC1605087 ( USD )",
     "tradingType": "Derivatives 📊",
     "market": "Volatility 75(1s) 📈",
-    "contractType": "Digits ⬇️6️⃣", //"Rise ⬆️", //Digit NOT Random 🎲
-    "stake": 1,
+    "contractType": "Strategy 1️⃣3️⃣2️⃣6️⃣", //"Digits ⬇️6️⃣", "Rise ⬆️", //Digit NOT Random 🎲
+    "stake": 4,
     "takeProfit": "USD15,000.34",
     "stopLoss": 10000,
     "tradeDuration": "24hrs ⏱️",

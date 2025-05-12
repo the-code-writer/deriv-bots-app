@@ -42,6 +42,7 @@ export const StepType = {
 
 export type ContractType =
     | "DIGITMATCH"
+    | "DIGITDIFF1326"
     | "DIGITDIFF"
     | "DIGITOVER"
     | "DIGITOVER_0"
@@ -76,6 +77,7 @@ export type ContractType =
 
 export const ContractTypeEnum = {
     Default: "DIGITDIFF" as ContractType,
+    DigitDiff1326: "DIGITDIFF1326" as ContractType,
     DigitDiff: "DIGITDIFF" as ContractType,
     DigitMatch: "DIGITMATCH" as ContractType,
     DigitOver: "DIGITOVER" as ContractType,
@@ -183,6 +185,9 @@ export const DerivativeDigitsEnum = {
     // Digit NOT options
     DigitNotLast: "Digit NOT Last 🔚",
     DigitNotRandom: "Digit NOT Random 🎲",
+
+    DigitDiff1326: "Strategy 1️⃣3️⃣2️⃣6️⃣",
+    
 } as const;
 
 export const CryptoTradingPairsEnum = {
