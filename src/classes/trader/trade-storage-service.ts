@@ -101,6 +101,7 @@ export class TradeStorageService {
             await this.db.insertItem(this.collectionName, trade);
             logger.info(`Trade inserted for user ${trade.userAccount.email}`);
         } catch (error) {
+            logger.error('insertTrade:', trade);
             logger.error('Error inserting trade:', error);
             throw error;
         }

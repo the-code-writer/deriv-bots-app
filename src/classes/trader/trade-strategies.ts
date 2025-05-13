@@ -88,9 +88,13 @@ export abstract class TradeStrategy {
     protected strategy1326: any;
 
     constructor(config: BotConfig) {
+
         this.config = config;
         this.tradeRewardStructures = new TradeRewardStructures();
         this.contractFactory = ContractParamsFactory;
+
+        this.userAccountToken = this.config.userAccountToken;
+
     }
 
     checkPendingRecovery(): boolean {
@@ -147,15 +151,15 @@ export abstract class TradeStrategy {
 
         this.strategyParser = new StrategyParser(strategyJson, this.baseStake, this.config);
 
-
+        /*
         logger.info({
-            action: 'initializeVolatilityRiskManager::::::' + this.userAccountToken,
+            action: 'initializeVolatilityRiskManager::::::',
+            userAccountToken: this.config.userAccountToken,
+            config: this.config,
             strategyJson: strategyJson,
-            // strategyParser: this.strategyParser.getFormattedOutput() 
+            strategyParser: this.strategyParser.getFormattedOutput() 
         });
-
-        
-
+        */
 
         this.volatilityRiskManager = new VolatilityRiskManager(
             this.baseStake,
@@ -164,15 +168,15 @@ export abstract class TradeStrategy {
             this.contractType,
             this.contractDurationValue,
             this.contractDurationUnits,
+            this.userAccountToken,
             this.strategyParser,
-            circuitBreakerConfig,
-            this.userAccountToken
+            circuitBreakerConfig
         );
 
         this.executor = new TradeExecutor(this.volatilityRiskManager);
 
 
-        this.strategy1326  = new OneThreeTwoSixStrategy({
+        this.strategy1326 = new OneThreeTwoSixStrategy({
             initialStake: config.baseStake, // Custom initial stake
             profitThreshold: config.takeProfit, // Custom profit threshold
             lossThreshold: config.stopLoss, // Custom loss threshold,
@@ -195,18 +199,19 @@ export abstract class TradeStrategy {
                 return null;
             }
 
-            let recoveryAmount = this.volatilityRiskManager.lastTradeWon ? decision.amount : roundToTwoDecimals(this.volatilityRiskManager.lastTradeProfit * -1 * 12.75);
+            let recoveryAmount:number = (this.volatilityRiskManager.lastTradeWon ? roundToTwoDecimals(decision.amount) : roundToTwoDecimals(this.volatilityRiskManager.lastTradeProfit * -1 * 12.75)) as number;
 
             if (this.volatilityRiskManager.getTotalProfit() < 0) {
 
-                const nextRecoveryAmount = roundToTwoDecimals(this.volatilityRiskManager.getTotalProfit() * -1 * 12.75);
+                const nextRecoveryAmount:number = roundToTwoDecimals(this.volatilityRiskManager.getTotalProfit() * -1 * 12.75) as number;
+
                 if (recoveryAmount < nextRecoveryAmount) {
                     recoveryAmount = nextRecoveryAmount;
                 }
 
             }
 
-            const newParams = {
+            const newParams: ContractParams = {
                 amount: recoveryAmount,
                 currency: CurrenciesEnum.Default,
                 basis: BasisTypeEnum.Stake,
@@ -215,14 +220,14 @@ export abstract class TradeStrategy {
                 duration: decision.duration,
                 duration_unit: decision.durationType,
                 barrier: decision.prediction
-            }
-            
+            };
+
             this.validateParameters(newParams);
 
             params = newParams;
 
         } else {
-          
+
             const response: SafetyModeResponse = await this.preContractPurchaseChecks();
 
             if (response?.status === 'OK') {
@@ -301,7 +306,7 @@ export abstract class TradeStrategy {
 
                 // TODO : Stop Trades
             }
-            
+
         }
 
         const result: ITradeData = await this.executor.purchaseContract(params, this.config) as ITradeData;
@@ -837,15 +842,15 @@ export class PutStrategy extends TradeStrategy {
 }
 
 export class DigitUnderStrategy extends TradeStrategy {
-    constructor(config: BotConfig, barrier?:number) {
+    constructor(config: BotConfig, barrier?: number) {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitUnder;
         this.initializeVolatilityRiskManager(this.contractType);
-        if(barrier){
+        if (barrier) {
             this.barrier = barrier;
         }
-        
+
     }
 
     async execute(): Promise<ITradeData | null> {
@@ -865,12 +870,12 @@ export class DigitUnderStrategy extends TradeStrategy {
 }
 
 export class DigitOverStrategy extends TradeStrategy {
-    constructor(config: BotConfig, barrier?:number) {
+    constructor(config: BotConfig, barrier?: number) {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitOver;
         this.initializeVolatilityRiskManager(this.contractType);
-        if(barrier){
+        if (barrier) {
             this.barrier = barrier;
         }
 

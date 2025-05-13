@@ -18,6 +18,7 @@ export interface IDerivUserAccount {
     token?: string;
     balance?: any;
     initialBalance?: any;
+    status?: any;
 }
 
 /**
@@ -55,29 +56,66 @@ export class DerivUserAccount {
     static async getUserAccount(
         userAccountToken: string,
         api?: IDerivApiClient,
+        onBalanceCallback?: any
     ): Promise<IDerivUserAccount | null> {
         // Initialize empty user account object
         let userAccount: IDerivUserAccount | null = null;
 
+        let derivUserAccount:any = {};
+
         try {
 
-            if (api) {
+            if (userAccountToken !== '') {
+                    
+                if (api) {
+                    
+                    derivUserAccount = await api.account(userAccountToken) as IDerivUserAccount | null;
+
+                } else {
+                    
+                const derivAPI = new DerivAPI({ endpoint: env.DERIV_APP_ENDPOINT_DOMAIN, app_id: env.DERIV_APP_ENDPOINT_APP_ID, lang: env.DERIV_APP_ENDPOINT_LANG });
                 
-                userAccount = await api.account(userAccountToken) as IDerivUserAccount | null;
+                    derivUserAccount = await derivAPI.account(userAccountToken) as IDerivUserAccount | null;
+
+                }
+
+                if (typeof onBalanceCallback === "function") {
+                    derivUserAccount.balance.on_update((balance: any) => {
+                        onBalanceCallback(balance);
+                    })
+                }
+
+                userAccount = {
+                    email: derivUserAccount._data.email,
+                    country: derivUserAccount._data.country,
+                    currency: derivUserAccount._data.currency,
+                    loginid: derivUserAccount._data.loginid,
+                    user_id: derivUserAccount._data.user_id,
+                    fullname: derivUserAccount._data.fullname,
+                    balance: derivUserAccount._data.balance._data.amount._data,
+                    status: derivUserAccount.status_codes,
+                    token: derivUserAccount.token
+                }
 
             } else {
-                
-            const derivAPI = new DerivAPI({ endpoint: env.DERIV_APP_ENDPOINT_DOMAIN, app_id: env.DERIV_APP_ENDPOINT_APP_ID, lang: env.DERIV_APP_ENDPOINT_LANG });
-            
-                userAccount = await derivAPI.account(userAccountToken) as IDerivUserAccount | null;
+
+                console.error('User token error:', [userAccountToken]);
+
+                throw("Missing account Token");
 
             }
 
         } catch (error) {
 
-            console.error('Error fetching user account:', error);
+            if (error.error.code === "") {
+                
+            } else {
+                
+            console.error('Error fetching user account:', [userAccountToken, error]);
 
             throw new Error('Failed to fetch user account');
+
+            }
 
         }
 

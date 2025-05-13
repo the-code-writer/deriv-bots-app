@@ -532,7 +532,7 @@ export type BotConfig = {
     maxRecoveryTrades?: number,
     maxStake?: number,
     minStake?: number,
-    userAccountToken?: string;
+    userAccountToken: string;
 };
 
 export interface ContractResponse {

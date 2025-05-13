@@ -176,6 +176,8 @@ export class VolatilityRiskManager {
 
     private userAccountToken: string = "";
 
+    private userAccountBalance: number = 0;
+
     private accountInitialBalance: number = 0;
 
     public lastTradeWon: boolean = true;
@@ -189,9 +191,9 @@ export class VolatilityRiskManager {
         contractType: ContractType,
         contractDurationValue: number,
         contractDurationUnits: ContractDurationUnitType,
+        userAccountToken: string,
         strategyParser: StrategyParser,
         circuitBreakerConfig?: CircuitBreakerConfig,
-        userAccountToken?: string
     ) {
         this.baseStake = baseStake;
         this.minStake = env.MIN_STAKE
@@ -207,6 +209,7 @@ export class VolatilityRiskManager {
 
         // Initialize circuit breakers with defaults or provided config
         this.circuitBreakerConfig = {
+            ...circuitBreakerConfig,
             maxAbsoluteLoss: env.MAX_ABSOLUTE_LOSS,
             maxDailyLoss: env.MAX_DAILY_LOSS,
             maxConsecutiveLosses: env.MAX_CONSECUTIVE_LOSSES,
@@ -247,16 +250,22 @@ export class VolatilityRiskManager {
 
     }
 
-    private async checkUserBalance(): Promise<void>{
+    private async checkUserBalance(): Promise<void> {
 
-        const userBalance =  await this.getUserBalance();
+        const userBalance = await this.getUserBalance();
 
         if (userBalance) {
-            
+
             this.accountInitialBalance = parseFloat(userBalance.display);
 
+            this.userAccountBalance = this.accountInitialBalance;
+
         } else {
+
             this.accountInitialBalance = 0;
+
+            this.userAccountBalance = 0;
+
         }
 
     }
@@ -274,16 +283,18 @@ export class VolatilityRiskManager {
     }
 
     public async getCurrentAccount(): Promise<IDerivUserAccount> {
-        
+
         const userAccount = await DerivUserAccount.getUserAccount(this.userAccountToken) as IDerivUserAccount;
 
+
         if (userAccount) {
-            userAccount.balance = await this.getUserBalance(),
+
             userAccount.initialBalance = this.accountInitialBalance;
+
         }
-        
+
         return userAccount;
- 
+
     }
 
     private validateInitialization(): void {
@@ -337,7 +348,7 @@ export class VolatilityRiskManager {
             this.enterSafetyMode('circuit_breaker_triggered');
             shouldContinueTrading = false;
         }
-        
+
 
         if (this.consecutiveLosses === 2) {
             if (this.totalProfit < 0) {
@@ -588,7 +599,7 @@ export class VolatilityRiskManager {
                     this.highestStakeInvested = investmentStake;
                 }
 
-                
+
 
                 return {
                     basis: step.basis || strategyConfig.meta.basis,
@@ -982,34 +993,54 @@ export class VolatilityRiskManager {
             availableAfterTrade: number;
         };
     } {
-        const reasons: string[] = [];
-        const balance = account.balance;
-        const riskPercentage = (amount / balance) * 100;
-        const availableAfterTrade = balance - amount;
-        const requiredMinimum = this.baseStake * 3; // Minimum 3x base stake
 
-        // Check various balance conditions
-        if (amount > balance) {
-            reasons.push('insufficient_balance');
-        }
-        if (availableAfterTrade < requiredMinimum) {
-            reasons.push('minimum_balance_violation');
-        }
-        if (riskPercentage > this.circuitBreakerConfig.maxBalancePercentageLoss * 100) {
-            reasons.push('max_risk_exceeded');
+        const reasons: string[] = [];
+
+        if (account) {
+
+            const balance = account.balance.value;
+            const riskPercentage = (amount / balance) * 100;
+            const availableAfterTrade = balance - amount;
+            const requiredMinimum = this.baseStake * 3; // Minimum 3x base stake
+            this.userAccountBalance = balance;
+
+            // Check various balance conditions
+            if (amount > balance) {
+                reasons.push('insufficient_balance');
+            }
+            if (availableAfterTrade < requiredMinimum) {
+                reasons.push('minimum_balance_violation');
+            }
+            if (riskPercentage > this.circuitBreakerConfig.maxBalancePercentageLoss * 100) {
+                reasons.push('max_risk_exceeded');
+            }
+
+            return {
+                isValid: reasons.length === 0,
+                reasons,
+                metrics: {
+                    balance,
+                    proposedStake: amount,
+                    riskPercentage,
+                    requiredMinimum,
+                    availableAfterTrade
+                }
+            };
+
         }
 
         return {
-            isValid: reasons.length === 0,
-            reasons,
+            isValid: false,
+            reasons: ['could_not_fetch_balance'],
             metrics: {
-                balance,
+                balance: -1,
                 proposedStake: amount,
-                riskPercentage,
-                requiredMinimum,
-                availableAfterTrade
+                riskPercentage: -1,
+                requiredMinimum: -1,
+                availableAfterTrade: -1
             }
         };
+
     }
 
     /**
