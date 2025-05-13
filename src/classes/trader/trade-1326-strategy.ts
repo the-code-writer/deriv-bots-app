@@ -32,6 +32,7 @@ interface StrategyState {
     lastPrediction: number;
     sequencePosition: number;
     tradeCount: number;
+    consecutiveLosses: number;
 }
 
 // ==================== Constants ====================
@@ -46,33 +47,27 @@ const DEFAULT_CONFIG: StrategyConfig = {
 };
 
 /** The 1-3-2-6 sequence multipliers */
-const SEQUENCE_MULTIPLIERS = [1, 3, 2, 6];
+const SEQUENCE_MULTIPLIERS = [1, 3, 2, 6, 4, 10];
 
 // ==================== Strategy Class ====================
 
 export class OneThreeTwoSixStrategy {
-    private config: StrategyConfig;
-    private state: StrategyState;
+
+    private config: StrategyConfig = {} as StrategyConfig;
+    private state: StrategyState = {} as StrategyState;
     private isInitialized: boolean = false;
 
     constructor(config: Partial<StrategyConfig> = {}) {
         // Merge provided config with defaults
         this.config = { ...DEFAULT_CONFIG, ...config };
 
-        console.error({
-            CONFIG: this.config
-        })
+        this.reset();
 
         // Initialize state
-        this.state = {
-            currentUnits: 1,
-            totalProfit: 0,
-            lastPrediction: this.config.initialPrediction,
-            sequencePosition: 0,
-            tradeCount: 0
-        };
+        this.state.lastPrediction = this.config.initialPrediction;
 
         this.isInitialized = true;
+
     }
 
     // ==================== Public Methods ====================
@@ -84,6 +79,7 @@ export class OneThreeTwoSixStrategy {
      * @returns Trade decision including amount and prediction
      */
     public executeTrade(lastTradeOutcome?: boolean, lastTradeProfit?: number): TradeDecision {
+
         if (!this.isInitialized) {
             throw new Error('Strategy not initialized');
         }
@@ -99,18 +95,12 @@ export class OneThreeTwoSixStrategy {
                 this.state.totalProfit >= this.config.profitThreshold ? 'success' : 'error',
                 this.getThresholdMessage()
             );
-            return { shouldTrade: false };
+            return { shouldTrade: false, reason: this.getThresholdMessage() };
         }
-
-        // Get the current stake amount
-        const stakeAmount = this.getCurrentStake();
-
-        // Send notification about current stake
-        this.sendNotification('warn', `Current stake: ${stakeAmount}`);
 
         return {
             shouldTrade: true,
-            amount: stakeAmount,
+            amount: this.getCurrentStake(),
             prediction: getRandomDigit(),
             contractType: ContractTypeEnum.DigitDiff,
             market: this.config.market,
@@ -128,7 +118,8 @@ export class OneThreeTwoSixStrategy {
             totalProfit: 0,
             lastPrediction: getRandomDigit(),
             sequencePosition: 0,
-            tradeCount: 0
+            tradeCount: 0,
+            consecutiveLosses: 0
         };
     }
 
@@ -140,7 +131,9 @@ export class OneThreeTwoSixStrategy {
      * @param profit Profit from the trade
      */
     private updateStateAfterTrade(outcome: boolean, profit: number): void {
+
         this.state.totalProfit += profit;
+
         this.state.tradeCount++;
 
         if (outcome) {
@@ -149,39 +142,55 @@ export class OneThreeTwoSixStrategy {
             this.handleLoss();
         }
 
+        /*
         // Send periodic profit update
         if (this.state.tradeCount % 5 === 0) {
             this.sendNotification('info', `Total Profit: ${this.state.totalProfit.toFixed(2)}`);
         }
+        */
+
+        this.state.lastPrediction = getRandomDigit();
+
     }
 
     /**
      * Handles the strategy logic after a winning trade
      */
     private handleWin(): void {
+
         // Progress through the 1-3-2-6 sequence
         this.state.sequencePosition = (this.state.sequencePosition + 1) % SEQUENCE_MULTIPLIERS.length;
+
         this.state.currentUnits = SEQUENCE_MULTIPLIERS[this.state.sequencePosition];
 
         // If we completed a full sequence (1-3-2-6), reset to start
         if (this.state.sequencePosition === 0) {
+
             this.sendNotification('success', '1-3-2-6 sequence completed, resetting to initial stake');
+
         }
 
-        // For wins, use the last digit of the previous result as prediction
-        this.state.lastPrediction = this.getLastDigit();
+        this.state.consecutiveLosses = 0;
+
     }
 
     /**
      * Handles the strategy logic after a losing trade
      */
     private handleLoss(): void {
-        // After a loss, multiply stake by 12.5x (stop-loss mechanism)
-        this.state.currentUnits *= 12.5;
-        this.state.sequencePosition = 0; // Reset sequence position
 
-        // For losses, use a fixed prediction of 9
-        this.state.lastPrediction = 9;
+        // After a loss, multiply stake by 12.75x (recovery mechanism)
+        this.state.currentUnits *= 12.75;
+
+        this.state.consecutiveLosses++;
+
+        if (this.state.consecutiveLosses === 2) {
+            
+            this.state.sequencePosition = 0; // Reset sequence position
+            this.state.consecutiveLosses = 0;
+
+        }
+
     }
 
     /**
@@ -189,10 +198,13 @@ export class OneThreeTwoSixStrategy {
      * @returns boolean indicating whether to continue trading
      */
     private shouldContinueTrading(): boolean {
+
         return (
             this.state.totalProfit < this.config.profitThreshold &&
-            this.state.totalProfit > -this.config.lossThreshold
+            this.state.totalProfit > -this.config.lossThreshold &&
+            this.state.consecutiveLosses < 2
         );
+
     }
 
     /**
@@ -200,19 +212,12 @@ export class OneThreeTwoSixStrategy {
      * @returns Current stake amount
      */
     private getCurrentStake(): number {
+
         return this.config.initialStake * this.state.currentUnits;
+
     }
 
     // ==================== Helper Methods ====================
-
-    /**
-     * Simulates getting the last digit from the market (placeholder implementation)
-     * @returns A random digit between 0-9
-     */
-    private getLastDigit(): number {
-        // In a real implementation, this would fetch the last digit from market data
-        return Math.floor(Math.random() * 10);
-    }
 
     /**
      * Gets the appropriate threshold message based on current profit
@@ -242,6 +247,7 @@ export class OneThreeTwoSixStrategy {
 /** Decision made by the strategy about trading */
 interface TradeDecision {
     shouldTrade: boolean;
+    reason?: string;
     amount?: number;
     prediction?: number;
     contractType?: string;

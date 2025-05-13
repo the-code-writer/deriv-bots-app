@@ -1,5 +1,6 @@
-import { CurrencyType } from '../trader/types';
+import { CurrencyType, TradingEvent } from '../trader/types';
 import { env } from '@/common/utils/envConfig';
+import { defaultEventManager } from '../trader/trade-event-manager';
 
 const jsan = require("jsan");
 
@@ -109,15 +110,19 @@ export class DerivUserAccount {
 
         } catch (error:any) {
 
-            console.error('ERROR : ERROR :', error);
-
             if (error.error.code === "RateLimit") {
                 
-            console.error('ERROR : RATE LIMIT', [error]);
+                defaultEventManager.emit(TradingEvent.DeriveRateLimitReached.type, {
+                    reason: error.error.message,
+                    timestamp: Date.now(),
+                    cooldownMs: Date.now() + 3600 * 100 
+                });
 
             } else {
                 
-            throw new Error('Failed to fetch user account');
+                console.error('ERROR : ERROR :', error);
+
+                throw new Error('Failed to fetch user account');
 
             }
 

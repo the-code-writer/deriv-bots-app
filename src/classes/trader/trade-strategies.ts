@@ -26,9 +26,10 @@ import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "../user/UserDerivAccount";
 import { StrategyParser } from './trader-strategy-parser';
-import { BotConfig, BasisTypeEnum, CurrenciesEnum } from './types';
+import { BotConfig, BasisTypeEnum, CurrenciesEnum, TradingEvent } from './types';
 import { getRandomDigit, roundToTwoDecimals, sleep } from "@/common/utils/snippets";
 import { OneThreeTwoSixStrategy } from './trade-1326-strategy';
+import { defaultEventManager } from './trade-event-manager';
 
 const logger = pino({
     name: "TradeStrategy",
@@ -195,24 +196,30 @@ export abstract class TradeStrategy {
             const decision = this.strategy1326.executeTrade(this.volatilityRiskManager.lastTradeWon, this.volatilityRiskManager.lastTradeProfit);
 
             if (!decision.shouldTrade) {
-                //TODO return with a reason
-                return null;
+                defaultEventManager.emit(TradingEvent.StopTrading.type, {
+                    reason: decision.reason,
+                    timestamp: Date.now(),
+                    profit: this.volatilityRiskManager.getTotalProfit()
+                });
+                
             }
 
-            let recoveryAmount:number = (this.volatilityRiskManager.lastTradeWon ? roundToTwoDecimals(decision.amount) : roundToTwoDecimals(this.volatilityRiskManager.lastTradeProfit * -1 * 12.75)) as number;
+            let nextStakeAmount: number = decision.amount;
 
-            if (this.volatilityRiskManager.getTotalProfit() < 0) {
+            let currentProfit: number = roundToTwoDecimals(this.volatilityRiskManager.getTotalProfit()) as number;
 
-                const nextRecoveryAmount:number = roundToTwoDecimals(this.volatilityRiskManager.getTotalProfit() * -1 * 12.75) as number;
+            if (currentProfit < 0) {
 
-                if (recoveryAmount < nextRecoveryAmount) {
-                    recoveryAmount = nextRecoveryAmount;
+                const proposedAmountToRecoverLostProfit: number = currentProfit * -1 * 12.75;
+
+                if (nextStakeAmount < proposedAmountToRecoverLostProfit) {
+                    nextStakeAmount = roundToTwoDecimals(proposedAmountToRecoverLostProfit) as number;
                 }
 
             }
 
             const newParams: ContractParams = {
-                amount: recoveryAmount,
+                amount: nextStakeAmount,
                 currency: CurrenciesEnum.Default,
                 basis: BasisTypeEnum.Stake,
                 contract_type: decision.contractType,
@@ -313,9 +320,11 @@ export abstract class TradeStrategy {
 
         if (this.volatilityRiskManager) {
             if (this.config.contractType === ContractTypeEnum.DigitDiff1326) {
-                const isWin = result.profit_is_win;
-                const profit = result.safeProfit || 0;
-                await this.volatilityRiskManager.process1326TradeResult(params.amount, isWin, profit)
+                if (result && "profit_is_win" in result) {
+                    const isWin = result.profit_is_win;
+                    const profit = result.safeProfit || 0;
+                    await this.volatilityRiskManager.process1326TradeResult(params.amount, isWin, profit)
+                }
             } else {
                 this.volatilityRiskManager.processTradeResult(result);
             }

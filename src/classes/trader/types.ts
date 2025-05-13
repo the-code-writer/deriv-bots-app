@@ -371,7 +371,8 @@ export const TradeDurationUnitsOptimizedEnum = {
  */
 export type TradingEventType = 
   | "START_TRADING" 
-  | "STOP_TRADING" 
+    | "STOP_TRADING"
+    | "RATE_LIMIT_REACHED" 
   | "PAUSE_TRADING" 
   | "RESUME_TRADING"
   | "TRADE_EXECUTED"
@@ -383,6 +384,7 @@ export type TradingEventType =
 export type TradingEventPayloads = {
   START_TRADING: { symbol: string; strategy: string };
   STOP_TRADING: { reason: string; reasons?: string[], timestamp: number; profit: number };
+  RATE_LIMIT_REACHED: { reason: string; reasons?: string[], timestamp: number; cooldownMs: number };
   PAUSE_TRADING: { timestamp: number };
   RESUME_TRADING: { timestamp: number };
   TRADE_EXECUTED: { symbol: string; price: number; quantity: number };
@@ -421,6 +423,13 @@ export const TradingEvent = {
         type: "STOP_TRADING",
         payload
       })
+    },
+    DeriveRateLimitReached: {
+        type: "RATE_LIMIT_REACHED" as const,
+        create: (payload: TradingEventPayloads["RATE_LIMIT_REACHED"]): TradingEvent<"RATE_LIMIT_REACHED"> => ({
+            type: "RATE_LIMIT_REACHED",
+            payload
+        })
     },
     // ... similar for other events
   } as const;
