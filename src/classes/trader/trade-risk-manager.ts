@@ -295,7 +295,7 @@ export class VolatilityRiskManager {
         }
     }
 
-    public async process1326TradeResult(amount: number, isWin: boolean, profit: number): any {
+    public async process1326TradeResult(amount: number, isWin: boolean, profit: number): Promise<any> {
         // Update highest stake invested
         if (amount > this.highestStakeInvested) {
             this.highestStakeInvested = amount;

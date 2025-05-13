@@ -310,11 +310,10 @@ export abstract class TradeStrategy {
             if (this.config.contractType === ContractTypeEnum.DigitDiff1326) {
                 const isWin = result.profit_is_win;
                 const profit = result.safeProfit || 0;
-                this.volatilityRiskManager.process1326TradeResult(params.amount, isWin, profit)
+                await this.volatilityRiskManager.process1326TradeResult(params.amount, isWin, profit)
             } else {
                 this.volatilityRiskManager.processTradeResult(result);
             }
-            
         }
 
         return result;
