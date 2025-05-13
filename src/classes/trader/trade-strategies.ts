@@ -15,8 +15,6 @@ import {
     MarketTypeEnum,
     BasisType,
     CurrencyType,
-    BasisTypeEnum,
-    CurrenciesEnum,
     ContractDurationUnitTypeEnum,
     StatusTypeEnum
 } from './types';
@@ -26,7 +24,7 @@ import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "../user/UserDerivAccount";
 import { StrategyParser } from './trader-strategy-parser';
-import { BotConfig, BasisTypeEnum, CurrenciesEnum, TradingEvent } from './types';
+import { BotConfig, TradingEvent } from './types';
 import { getRandomDigit, roundToTwoDecimals, sleep } from "@/common/utils/snippets";
 import { OneThreeTwoSixStrategy } from './trade-1326-strategy';
 import { defaultEventManager } from './trade-event-manager';
@@ -746,7 +744,7 @@ export class DigitDiffStrategy extends TradeStrategy {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitDiff;
-        this.initializeVolatilityRiskManager(this.contractType);
+        this.initializeVolatilityRiskManager(this.contractType, config);
     }
 
     async execute(): Promise<ITradeData | null> {
@@ -770,7 +768,7 @@ export class DigitEvenStrategy extends TradeStrategy {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitEven;
-        this.initializeVolatilityRiskManager(this.contractType);
+        this.initializeVolatilityRiskManager(this.contractType, config);
     }
 
     async execute(): Promise<ITradeData | null> {
@@ -794,7 +792,7 @@ export class DigitOddStrategy extends TradeStrategy {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitOdd;
-        this.initializeVolatilityRiskManager(this.contractType);
+        this.initializeVolatilityRiskManager(this.contractType, config);
     }
 
     async execute(): Promise<ITradeData | null> {
@@ -818,7 +816,7 @@ export class CallStrategy extends TradeStrategy {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.Call;
-        this.initializeVolatilityRiskManager(this.contractType);
+        this.initializeVolatilityRiskManager(this.contractType, config);
     }
 
     async execute(): Promise<ITradeData | null> {
@@ -842,7 +840,7 @@ export class PutStrategy extends TradeStrategy {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.Put;
-        this.initializeVolatilityRiskManager(this.contractType);
+        this.initializeVolatilityRiskManager(this.contractType, config);
     }
 
     async execute(): Promise<ITradeData | null> {
@@ -866,7 +864,7 @@ export class DigitUnderStrategy extends TradeStrategy {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitUnder;
-        this.initializeVolatilityRiskManager(this.contractType);
+        this.initializeVolatilityRiskManager(this.contractType, config);
         if (barrier) {
             this.barrier = barrier;
         }
@@ -894,7 +892,7 @@ export class DigitOverStrategy extends TradeStrategy {
         super(config);
         // Class based contract type
         this.contractType = ContractTypeEnum.DigitOver;
-        this.initializeVolatilityRiskManager(this.contractType);
+        this.initializeVolatilityRiskManager(this.contractType, config);
         if (barrier) {
             this.barrier = barrier;
         }
