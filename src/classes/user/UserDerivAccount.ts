@@ -80,9 +80,11 @@ export class DerivUserAccount {
                 }
 
                 if (typeof onBalanceCallback === "function") {
-                    derivUserAccount.balance.on_update((balance: any) => {
-                        onBalanceCallback(balance);
-                    })
+                    if (typeof derivUserAccount._data.balance.on_update === "function") {
+                        derivUserAccount._data.balance.on_update((balance: any) => {
+                            onBalanceCallback(balance);
+                        })
+                    }
                 }
 
                 userAccount = {
@@ -105,14 +107,16 @@ export class DerivUserAccount {
 
             }
 
-        } catch (error) {
+        } catch (error:any) {
 
-            if (error.error.code === "") {
+            console.error('ERROR : ERROR :', error);
+
+            if (error.error.code === "RateLimit") {
                 
+            console.error('ERROR : RATE LIMIT', [error]);
+
             } else {
                 
-            console.error('Error fetching user account:', [userAccountToken, error]);
-
             throw new Error('Failed to fetch user account');
 
             }

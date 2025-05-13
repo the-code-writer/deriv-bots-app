@@ -230,21 +230,13 @@ export class DerivTradingBot {
 
                 if (ping) {
 
-                    /*
-
-                    const bal = new Balance(api);
-
-                    bal.onUpdate().subscribe((balance: any) => console.log(balance))
-
-                    */
-
-                    console.error([this.userAccountToken, userAccountToken])
-
                     if (userAccountToken === "") {
                         parentPort?.postMessage({ action: "revertStepShowAccountTypeKeyboard", text: "User account token is missing. Please select the account to use in order to resu,e your session.", meta: { cachedSession: this.cachedSession } });
                     }
 
-                    this.userAccount = await DerivUserAccount.getUserAccount(userAccountToken) as IDerivUserAccount;
+                    this.userAccount = await DerivUserAccount.getUserAccount(userAccountToken, api, (balanceUpdate: any) => {
+                        console.error(`BALANCE UPDATE: 🟢🟢🟢`, balanceUpdate)
+                    }) as IDerivUserAccount;
 
                     if (this.userAccount) {
 
