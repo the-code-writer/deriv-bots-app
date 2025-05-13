@@ -206,14 +206,25 @@ export abstract class TradeStrategy {
 
             let nextStakeAmount: number = decision.amount;
 
+            console.error(":::: >>>>> nextStakeAmount", nextStakeAmount);
+
             let currentProfit: number = roundToTwoDecimals(this.volatilityRiskManager.getTotalProfit()) as number;
+
+            console.error(":::: >>>>> currentProfit", currentProfit);
+
+            console.error(":::: >>>>> currentProfit < 0", currentProfit < 0);
 
             if (currentProfit < 0) {
 
                 const proposedAmountToRecoverLostProfit: number = currentProfit * -1 * 12.75;
 
+                console.error(":::: >>>>> proposedAmountToRecoverLostProfit", proposedAmountToRecoverLostProfit);
+
+                console.error(":::: >>>>> nextStakeAmount < proposedAmountToRecoverLostProfit", nextStakeAmount < proposedAmountToRecoverLostProfit);
+
                 if (nextStakeAmount < proposedAmountToRecoverLostProfit) {
                     nextStakeAmount = roundToTwoDecimals(proposedAmountToRecoverLostProfit) as number;
+                    console.error(":::: >>>>> nextStakeAmount FINAL!!!", nextStakeAmount);
                 }
 
             }
