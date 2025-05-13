@@ -17,6 +17,7 @@ export interface IDerivUserAccount {
     fullname: string;
     token?: string;
     balance?: any;
+    initialBalance?: any;
 }
 
 /**
@@ -52,47 +53,36 @@ export class DerivUserAccount {
      * @returns {Promise<IDerivUserAccount | null>} A promise that resolves to the user account object or null if not found
      */
     static async getUserAccount(
-        api: IDerivApiClient,
         userAccountToken: string,
-        includeBalance: boolean = false
+        api?: IDerivApiClient,
     ): Promise<IDerivUserAccount | null> {
         // Initialize empty user account object
         let userAccount: IDerivUserAccount | null = null;
 
         try {
-            // Fetch account data from API
-            const account = await api.account(userAccountToken);
 
-            if (account) {
+            if (api) {
+                
+                userAccount = await api.account(userAccountToken) as IDerivUserAccount | null;
 
-                // Parse the account data safely
-                const user = jsan.parse(jsan.stringify(account)) as IRawUserData;
+            } else {
+                
+            const derivAPI = new DerivAPI({ endpoint: env.DERIV_APP_ENDPOINT_DOMAIN, app_id: env.DERIV_APP_ENDPOINT_APP_ID, lang: env.DERIV_APP_ENDPOINT_LANG });
+            
+                userAccount = await derivAPI.account(userAccountToken) as IDerivUserAccount | null;
 
-                // Create user account object with typed structure
-                userAccount = {
-                    email: user._data.email,
-                    country: user._data.country,
-                    currency: user._data.currency as CurrencyType,
-                    loginid: user._data.loginid,
-                    user_id: user._data.user_id,
-                    fullname: user._data.fullname,
-                    token: userAccountToken,
-                };
-
-                if (includeBalance) {
-
-                    if ("basic" in api) {
-                        userAccount.balance = await api.basic.balance().balance;
-                    }
-
-                }
             }
+
         } catch (error) {
+
             console.error('Error fetching user account:', error);
+
             throw new Error('Failed to fetch user account');
+
         }
 
         return userAccount;
+
     }
     /**
      * Retrieves user account balance from Deriv API
@@ -107,6 +97,7 @@ export class DerivUserAccount {
         try { 
 
             const api = new DerivAPI({ endpoint: env.DERIV_APP_ENDPOINT_DOMAIN, app_id: env.DERIV_APP_ENDPOINT_APP_ID, lang: env.DERIV_APP_ENDPOINT_LANG });
+            
             const account = await api.account(userAccountToken);
 
             return account;

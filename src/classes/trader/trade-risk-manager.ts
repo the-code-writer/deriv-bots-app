@@ -255,6 +255,8 @@ export class VolatilityRiskManager {
             
             this.accountInitialBalance = parseFloat(userBalance.display);
 
+        } else {
+            this.accountInitialBalance = 0;
         }
 
     }
@@ -271,6 +273,19 @@ export class VolatilityRiskManager {
 
     }
 
+    public async getCurrentAccount(): Promise<IDerivUserAccount> {
+        
+        const userAccount = await DerivUserAccount.getUserAccount(this.userAccountToken) as IDerivUserAccount;
+
+        if (userAccount) {
+            userAccount.balance = await this.getUserBalance(),
+            userAccount.initialBalance = this.accountInitialBalance;
+        }
+        
+        return userAccount;
+ 
+    }
+
     private validateInitialization(): void {
         if (this.baseStake <= 0) throw new Error("Base stake must be positive");
         if (!this.market) throw new Error("Market must be specified");
@@ -278,6 +293,64 @@ export class VolatilityRiskManager {
         if (!Object.values(ContractTypeEnum).includes(this.contractType)) {
             throw new Error("Invalid contract type");
         }
+    }
+
+    public async process1326TradeResult(amount: number, isWin: boolean, profit: number): any {
+        // Update highest stake invested
+        if (amount > this.highestStakeInvested) {
+            this.highestStakeInvested = amount;
+        }
+
+        // Update total profit
+        this.totalProfit += profit;
+
+        // Update highest profit achieved if this was a winning trade
+        if (isWin && this.totalProfit > this.highestProfitAchieved) {
+            this.highestProfitAchieved = this.totalProfit;
+        }
+
+        // Update win/loss tracking
+        if (isWin) {
+            this.winningTrades++;
+            this.consecutiveLosses = 0;
+            this.resultIsWin = true;
+        } else {
+            this.losingTrades++;
+            this.consecutiveLosses++;
+            this.totalLossAmount += Math.abs(profit);
+            this.dailyLossAmount += Math.abs(profit);
+            this.resultIsWin = false;
+        }
+
+        // Update last trade tracking
+        this.lastTradeWon = isWin;
+        this.lastTradeProfit = profit;
+        this.totalTrades++;
+        this.lastTradeTimestamp = Date.now();
+
+        let shouldContinueTrading: boolean = true;
+        let shouldResetTrading: boolean = false;
+
+        // Check circuit breakers
+        const account = await this.getCurrentAccount();
+        if (this.checkCircuitBreakers(account)) {
+            this.enterSafetyMode('circuit_breaker_triggered');
+            shouldContinueTrading = false;
+        }
+        
+
+        if (this.consecutiveLosses === 2) {
+            if (this.totalProfit < 0) {
+                this.enterSafetyMode(['circuit_breaker_triggered', 'consecutive_losses_too_high']);
+                shouldContinueTrading = false;
+            } else {
+                shouldContinueTrading = true;
+                shouldResetTrading = true;
+            }
+        }
+
+        return { shouldContinueTrading, shouldResetTrading }
+
     }
 
     public processTradeResult(tradeResult: ITradeData): void {

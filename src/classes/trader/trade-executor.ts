@@ -240,7 +240,7 @@ export class TradeExecutor {
 
         const api = new DerivAPI({ endpoint: DERIV_APP_ENDPOINT_DOMAIN, app_id: DERIV_APP_ENDPOINT_APP_ID, lang: DERIV_APP_ENDPOINT_LANG });
 
-        const user: IDerivUserAccount = await DerivUserAccount.getUserAccount(api, userAccountToken) as IDerivUserAccount;
+        const user: IDerivUserAccount = await DerivUserAccount.getUserAccount(userAccountToken, api) as IDerivUserAccount;
 
         const contractPromise = api.contract(params);
 

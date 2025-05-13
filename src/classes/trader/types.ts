@@ -187,7 +187,7 @@ export const DerivativeDigitsEnum = {
     DigitNotRandom: "Digit NOT Random 🎲",
 
     DigitDiff1326: "Strategy 1️⃣3️⃣2️⃣6️⃣",
-    
+
 } as const;
 
 export const CryptoTradingPairsEnum = {
@@ -582,7 +582,7 @@ export interface UserAccount {
 }
 
 export interface ContractParams {
-    amount: number | string;
+    amount: number;
     currency: CurrencyType;
     basis?: BasisType;
     contract_type?: ContractType;
@@ -1030,3 +1030,5 @@ export type RewardStructure = {
 export type StrategyRewards = {
     [key in ContractType]?: RewardStructure[];
 };
+
+// 🟥🟧🟨🟩🟦🟪⬛️🔲🔳⬜️🔔

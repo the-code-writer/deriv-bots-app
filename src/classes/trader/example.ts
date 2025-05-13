@@ -14,9 +14,9 @@ const tradingSession = {
     "tradingType": "Derivatives 📊",
     "market": "Volatility 75(1s) 📈",
     "contractType": "Strategy 1️⃣3️⃣2️⃣6️⃣", //"Digits ⬇️6️⃣", "Rise ⬆️", //Digit NOT Random 🎲
-    "stake": 4,
+    "stake": 0.35,
     "takeProfit": "USD15,000.34",
-    "stopLoss": 10000,
+    "stopLoss": 100000,
     "tradeDuration": "24hrs ⏱️",
     "updateFrequency": "15min ⏱️",
     "contractDurationUnits": "Ticks ⏱️",

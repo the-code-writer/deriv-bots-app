@@ -244,7 +244,7 @@ export class DerivTradingBot {
                         parentPort?.postMessage({ action: "revertStepShowAccountTypeKeyboard", text: "User account token is missing. Please select the account to use in order to resu,e your session.", meta: { cachedSession: this.cachedSession } });
                     }
 
-                    this.userAccount = await DerivUserAccount.getUserAccount(api, userAccountToken) as IDerivUserAccount;
+                    this.userAccount = await DerivUserAccount.getUserAccount(userAccountToken) as IDerivUserAccount;
 
                     if (this.userAccount) {
 
@@ -306,7 +306,7 @@ export class DerivTradingBot {
 
             if (ping) {
 
-                const account: any = await DerivUserAccount.getUserAccount(api, userAccountToken || this.userAccountToken);
+                const account: any = await DerivUserAccount.getUserAccount(userAccountToken || this.userAccountToken);
 
                 callbackFunction({ error: null, account });
 

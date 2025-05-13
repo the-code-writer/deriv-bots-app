@@ -307,7 +307,14 @@ export abstract class TradeStrategy {
         const result: ITradeData = await this.executor.purchaseContract(params, this.config) as ITradeData;
 
         if (this.volatilityRiskManager) {
-            this.volatilityRiskManager.processTradeResult(result);
+            if (this.config.contractType === ContractTypeEnum.DigitDiff1326) {
+                const isWin = result.profit_is_win;
+                const profit = result.safeProfit || 0;
+                this.volatilityRiskManager.process1326TradeResult(params.amount, isWin, profit)
+            } else {
+                this.volatilityRiskManager.processTradeResult(result);
+            }
+            
         }
 
         return result;
