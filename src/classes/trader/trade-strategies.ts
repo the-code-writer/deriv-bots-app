@@ -24,9 +24,9 @@ import { TradeRewardStructures } from "./trade-reward-structures";
 import { ContractParamsFactory } from './contract-factory';
 import { IDerivUserAccount } from "../user/UserDerivAccount";
 import { StrategyParser } from './trader-strategy-parser';
-import { BotConfig, TradingEvent } from './types';
+import { BotConfig, TradingEvent, BasisTypeEnum, CurrenciesEnum } from './types';
 import { getRandomDigit, roundToTwoDecimals, sleep } from "@/common/utils/snippets";
-import { OneThreeTwoSixStrategy } from './trade-1326-strategy';
+import { Enhanced1326Strategy } from './trade-1326-strategy';
 import { defaultEventManager } from './trade-event-manager';
 
 const logger = pino({
@@ -175,11 +175,12 @@ export abstract class TradeStrategy {
         this.executor = new TradeExecutor(this.volatilityRiskManager);
 
 
-        this.strategy1326 = new OneThreeTwoSixStrategy({
+        this.strategy1326 = new Enhanced1326Strategy({
             initialStake: config.baseStake, // Custom initial stake
             profitThreshold: config.takeProfit, // Custom profit threshold
             lossThreshold: config.stopLoss, // Custom loss threshold,
-            market: config.market
+            market: config.market,
+            recoveryMode: 'aggressive'
         });
 
 
@@ -191,7 +192,7 @@ export abstract class TradeStrategy {
 
         if (this.config.contractType === ContractTypeEnum.DigitDiff1326) {
 
-            const decision = this.strategy1326.executeTrade(this.volatilityRiskManager.lastTradeWon, this.volatilityRiskManager.lastTradeProfit);
+            const decision = this.strategy1326.prepareForNextTrade(this.volatilityRiskManager.lastTradeWon, this.volatilityRiskManager.lastTradeProfit);
 
             if (!decision.shouldTrade) {
                 defaultEventManager.emit(TradingEvent.StopTrading.type, {

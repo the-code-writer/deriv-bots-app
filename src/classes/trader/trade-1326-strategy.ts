@@ -10,7 +10,7 @@
  */
 
 import { getRandomDigit } from "@/common/utils/snippets";
-import { ContractDurationUnitTypeEnum, ContractTypeEnum } from "./types";
+import { ContractDurationUnitTypeEnum, ContractTypeEnum, ContractType, ContractDurationUnitType } from './types';
 
 // ==================== Type Definitions ====================
 
@@ -112,9 +112,9 @@ interface TradeDecision {
     reason?: string;
     amount?: number;
     prediction?: number;
-    contractType?: ContractTypeEnum;
+    contractType?: ContractType;
     duration?: number;
-    durationType?: ContractDurationUnitTypeEnum;
+    durationType?: ContractDurationUnitType;
     market?: string;
     metadata?: {
         sequencePosition: number;
@@ -143,13 +143,10 @@ const SEQUENCE_VARIANTS: Record<RecoveryMode, number[]> = {
  * Stake multipliers for each recovery mode 
  */
 const RECOVERY_MULTIPLIERS: Record<RecoveryMode, number> = {
-    aggressive: 12.75,
-    conservative: 7.5,
-    neutral: 10
+    aggressive: 15.50,
+    conservative: 12.75,
+    neutral: 10.25
 };
-
-/** @constant {number} MAX_SEQUENCE_ATTEMPTS - Max attempts to complete a sequence */
-const MAX_SEQUENCE_ATTEMPTS: number = 3;
 
 // ==================== Strategy Class ====================
 
@@ -265,7 +262,7 @@ export class Enhanced1326Strategy {
      * @param {number} [lastProfit] - Profit from last trade
      * @returns {TradeDecision} Trade decision object
      */
-    public executeTrade(lastOutcome?: boolean, lastProfit?: number): TradeDecision {
+    public prepareForNextTrade(lastOutcome?: boolean, lastProfit?: number): TradeDecision {
         if (!this.isActive) {
             return { 
                 shouldTrade: false, 
@@ -606,7 +603,7 @@ export class Enhanced1326Strategy {
         }
 
         // Check consecutive losses
-        if (this.state.consecutiveLosses >= 3) {
+        if ( this.state.consecutiveLosses >= this.config.maxRecoveryAttempts ) {
             return {
                 shouldTrade: false,
                 reason: `Max consecutive losses (${this.state.consecutiveLosses})`
