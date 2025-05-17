@@ -11,6 +11,7 @@
 
 import { getRandomDigit } from "@/common/utils/snippets";
 import { ContractDurationUnitTypeEnum, ContractTypeEnum, ContractType, ContractDurationUnitType } from './types';
+import { roundToTwoDecimals } from '../../common/utils/snippets';
 
 // ==================== Type Definitions ====================
 
@@ -162,7 +163,10 @@ export class Enhanced1326Strategy {
     
     /** @type {boolean} */
     private isActive: boolean;
-    
+
+    /** @type {boolean} */
+    private startedTrading: boolean;
+
     /** @type {number[][]} */
     private sequenceHistory: number[][];
     
@@ -273,19 +277,27 @@ export class Enhanced1326Strategy {
         // Reset daily stats if new day
         this.checkDayChange();
 
-        // Update state from previous trade if provided
-        if (lastOutcome !== undefined && lastProfit !== undefined) {
-            this.updateState(lastOutcome, lastProfit);
-        }
+        if (!this.startedTrading) {
 
-        // Check trading conditions
-        const shouldTrade: TradeDecision = this.evaluateTradingConditions();
-        if (!shouldTrade.shouldTrade) {
-            return shouldTrade;
+            this.startedTrading = true;
+            
+        } else {
+
+            // Update state from previous trade if provided
+            if (lastOutcome !== undefined && lastProfit !== undefined) {
+                this.updateState(lastOutcome, lastProfit);
+            }
+
+            // Check trading conditions
+            const shouldTrade: TradeDecision = this.evaluateTradingConditions();
+            if (!shouldTrade.shouldTrade) {
+                return shouldTrade;
+            }
+
         }
 
         // Calculate next stake (starting with sequence position 0)
-        const stake: number = this.calculateNextStake();
+        const stake: number = roundToTwoDecimals(this.calculateNextStake()) as number;
 
         return {
             shouldTrade: true,
