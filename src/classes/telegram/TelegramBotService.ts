@@ -98,43 +98,6 @@ export class TelegramBotService implements ITelegramBotService {
 
 
     /**
-     * Handle the logged-in event
-     * @param {any} data - The data associated with the logged-in event
-     * @public
-     */
-    public async authorizeOauthData(sessionDocument: any): Promise<boolean> {
-
-        let chatId: number = 0;
-
-        let encid: string = sessionDocument.session.encid;
-
-        if (encid) {
-
-            encid = String(encid).replace(/ /g, '+');
-
-            chatId = parseInt(Encryption.decryptAES(encid, APP_CRYPTOGRAPHIC_KEY));
-
-        } else {
-
-            chatId = sessionDocument.session.chatId;
-
-        }
-
-        if (!chatId) {
-            return false;
-        }
-
-        const updatedSession = await this.sessionService.updateSessionWithChatId(chatId, sessionDocument.session);
-
-        logger.info(JSON.stringify(updatedSession))
-
-        this.tradingProcessFlow.handleLoginAccount(chatId, "", updatedSession);
-
-        return true;
-
-    }
-
-    /**
      * Handle polling errors
      * @param {Error} error - The error object
      * @private
