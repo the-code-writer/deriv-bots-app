@@ -20,7 +20,7 @@ import { roundToTwoDecimals } from '../../common/utils/snippets';
  * @property {number} profitThreshold - Profit target at which to stop trading
  * @property {number} lossThreshold - Maximum allowed loss before stopping
  * @property {number} initialStake - Base stake amount
- * @property {number} initialPrediction - Starting prediction digit (0-9)
+ * @property {number} initialBarrier - Starting barrier digit (0-9)
  * @property {string} market - Market identifier
  * @property {number} maxRecoveryAttempts - Max recovery attempts before reset
  * @property {RecoveryMode} recoveryMode - Selected recovery strategy mode
@@ -31,7 +31,7 @@ interface StrategyConfiguration {
     profitThreshold: number;
     lossThreshold: number;
     initialStake: number;
-    initialPrediction: number;
+    initialBarrier: number;
     market: string;
     maxRecoveryAttempts: number;
     recoveryMode: RecoveryMode;
@@ -43,7 +43,7 @@ interface StrategyConfiguration {
  * @typedef {'aggressive' | 'conservative' | 'neutral'} RecoveryMode
  * @description Different recovery strategy modes
  */
-type RecoveryMode = 'aggressive' | 'conservative' | 'neutral';
+type RecoveryMode = 'base' | 'aggressive' | 'conservative' | 'neutral';
 
 /**
  * @typedef {Object} StrategyStatistics
@@ -98,7 +98,7 @@ interface StrategyState {
  * @property {boolean} shouldTrade - Whether to execute a trade
  * @property {string} [reason] - Reason if not trading
  * @property {number} [amount] - Stake amount if trading
- * @property {number} [prediction] - Predicted digit if trading
+ * @property {number} [barrier] - Predicted digit if trading
  * @property {ContractTypeEnum} [contractType] - Type of contract
  * @property {number} [duration] - Contract duration
  * @property {ContractDurationUnitTypeEnum} [durationType] - Duration units
@@ -112,7 +112,7 @@ interface TradeDecision {
     shouldTrade: boolean;
     reason?: string;
     amount?: number;
-    prediction?: number;
+    barrier?: number | string;
     contractType?: ContractType;
     duration?: number;
     durationType?: ContractDurationUnitType;
@@ -134,6 +134,7 @@ const BASE_SEQUENCE: number[] = [1, 3, 2, 6];
  * Different sequence variants for each recovery mode 
  */
 const SEQUENCE_VARIANTS: Record<RecoveryMode, number[]> = {
+    base: [1, 3, 2, 6],
     conservative: [1, 2, 3, 4],
     aggressive: [1, 3, 5, 7],
     neutral: BASE_SEQUENCE
@@ -144,8 +145,9 @@ const SEQUENCE_VARIANTS: Record<RecoveryMode, number[]> = {
  * Stake multipliers for each recovery mode 
  */
 const RECOVERY_MULTIPLIERS: Record<RecoveryMode, number> = {
-    aggressive: 15.50,
+    base: 12.75,
     conservative: 12.75,
+    aggressive: 15.50,
     neutral: 10.25
 };
 
@@ -182,6 +184,7 @@ export class Enhanced1326Strategy {
         this.config = this.initializeConfig(config);
         this.state = this.initializeState();
         this.stats = this.initializeStatistics();
+        this.startedTrading = false;
         this.isActive = true;
         this.sequenceHistory = [];
         this.dailyProfitLoss = 0;
@@ -200,7 +203,7 @@ export class Enhanced1326Strategy {
             profitThreshold: 1000,
             lossThreshold: 500,
             initialStake: 5,
-            initialPrediction: getRandomDigit(),
+            initialBarrier: getRandomDigit(),
             market: '1HZ100V',
             maxRecoveryAttempts: 2,
             recoveryMode: 'neutral',
@@ -259,6 +262,37 @@ export class Enhanced1326Strategy {
 
     // ==================== Core Strategy Methods ====================
 
+    // Add this method to select sequence based on market conditions
+    private selectOptimalSequence(): number[] {
+        // If we're in a losing streak, use more conservative sequence
+        if (this.state.consecutiveLosses >= 2) {
+            return SEQUENCE_VARIANTS.conservative;
+        }
+
+        // If we're in recovery, use neutral sequence
+        if (this.state.inRecovery) {
+            return SEQUENCE_VARIANTS.neutral;
+        }
+
+        // Default to configured sequence
+        return SEQUENCE_VARIANTS[this.config.recoveryMode];
+    }
+
+    // Add this method to lock in profits
+    private shouldLockInProfits(): boolean {
+        // Lock in profits if we've reached 50% of target
+        if (this.state.totalProfit >= this.config.profitThreshold * 0.5) {
+            return true;
+        }
+
+        // Lock in profits if we've had a good sequence
+        if (this.state.sequenceProfit >= this.config.initialStake * 10) {
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Executes the strategy's trade logic
      * @public
@@ -271,6 +305,15 @@ export class Enhanced1326Strategy {
             return { 
                 shouldTrade: false, 
                 reason: "Strategy is inactive" 
+            };
+        }
+
+        // Add profit lock check
+        if (this.shouldLockInProfits()) {
+            this.resetSequence();
+            return {
+                shouldTrade: false,
+                reason: "Profit lock activated"
             };
         }
 
@@ -302,8 +345,8 @@ export class Enhanced1326Strategy {
         return {
             shouldTrade: true,
             amount: stake,
-            prediction: getRandomDigit(),
-            contractType: ContractTypeEnum.DigitDiff,
+            barrier: getRandomDigit(),
+            contractType: ContractTypeEnum.DigitOdd,
             market: this.config.market,
             duration: 1,
             durationType: ContractDurationUnitTypeEnum.Default,
@@ -368,17 +411,39 @@ export class Enhanced1326Strategy {
      * Handles loss outcome
      * @private
      */
+    // Enhance the handleLoss method
     private handleLoss(): void {
         this.state.consecutiveLosses++;
         this.state.consecutiveWins = 0;
         this.stats.totalLosses++;
-        this.state.recoveryAttempts++;
 
-        if (this.state.inRecovery) {
-            this.handleRecoveryLoss();
-        } else {
-            this.handleSequenceLoss();
+        // Only count as recovery attempt if stake was significant
+        if (this.state.currentStake > this.config.initialStake * 3) {
+            this.state.recoveryAttempts++;
         }
+
+        // Implement graduated response to losses
+        if (this.state.consecutiveLosses === 1) {
+            // First loss - reduce stake
+            this.state.currentStake = Math.max(
+                this.config.initialStake,
+                this.state.currentStake * 0.7
+            );
+        }
+        else if (this.state.consecutiveLosses >= 2) {
+            // Multiple losses - enter recovery
+            if (this.config.enableSequenceProtection) {
+                this.enterRecoveryMode();
+            } else {
+                this.resetSequence();
+            }
+        }
+
+        // Update worst sequence loss tracking
+        this.stats.worstSequenceLoss = Math.min(
+            this.stats.worstSequenceLoss,
+            this.state.sequenceProfit
+        );
     }
 
     // ==================== Sequence Management Methods ====================
@@ -584,6 +649,46 @@ export class Enhanced1326Strategy {
 
     // ==================== Condition Evaluation Methods ====================
 
+    // Add this new method to calculate dynamic recovery stake
+    private calculateDynamicRecoveryStake(): number {
+        const lossAmount = Math.abs(this.state.totalProfit);
+        const baseMultiplier = RECOVERY_MULTIPLIERS[this.config.recoveryMode];
+
+        // Dynamic multiplier based on consecutive losses
+        const dynamicMultiplier = baseMultiplier *
+            (1 + (this.state.consecutiveLosses * 0.1)); // 10% increase per consecutive loss
+
+        let calculatedStake = lossAmount * dynamicMultiplier;
+
+        // Cap at 25% of loss threshold and ensure minimum stake
+        return Math.max(
+            this.config.initialStake,
+            Math.min(
+                calculatedStake,
+                this.config.lossThreshold * 0.25
+            )
+        );
+    }
+
+    // Add this new method to evaluate sequence safety
+    private shouldContinueSequence(): boolean {
+        // Don't continue if we've hit daily trade limit
+        if (this.state.tradesToday >= this.config.maxDailyTrades) return false;
+
+        // Don't continue if we're in deep recovery
+        if (this.state.inRecovery &&
+            this.state.totalProfit < -(this.config.lossThreshold * 0.5)) {
+            return false;
+        }
+
+        // Don't continue if we've had multiple sequence failures today
+        const failedSequencesToday = this.sequenceHistory.filter(
+            seq => seq[seq.length - 1] < 0
+        ).length;
+
+        return failedSequencesToday < 3; // Max 3 failed sequences per day
+    }
+
     /**
      * Evaluates whether trading should continue
      * @private
@@ -619,6 +724,23 @@ export class Enhanced1326Strategy {
             return {
                 shouldTrade: false,
                 reason: `Max consecutive losses (${this.state.consecutiveLosses})`
+            };
+        }
+
+        // Add sequence safety check
+        if (!this.shouldContinueSequence()) {
+            return {
+                shouldTrade: false,
+                reason: "Sequence safety check failed"
+            };
+        }
+
+        // Add maximum sequence attempts check
+        if (this.sequenceHistory.length >= 5 &&
+            this.stats.sequencesCompleted === 0) {
+            return {
+                shouldTrade: false,
+                reason: "No successful sequences in last 5 attempts"
             };
         }
 
