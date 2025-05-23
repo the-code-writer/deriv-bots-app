@@ -28,6 +28,7 @@ export class UserService implements IUserService {
             username: userAccount.email,
             email: userAccount.email,
             derivAccount: userAccount,
+            derivAccountList: sessionDocument.bot.accounts.deriv,
             telegramAccount: sessionDocument.bot.accounts.telegram,
         };
 
@@ -86,6 +87,7 @@ export class UserService implements IUserService {
             username: userData.name.trim() || '',
             email: userData.email.toLowerCase().trim(),
             derivAccount: userData.derivAccount || {},
+            derivAccountList: userData.derivAccountList || {},
             telegramAccount: userData.telegramAccount || {},
             sessionID: userData.sessionID,
             createdAt: new Date(),

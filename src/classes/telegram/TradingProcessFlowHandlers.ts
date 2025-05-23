@@ -5,6 +5,8 @@ import { extractAmount, isCurrency } from "@/common/utils/snippets";;
 import { ISessionService, Session } from "@/classes/telegram/SessionService";
 import { IKeyboardService } from "@/classes/telegram/KeyboardService";
 import { IWorkerService } from "@/classes/telegram/WorkerService";
+import { TradingModeTypeEnum } from '../trader/types';
+import { NumericInputValuesEnum } from '@/classes/trader/types';
 
 // Logger
 const logger = pino({ name: "TradingProcessFlowHandlers" });
@@ -195,7 +197,7 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
         showNextKeyboard: () => void,
         showCurrentKeyboard: () => void
     ): Promise<void> {
-        if (text === "Automatic") {
+        if (text === NumericInputValuesEnum.AUTOMATIC) {
             session.bot.tradingOptions[field] = this.getAutomaticStake(session.bot.tradingOptions.step, nextStep);
             session.bot.tradingOptions.step = nextStep;
             await this.sessionService.updateSessionWithChatId(chatId, session);
@@ -234,8 +236,12 @@ export class TradingProcessFlowHandlers implements ITradingProcessFlow {
      * @param {Session} session - The current session
      * @public
      */
-    public async handleLoginAccount(chatId: number, text: string, session: Session): Promise<void> {
-        session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_ACCOUNT_TYPE;
+    public async handleLoginAccount(chatId: number, text: string, session: Session, accountList: any): Promise<void> {
+        if (accountList) {
+            session.bot.accounts.deriv.accountList = accountList;
+        }
+        
+        session.bot.tradingOptions.step = CONSTANTS.SESSION_STEPS.SELECT_ACCOUNT_TYPE; 
         await this.sessionService.updateSessionWithChatId(chatId, session);
         this.keyboardService.showAccountTypeKeyboard(chatId, session.bot.accounts.deriv.accountList);
     }

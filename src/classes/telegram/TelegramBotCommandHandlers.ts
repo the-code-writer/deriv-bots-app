@@ -309,7 +309,7 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
      * @param {any} data - The data associated with the logged-in event
      * @public
      */
-    public async authorizeOauthData(sessionDocument: any): Promise<boolean> {
+    public async authorizeOauthData(sessionDocument: any, user:any): Promise<boolean> {
 
         let chatId: number = 0;
 
@@ -333,9 +333,23 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
         const updatedSession = await this.sessionService.updateSessionWithChatId(chatId, sessionDocument.session);
 
+        logger.error("updatedSession")
+
         logger.info(JSON.stringify(updatedSession))
 
-        this.tradingProcessFlow.handleLoginAccount(chatId, "", updatedSession);
+        logger.error(">>>USER>>>")
+
+        logger.error(user)
+
+        let derivAccountList = null;
+
+        if (user) {
+            derivAccountList = user.derivAccountList.accountList;
+        }
+
+        //return
+
+        this.tradingProcessFlow.handleLoginAccount(chatId, "", updatedSession, derivAccountList);
 
         return true;
 
@@ -361,11 +375,15 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
         
         const user = await this.userService.getUserByChat(chatId);
 
-        if(user && session){
+        logger.warn(user?.chatId === session?.chatId);  
 
-            await this.authorizeOauthData(session);
+        if (user?.chatId === session?.chatId) {  
+
+            await this.authorizeOauthData(session, user);
             
         } else {
+
+            logger.warn("User/session invalid during /start");  
 
             const encid: string = Encryption.encryptAES(String(chatId), APP_CRYPTOGRAPHIC_KEY);
 

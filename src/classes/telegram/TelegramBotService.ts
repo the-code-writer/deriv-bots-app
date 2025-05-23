@@ -119,6 +119,7 @@ export class TelegramBotService implements ITelegramBotService {
         const text = sanitizeHtml(msg.text || "", { allowedTags: [], allowedAttributes: {} });
         const session = await this.sessionService.getUserSessionByChatId(chatId);
         if (!session) {
+            logger.error(`Session not found for chatId: ${chatId}`);  
             this.telegramBot.sendMessage(chatId, `Hey ***${firstname}!*** . Your session was not found or has expired. Creating a fresh one... 🚀`, { parse_mode: "Markdown" });
             return;
         }
@@ -187,6 +188,12 @@ export class TelegramBotService implements ITelegramBotService {
                 logger.info(["@@@@@@@@@@@@@@@@@@@@@@@@", chatId, text, session.bot.tradingOptions.step])
                 break;
         }
+    }
+
+    public authorizeOauthData(sessionDocument: any, user:any): Promise<boolean> {
+
+        return this.commandHandlers.authorizeOauthData(sessionDocument, user);
+
     }
 
 }

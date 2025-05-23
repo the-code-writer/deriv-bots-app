@@ -100,6 +100,13 @@ export class OAuthRouter {
 
             const { encid } = req.query; // Extract query parameters
 
+            console.log("### 1. ROUTER ### encid ###", encid);
+
+            if (!encid || typeof encid !== "string") {
+                res.status(400).send("Invalid encid");
+                return;
+            }  
+
             let sessionDocument = null;
             let sessionID = null;
 

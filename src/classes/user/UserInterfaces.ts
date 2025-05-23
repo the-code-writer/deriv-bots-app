@@ -17,6 +17,7 @@ export interface IUser {
     username?: string;
     email: string;
     derivAccount: IDerivUserAccount;
+    derivAccountList: any[];
     telegramAccount: ITelegramAccount;
     createdAt?: Date;
     updatedAt?: Date;

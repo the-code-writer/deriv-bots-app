@@ -5,7 +5,7 @@ import { InsertOneResult } from 'mongodb';
  * MongoDB implementation of the user repository
  */
 export class UserRepository implements IUserRepository {
-    private readonly collection: string = 'sv_users';
+    private readonly collection: string = 'ndtx_users';
 
     constructor(private db: DatabaseConnection) { 
         

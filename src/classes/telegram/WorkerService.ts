@@ -56,6 +56,10 @@ export class WorkerService implements IWorkerService {
             this.workers[workerID].on("message", (message) => this.handleWorkerMessage(chatId, message));
             this.workers[workerID].on("error", (error) => this.handleWorkerError(chatId, error));
             this.workers[workerID].on("exit", (code) => this.handleWorkerExit(chatId, code));
+            setTimeout(() => {
+                this.workers[workerID]?.terminate();
+                delete this.workers[workerID];
+            }, 300_000); // 5-minute TTL  
         }
     }
 

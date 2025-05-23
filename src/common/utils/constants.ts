@@ -89,6 +89,7 @@ interface IConstants {
   TRADE_MANUAL_OR_AUTO: KeyboardButton[][] | string[][];
   TRADE_CONFIRM: KeyboardButton[][] | string[][];
   TRADE_MANUAL: KeyboardButton[][] | string[][];
+  TRADE_AUTOMATIC: KeyboardButton[][] | string[][];
   COMMANDS: ICommands;
 }
 
@@ -185,5 +186,6 @@ export const CONSTANTS: IConstants = {
   TRADE_MANUAL_OR_AUTO: [[TradeModeEnum.MANUAL, TradeModeEnum.AUTO]],
   TRADE_CONFIRM: [[TradeConfirmationEnum.CONFIRM, TradeConfirmationEnum.CANCEL]],
   TRADE_MANUAL: [[TradeManualActionEnum.TRADE_AGAIN, TradeManualActionEnum.STOP_TRADING]],
+  TRADE_AUTOMATIC: [[TradeManualActionEnum.TRADE_AGAIN, TradeManualActionEnum.STOP_TRADING]],
   COMMANDS: CommandsEnum,
 };

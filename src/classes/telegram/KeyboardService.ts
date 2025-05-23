@@ -197,11 +197,9 @@ export class KeyboardService implements IKeyboardService {
 
     getAccountTypeKeyboard(userAccounts: any): KeyboardButton[][] | string[][] {
 
-        if (this.userAccounts.length === 0) {
-            this.userAccounts = userAccounts;
-        }
+        const accounts = userAccounts || this.userAccounts; 
 
-        const result = Object.values(this.userAccounts).map((item: any) => ([{
+        const result = Object.values(accounts).map((item: any) => ([{
             text: `${item.acct} ( ${item.cur} )`,
             callback_data: item
         }]));

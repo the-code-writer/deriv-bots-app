@@ -16,6 +16,8 @@ const { NODE_ENV, HOST, PORT, MONGODB_DATABASE_NAME, DB_SERVER_SESSIONS_DATABASE
 
 const serverUrl: string = `http://${HOST}:${PORT}`;
 
+let db:any;
+
 // Utility function to override util methods
 const overrideUtilMethods = () => {
 
@@ -29,7 +31,7 @@ const overrideUtilMethods = () => {
 // Initialize services required for the application
 const initializeServices = async (telegramBot: TelegramBot) : Promise<any>=> {
 
-  const db = new MongoDBConnection();
+  db = new MongoDBConnection();
   await db.connect();
   await db.createDatabase(MONGODB_DATABASE_NAME);
 
@@ -60,6 +62,8 @@ const startTelegramBotService = (
 
 };
 
+let telegramBot:any;
+
 // Start the server
 const startServer = () => {
 
@@ -69,8 +73,10 @@ const startServer = () => {
 
   });
 
-  const onCloseSignal = () => {
+  const onCloseSignal = async () => {
     logger.info("sigint received, shutting down");
+    await db.disconnect();
+    telegramBot.stopPolling(); 
     server.close(() => {
       logger.info("server closed");
       process.exit();
@@ -91,7 +97,7 @@ const bootstrap = async () => {
 
   overrideUtilMethods();
 
-  const telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+  telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
   const { sessionService, workerService, commandHandlers, tradingProcessFlow, keyboardService } = await initializeServices(telegramBot);
 

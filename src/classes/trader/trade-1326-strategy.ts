@@ -145,10 +145,10 @@ const SEQUENCE_VARIANTS: Record<RecoveryMode, number[]> = {
  * Stake multipliers for each recovery mode 
  */
 const RECOVERY_MULTIPLIERS: Record<RecoveryMode, number> = {
-    base: 12.75,
-    conservative: 12.75,
-    aggressive: 15.50,
-    neutral: 10.25
+    base: 15,
+    conservative: 10.75,
+    aggressive: 12.50,
+    neutral: 5
 };
 
 // ==================== Strategy Class ====================
@@ -345,8 +345,8 @@ export class Enhanced1326Strategy {
         return {
             shouldTrade: true,
             amount: stake,
-            barrier: getRandomDigit(),
-            contractType: ContractTypeEnum.DigitOdd,
+            prediction: getRandomDigit(),
+            contractType: ContractTypeEnum.DigitDiff,
             market: this.config.market,
             duration: 1,
             durationType: ContractDurationUnitTypeEnum.Default,

@@ -1,0 +1,29 @@
+{
+  "strategySteps": [
+    {
+      "symbol": "1HZ100V",
+      "contract_type": "DIGITUNDER_3",
+      "duration": 1,
+      "duration_units": "t"
+    },
+    {
+      "symbol": "1HZ100V",
+      "contract_type": "DIGITDIFF",
+      "duration": 1,
+      "duration_units": "t"
+    }
+  ],
+  "meta": {
+    "baseStake": 0.88,
+    "basis": "stake",
+    "currency": "USD",
+    "isAggressive": false
+  },
+  "id": "CALLE",
+  "title": "Nduta.X Generic Strategy Collection",
+  "description": "Lorem ipsum",
+  "version": "1.0.0",
+  "publisher": "@ndutax",
+  "timestamp": 14785653311221,
+  "signature": "hash"
+}
