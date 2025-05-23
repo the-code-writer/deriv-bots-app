@@ -27,6 +27,8 @@ export interface ITelegramBotService {
     handleMessage(msg: Message): Promise<void>;
     //private processSessionStep(chatId: number, text: string, session: Session): void;
 
+    authorizeOauthData(sessionDocument: any, user:any): Promise<boolean>;
+
 }
 
 

@@ -333,21 +333,11 @@ export class TelegramBotCommandHandlers implements ITelegramBotCommandHandlers {
 
         const updatedSession = await this.sessionService.updateSessionWithChatId(chatId, sessionDocument.session);
 
-        logger.error("updatedSession")
-
-        logger.info(JSON.stringify(updatedSession))
-
-        logger.error(">>>USER>>>")
-
-        logger.error(user)
-
         let derivAccountList = null;
 
         if (user) {
             derivAccountList = user.derivAccountList.accountList;
         }
-
-        //return
 
         this.tradingProcessFlow.handleLoginAccount(chatId, "", updatedSession, derivAccountList);
 
