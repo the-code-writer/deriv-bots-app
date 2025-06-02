@@ -119,7 +119,12 @@ export const TradingTypeEnum = {
     Forex: "FOREX" as TradingType,
     Derivatives: "DERIVATIVES" as TradingType,
     Crypto: "CRYPTO" as TradingType,
-    Commodities: "COMMODITIES" as TradingType
+    Commodities: "COMMODITIES" as TradingType,
+    Crypto: "MY_STRATEGIES" as TradingType,
+    Crypto: "NDTX_STRATEGIES" as TradingType,
+    Crypto: "1326_
+    SEQUENCIES" as TradingType,
+    Crypto: "OTGER_SEQUENCIES" as TradingType,
 } as const;
 
 export type MarketType = "R_100" | "R_75" | "R_50" | "R_25" | "R_10" | "R_100 (1s)" | "R_75 (1s)" | "R_50 (1s)" | "R_25 (1s)" | "R_10 (1s)";
