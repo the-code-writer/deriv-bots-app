@@ -120,11 +120,10 @@ export const TradingTypeEnum = {
     Derivatives: "DERIVATIVES" as TradingType,
     Crypto: "CRYPTO" as TradingType,
     Commodities: "COMMODITIES" as TradingType,
-    Crypto: "MY_STRATEGIES" as TradingType,
-    Crypto: "NDTX_STRATEGIES" as TradingType,
-    Crypto: "1326_
-    SEQUENCIES" as TradingType,
-    Crypto: "OTGER_SEQUENCIES" as TradingType,
+    MyStrategies: "MY_STRATEGIES" as TradingType,
+    NDTXStrategies: "NDTX_STRATEGIES" as TradingType,
+    Strategy1326: "1326_SEQUENCIES" as TradingType,
+    SequenceStrategies: "OTHER_SEQUENCIES" as TradingType,
 } as const;
 
 export type MarketType = "R_100" | "R_75" | "R_50" | "R_25" | "R_10" | "R_100 (1s)" | "R_75 (1s)" | "R_50 (1s)" | "R_25 (1s)" | "R_10 (1s)";
@@ -1007,8 +1006,23 @@ export const CurrenciesEnum = {
     ETH: "ETH" as CurrencyType
 } as const;
 
+export type MultiplicativeRecoveryMode = 'standard' | 'aggressive' | 'conservative';
 
 export type StrategyName = 'Initial' | 'Recovery1' | 'Recovery2' | 'Recovery3' | 'Recovery4';
+
+export interface CallMultiplicativeRecoveryConfig {
+    profitThreshold: number;
+    lossThreshold: number;
+    initialStake: number;
+    market: string;
+    maxRecoveryAttempts: number;
+    maxDailyTrades: number;
+    enableRecovery: boolean;
+    maxStakeMultiplier: number;
+    enableAutoAdjust: boolean;
+    maxVolatility: number;
+    minTrendStrength: number;
+}
 
 export interface RecoveryStrategy {
     name: StrategyName;

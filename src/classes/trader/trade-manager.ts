@@ -58,7 +58,7 @@ export class TradeManager {
      * @param {ContractType} contractType - Type of trade to execute
      * @returns {Promise<ITradeData>} Trade execution result
      */
-    async executeTrade(): Promise<ITradeData | null> {
+    async  executeTrade(): Promise<ITradeData | null> {
 
         const reasons: string[] = [];
 
@@ -106,7 +106,7 @@ export class TradeManager {
                 reason: "Trade execution failed",
                 reasons,
                 timestamp: Date.now(),
-                profit: 1250.50
+                profit: -1
             });
 
         }

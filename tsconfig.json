@@ -4,14 +4,16 @@
     "module": "NodeNext",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@/common/*": ["src/common/*"]
     },
-    "moduleResolution": "NodeNext", // or "Node"
+    "moduleResolution": "NodeNext",
     "outDir": "dist",
     "importsNotUsedAsValues": "remove",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["vitest/globals"]
   },

@@ -801,3 +801,13 @@ export const roundToTwoDecimals = (num: number, float:boolean=false): number | s
   }
   return amount;
 }
+
+export const mathMin = (...args: number[]): number => {
+  if (args.length === 0) return 0;
+  return Math.min(...args);
+}
+
+export const mathMax = (...args: number[]): number => {
+  if (args.length === 0) return 0;
+  return Math.max(...args);
+}

@@ -9,9 +9,8 @@
  * - Detailed documentation
  */
 
-import { getRandomDigit } from "@/common/utils/snippets";
+import { getRandomDigit, roundToTwoDecimals } from "@/common/utils/snippets";
 import { ContractDurationUnitTypeEnum, ContractTypeEnum, ContractType, ContractDurationUnitType } from './types';
-import { roundToTwoDecimals } from '../../common/utils/snippets';
 
 // ==================== Type Definitions ====================
 
@@ -26,6 +25,7 @@ import { roundToTwoDecimals } from '../../common/utils/snippets';
  * @property {RecoveryMode} recoveryMode - Selected recovery strategy mode
  * @property {boolean} enableSequenceProtection - Whether to use recovery mode
  * @property {number} maxDailyTrades - Maximum trades per day
+ * //TODO : add props
  */
 interface StrategyConfiguration {
     profitThreshold: number;
@@ -37,6 +37,10 @@ interface StrategyConfiguration {
     recoveryMode: RecoveryMode;
     enableSequenceProtection: boolean;
     maxDailyTrades: number;
+    enableAutoAdjust: boolean;
+    maxVolatility: number;
+    minTrendStrength: number;
+    minWinRate: number;
 }
 
 /**
@@ -63,6 +67,10 @@ interface StrategyStatistics {
     maxLossStreak: number;
     bestSequenceProfit: number;
     worstSequenceLoss: number;
+    totalRecoveryAttempts: number;
+    successfulRecoveries: number;
+    bestRecoveryProfit: number;
+    worstRecoveryLoss: number;
 }
 
 /**
@@ -113,6 +121,7 @@ interface TradeDecision {
     reason?: string;
     amount?: number;
     barrier?: number | string;
+    prediction?: number | string;
     contractType?: ContractType;
     duration?: number;
     durationType?: ContractDurationUnitType;
@@ -121,9 +130,25 @@ interface TradeDecision {
         sequencePosition: number;
         inRecovery: boolean;
         sequence: string;
+        marketConditions: any;
     };
 }
 
+interface SequenceHistoryEntry {
+    sequence: number[];
+    outcome: 'win' | 'loss';
+    profit: number;
+    timestamp?: number;
+}
+
+interface RecoveryHistoryEntry {
+    outcome: 'win' | 'loss';
+    profit: number;
+    stake: number;
+    recoveryAttempt: number;
+    timestamp: number;
+    consecutiveLosses: number;
+}
 // ==================== Constants ====================
 
 /** @constant {number[]} BASE_SEQUENCE - The standard 1-3-2-6 sequence */
@@ -151,28 +176,45 @@ const RECOVERY_MULTIPLIERS: Record<RecoveryMode, number> = {
     neutral: 5
 };
 
+const SAFETY_FACTORS = {
+    MAX_SEQUENCE_ATTEMPTS: 5,
+    LOSS_THRESHOLD_REDUCTION: 0.1,
+    MINIMUM_STAKE_MULTIPLIER: 0.5
+};
+
+const STRATEGY_CONSTANTS = {
+    MAX_RECOVERY_ATTEMPTS: 3,
+    MIN_STAKE_MULTIPLIER: 0.3,
+    SEQUENCE_LENGTH: 4
+};
+
+
 // ==================== Strategy Class ====================
 
 export class Enhanced1326Strategy {
     /** @type {StrategyConfiguration} */
     private config: StrategyConfiguration;
-    
+
     /** @type {StrategyState} */
     private state: StrategyState;
-    
+
     /** @type {StrategyStatistics} */
     private stats: StrategyStatistics;
-    
+
     /** @type {boolean} */
     private isActive: boolean;
 
     /** @type {boolean} */
     private startedTrading: boolean;
 
-    /** @type {number[][]} */
-    private sequenceHistory: number[][];
-    
+    /** @type {any[]} */
+    private sequenceHistory: any[];
+
     /** @type {number} */
+    private dailyProfitLoss: number;
+
+    private recoveryHistory: RecoveryHistoryEntry[];
+
     private dailyProfitLoss: number;
 
     /**
@@ -187,6 +229,8 @@ export class Enhanced1326Strategy {
         this.startedTrading = false;
         this.isActive = true;
         this.sequenceHistory = [];
+        this.dailyProfitLoss = 0;
+        this.recoveryHistory = [];
         this.dailyProfitLoss = 0;
     }
 
@@ -208,8 +252,22 @@ export class Enhanced1326Strategy {
             maxRecoveryAttempts: 2,
             recoveryMode: 'neutral',
             enableSequenceProtection: true,
-            maxDailyTrades: 50
+            maxDailyTrades: 50,
+            enableAutoAdjust: true,
+            maxVolatility: 0.6,
+            minTrendStrength: 0.4,
+            minWinRate: 0.4
         };
+
+        if (config.maxVolatility !== undefined && (config.maxVolatility < 0 || config.maxVolatility > 1)) {
+            throw new Error("Max volatility must be between 0 and 1");
+        }
+        if (config.minTrendStrength !== undefined && (config.minTrendStrength < 0 || config.minTrendStrength > 1)) {
+            throw new Error("Min trend strength must be between 0 and 1");
+        }
+        if (config.minWinRate !== undefined && (config.minWinRate < 0 || config.minWinRate > 1)) {
+            throw new Error("Min win rate must be between 0 and 1");
+        }
 
         const merged: StrategyConfiguration = { ...defaults, ...config };
 
@@ -220,6 +278,11 @@ export class Enhanced1326Strategy {
         if (merged.maxDailyTrades <= 0) throw new Error("Max daily trades must be positive");
 
         return merged;
+    }
+
+    public updateConfig(updates: Partial<StrategyConfiguration>): void {
+        this.config = this.initializeConfig({ ...this.config, ...updates });
+        this.logEvent("Configuration updated");
     }
 
     /**
@@ -256,7 +319,11 @@ export class Enhanced1326Strategy {
             maxWinStreak: 0,
             maxLossStreak: 0,
             bestSequenceProfit: 0,
-            worstSequenceLoss: 0
+            worstSequenceLoss: 0,
+    totalRecoveryAttempts: 0,
+            successfulRecoveries: 0,
+            bestRecoveryProfit: 0,
+            worstRecoveryLoss: 0
         };
     }
 
@@ -264,14 +331,14 @@ export class Enhanced1326Strategy {
 
     // Add this method to select sequence based on market conditions
     private selectOptimalSequence(): number[] {
-        // If we're in a losing streak, use more conservative sequence
-        if (this.state.consecutiveLosses >= 2) {
-            return SEQUENCE_VARIANTS.conservative;
+        // If we're in recovery, use neutral sequence (highest priority)
+        if (this.state.inRecovery) {
+            return SEQUENCE_VARIANTS.neutral; // [1, 3, 2, 6]
         }
 
-        // If we're in recovery, use neutral sequence
-        if (this.state.inRecovery) {
-            return SEQUENCE_VARIANTS.neutral;
+        // If we're in a losing streak, use more conservative sequence
+        if (this.state.consecutiveLosses >= 2) {
+            return SEQUENCE_VARIANTS.conservative; // [1, 2, 3, 4]
         }
 
         // Default to configured sequence
@@ -279,7 +346,7 @@ export class Enhanced1326Strategy {
     }
 
     // Add this method to lock in profits
-    private shouldLockInProfits(): boolean {
+    public shouldLockInProfits(): boolean {
         // Lock in profits if we've reached 50% of target
         if (this.state.totalProfit >= this.config.profitThreshold * 0.5) {
             return true;
@@ -290,7 +357,18 @@ export class Enhanced1326Strategy {
             return true;
         }
 
+        if (this.state.totalProfit >= this.config.profitThreshold * 0.5) {
+            return true;
+        }
+
+        const { trend } = this.analyzeMarketConditions();
+
+        if (trend < 0.4 && this.state.sequenceProfit > 0) {
+            return true
+        };
+
         return false;
+
     }
 
     /**
@@ -302,9 +380,9 @@ export class Enhanced1326Strategy {
      */
     public prepareForNextTrade(lastOutcome?: boolean, lastProfit?: number): TradeDecision {
         if (!this.isActive) {
-            return { 
-                shouldTrade: false, 
-                reason: "Strategy is inactive" 
+            return {
+                shouldTrade: false,
+                reason: "Strategy is inactive"
             };
         }
 
@@ -323,29 +401,25 @@ export class Enhanced1326Strategy {
         if (!this.startedTrading) {
 
             this.startedTrading = true;
-            
-        } else {
-
-            // Update state from previous trade if provided
-            if (lastOutcome !== undefined && lastProfit !== undefined) {
-                this.updateState(lastOutcome, lastProfit);
-            }
-
-            // Check trading conditions
-            const shouldTrade: TradeDecision = this.evaluateTradingConditions();
-            if (!shouldTrade.shouldTrade) {
-                return shouldTrade;
-            }
 
         }
 
+
+        // Check trading conditions
+        const shouldTrade: TradeDecision = this.evaluateTradingConditions();
+        if (!shouldTrade.shouldTrade) {
+            return shouldTrade;
+        }
+
+
         // Calculate next stake (starting with sequence position 0)
         const stake: number = roundToTwoDecimals(this.calculateNextStake()) as number;
-
+        const randomDigit: number | string = getRandomDigit();
         return {
             shouldTrade: true,
             amount: stake,
-            prediction: getRandomDigit(),
+            prediction: randomDigit,
+            barrier: randomDigit,
             contractType: ContractTypeEnum.DigitDiff,
             market: this.config.market,
             duration: 1,
@@ -353,7 +427,8 @@ export class Enhanced1326Strategy {
             metadata: {
                 sequencePosition: this.state.sequencePosition,
                 inRecovery: this.state.inRecovery,
-                sequence: this.state.currentSequence.join('-')
+                sequence: this.state.currentSequence.join('-'),
+                marketConditions: this.analyzeMarketConditions()
             }
         };
     }
@@ -366,11 +441,10 @@ export class Enhanced1326Strategy {
      * @param {boolean} outcome - Trade outcome (true=win)
      * @param {number} profit - Profit amount from trade
      */
-    private updateState(outcome: boolean, profit: number): void {
-        // Validate profit value
-        if (!Number.isFinite(profit)) {
-            throw new Error("Invalid profit value");
-        }
+    public updateState(outcome: boolean, profit: number): void {
+
+        // Validate inputs
+        this.validateProfitInput(profit);
 
         // Update daily stats
         this.state.tradesToday++;
@@ -378,7 +452,7 @@ export class Enhanced1326Strategy {
         this.state.lastTradeTimestamp = Date.now();
 
         // Update profit tracking
-        this.state.totalProfit = this.calculateSafeProfit(this.state.totalProfit + profit);
+        this.state.totalProfit = this.calculateSafeProfit(this.state.totalProfit, profit);
         this.state.sequenceProfit += profit;
 
         if (outcome) {
@@ -389,6 +463,62 @@ export class Enhanced1326Strategy {
 
         // Update statistics
         this.updateStatistics(outcome, profit);
+
+        // Record in history
+        this.recordTradeHistory(outcome, profit);
+
+        // Monitor session safety
+        this.monitorSession();
+    }
+
+    private recordTradeHistory(outcome: boolean, profit: number): void {
+        this.recoveryHistory.push({
+            outcome: outcome ? 'win' : 'loss',
+            profit,
+            stake: this.state.currentStake,
+            recoveryAttempt: this.state.recoveryAttempts,
+            consecutiveLosses: this.state.consecutiveLosses,
+            timestamp: Date.now()
+        });
+
+        // Keep history manageable
+        if (this.recoveryHistory.length > 100) {
+            this.recoveryHistory = this.recoveryHistory.slice(-50);
+        }
+    }
+
+
+    private validateProfitInput(profit: number): void {
+        if (Number.isNaN(profit)) throw new Error("Invalid profit value (NaN)");
+        if (!Number.isFinite(profit)) throw new Error("Invalid profit value (Infinity)");
+        if (Math.abs(profit) > this.config.lossThreshold * 5) {
+            this.logEvent("Abnormal profit detected - pausing", 'error');
+            this.pauseStrategy();
+        }
+    }
+
+    public setSequenceProfit(profit: number): void {
+        this.state.sequenceProfit = profit;
+    }
+
+    public setTradesToday(trades: number): void {
+        this.state.tradesToday = trades;
+    }
+
+    public setDailyProfitLoss(losses: number): void {
+        this.dailyProfitLoss = losses;
+    }
+
+    public setConsecutiveLosses(losses: number): void {
+        this.state.consecutiveLosses = losses;
+    }
+
+    public setInRecovery(inRecovery: boolean): void {
+        this.state.inRecovery = inRecovery;
+    }
+
+    public setSequencePosition(index: number): void {
+        this.state.sequencePosition = index;
     }
 
     /**
@@ -464,6 +594,17 @@ export class Enhanced1326Strategy {
         }
     }
 
+    public safeSequencePositionIncrement(): void {
+        if (this.state.sequencePosition >= this.state.currentSequence.length - 1) {
+            this.completeSequence();
+        } else {
+            this.state.sequencePosition = Math.min(
+                this.state.sequencePosition + 1,
+                this.state.currentSequence.length - 1
+            );
+        }
+    }
+
     /**
      * Handles sequence reset on loss
      * @private
@@ -478,19 +619,44 @@ export class Enhanced1326Strategy {
         }
     }
 
+    private getEffectiveLossThreshold(): number {
+        // Reduce threshold during losing streaks
+        const reductionFactor = 1 - (0.1 * this.state.consecutiveLosses);
+        return Math.max(
+            this.config.lossThreshold * 0.5, // Minimum 50% of original
+            this.config.lossThreshold * reductionFactor
+        );
+    }
+
+    public validateSequence(sequence: number[]): boolean {
+        return sequence.length === 4 && sequence.every(x => Number.isInteger(x)) && sequence[0] === 1;
+    }
+
+    public validateCurrentSequence(): void {
+        if (!this.validateSequence(this.state.currentSequence)) {
+            this.logEvent("Invalid sequence detected", "error");
+            this.state.currentSequence = this.selectOptimalSequence();
+        }
+    }
+
     /**
      * Completes current sequence successfully
      * @private
      */
     private completeSequence(): void {
         this.stats.sequencesCompleted++;
+
         this.stats.bestSequenceProfit = Math.max(
             this.stats.bestSequenceProfit,
             this.state.sequenceProfit
         );
 
         // Record successful sequence
-        this.sequenceHistory.push([...this.state.currentSequence]);
+        this.sequenceHistory.push({
+            sequence: this.state.currentSequence.slice(),
+            outcome: 'win',
+            profit: this.state.sequenceProfit
+        });
 
         // Reset for new sequence (starting at position 0)
         this.resetSequence();
@@ -504,10 +670,20 @@ export class Enhanced1326Strategy {
      * @private
      */
     private resetSequence(): void {
-        this.state.sequencePosition = 0; // Reset to first position
-        this.state.currentSequence = this.getSequenceVariant();
-        this.state.currentStake = this.config.initialStake * this.state.currentSequence[0]; // Start with first sequence value
+        this.state.sequencePosition = 0;
+
+        // Replace getSequenceVariant() with the smarter selector
+        this.state.currentSequence = this.selectOptimalSequence();
+
+        // Start with first sequence value (now dynamically selected)
+        this.state.currentStake = Number(roundToTwoDecimals(
+            this.config.initialStake * this.state.currentSequence[0]
+        ));
+
         this.state.sequenceProfit = 0;
+
+        // Log the new sequence for debugging
+        this.logEvent(`Sequence reset to: ${this.state.currentSequence.join('-')}`);
     }
 
     // ==================== Recovery Management Methods ====================
@@ -518,8 +694,9 @@ export class Enhanced1326Strategy {
      */
     private enterRecoveryMode(): void {
         this.state.inRecovery = true;
+        this.state.currentSequence = this.selectOptimalSequence(); // Set recovery sequence
         this.state.currentStake = this.calculateRecoveryStake();
-        this.logEvent("Entering recovery mode");
+        this.logEvent(`Entering recovery mode with sequence: ${this.state.currentSequence.join('-')}`);
     }
 
     /**
@@ -542,8 +719,16 @@ export class Enhanced1326Strategy {
         if (this.state.totalProfit >= 0) {
             this.exitRecoveryMode();
         } else {
-            // Continue recovery but with reduced stake
-            this.state.currentStake = this.calculateRecoveryStake();
+
+            // Suggested (safer):
+            if (this.state.totalProfit >= (this.config.lossThreshold * -0.75)) {
+                // Exit when losses are recovered to 75% of threshold
+                this.exitRecoveryMode();
+            } else {
+                // Continue recovery but with reduced stake
+                this.state.currentStake = this.calculateRecoveryStake();
+            }
+
         }
     }
 
@@ -571,6 +756,18 @@ export class Enhanced1326Strategy {
         this.logEvent("Hard reset triggered after failed recovery");
     }
 
+    /**
+     * Performs hard reset of strategy
+     * @private
+     */
+    private partialReset(): void {
+        this.state.consecutiveLosses = 0;
+        this.state.recoveryAttempts = 0;
+        this.state.inRecovery = false;
+        this.resetSequence();
+        this.logEvent("Partial reset after failed recovery");
+    }
+
     // ==================== Calculation Methods ====================
 
     /**
@@ -579,6 +776,13 @@ export class Enhanced1326Strategy {
      * @returns {number} Stake amount
      */
     private calculateNextStake(): number {
+
+        // Add validation
+        if (this.state.totalProfit <= -this.getEffectiveLossThreshold()) {
+            this.pauseStrategy();
+            return 0;
+        }
+
         // If in negative territory, use recovery calculation
         if (this.state.totalProfit < 0) {
             return this.calculateRecoveryStake();
@@ -603,54 +807,6 @@ export class Enhanced1326Strategy {
      * @returns {number} Recovery stake amount
      */
     private calculateRecoveryStake(increase: boolean = false): number {
-        const lossAmount: number = Math.abs(this.state.totalProfit);
-        const baseMultiplier: number = RECOVERY_MULTIPLIERS[this.config.recoveryMode];
-        const multiplier: number = increase ? baseMultiplier * 1.5 : baseMultiplier;
-        
-        const calculatedStake: number = lossAmount * multiplier;
-        
-        // Ensure stake doesn't exceed loss threshold
-        return Math.min(
-            calculatedStake,
-            this.config.lossThreshold * 0.5 // Don't risk more than half loss threshold
-        );
-    }
-
-    /**
-     * Gets next stake amount in sequence
-     * @private
-     * @returns {number} Stake amount
-     */
-    private getNextSequenceStake(): number {
-        return this.config.initialStake * 
-               this.state.currentSequence[this.state.sequencePosition];
-    }
-
-    /**
-     * Ensures profit is valid and within bounds
-     * @private
-     * @param {number} rawProfit - Unverified profit amount
-     * @returns {number} Validated profit
-     */
-    private calculateSafeProfit(rawProfit: number): number {
-        // Ensure profit is a finite number
-        if (!Number.isFinite(rawProfit)) {
-            this.logEvent("Invalid profit calculation detected", "error");
-            return this.state.totalProfit; // Revert to previous value
-        }
-        
-        // Ensure profit doesn't exceed thresholds
-        if (rawProfit > this.config.profitThreshold * 1.5) {
-            return this.config.profitThreshold;
-        }
-        
-        return rawProfit;
-    }
-
-    // ==================== Condition Evaluation Methods ====================
-
-    // Add this new method to calculate dynamic recovery stake
-    private calculateDynamicRecoveryStake(): number {
         const lossAmount = Math.abs(this.state.totalProfit);
         const baseMultiplier = RECOVERY_MULTIPLIERS[this.config.recoveryMode];
 
@@ -659,6 +815,10 @@ export class Enhanced1326Strategy {
             (1 + (this.state.consecutiveLosses * 0.1)); // 10% increase per consecutive loss
 
         let calculatedStake = lossAmount * dynamicMultiplier;
+
+        if (increase) {
+            //calculatedStake = calculatedStake * 1.5;
+        }
 
         // Cap at 25% of loss threshold and ensure minimum stake
         return Math.max(
@@ -670,7 +830,204 @@ export class Enhanced1326Strategy {
         );
     }
 
+    private validateStake(amount: number): number {
+        return Math.min(
+            Math.max(amount, this.config.initialStake),
+            this.config.lossThreshold * 0.3
+        );
+    }
+
+    private isSafeToIncreaseStake(): boolean {
+        return this.state.consecutiveWins >= 2 &&
+            this.state.totalProfit > 0;
+    }
+
+    private checkSessionDuration(): boolean {
+        const sessionDuration = Date.now() - this.state.lastTradeTimestamp;
+        return sessionDuration < 1000 * 60 * 60 * 4; // 4 hour max session
+    }
+
+    /**
+     * Gets next stake amount in sequence
+     * @private
+     * @returns {number} Stake amount
+     */
+    private getNextSequenceStake(): number {
+        const multiplier = this.state.currentSequence[this.state.sequencePosition];
+        if (isNaN(multiplier) || multiplier <= 0) {
+            this.logEvent("Invalid sequence multiplier detected", "error");
+            return this.config.initialStake;
+        }
+        return this.config.initialStake * multiplier;
+    }
+
+    public getVolatilityAdjustedStake(baseStake: number): number {
+        const recentResults = this.sequenceHistory.slice(-5);
+
+        // Handle empty array case
+        if (recentResults.length === 0) {
+            return baseStake;
+        }
+
+        const lossRate = recentResults.filter((x: any) => x.profit < 0).length / recentResults.length;
+        return baseStake * (1 - Math.min(0.5, lossRate * 0.7));
+    }
+
+    public getVolatilityAdjustedStakeX(baseStake: number): number {
+        const conditions = this.analyzeMarketConditions();
+        const reductionFactor = 1 - (Math.min(0.5, conditions.volatility * 0.7));
+        return baseStake * reductionFactor;
+    }
+
+    public checkTradingHours(): boolean {
+        const now = new Date().getHours();
+        return now >= 8 && now <= 20; // Only trade 8AM-8PM
+    }
+
+    private checkVolatility(): boolean {
+        const recentResults = this.sequenceHistory.slice(-10);
+
+        // Handle empty array case - no history means acceptable volatility
+        if (recentResults.length === 0) {
+            return true;
+        }
+
+        const lossRate = recentResults.filter((x: any) => x.profit < 0).length / recentResults.length;
+        return lossRate < 0.6; // 60% max acceptable loss rate
+    }
+
+    private analyzeMarketConditions(): {
+        wins: number,
+        losses: number,
+        totalProfit: number,
+        volatility: number;
+        trend: number;
+        winRate: number
+    } {
+        const recent = this.sequenceHistory.slice(-20);
+        if (recent.length === 0) {
+            return {
+                wins: 0,
+                losses: 0,
+                totalProfit: 0,
+                volatility: 0,
+                trend: this.config.minTrendStrength,
+                winRate: this.config.minWinRate
+            };
+        }
+
+        const wins = recent.filter((t: any) => t.outcome === 'win').length;
+        const losses = recent.filter((t: any) => t.outcome !== 'win').length;
+        const totalProfit = recent.reduce((sum: number, t: any) => sum + Math.abs(t.profit), 0);
+        const avgProfit = totalProfit / recent.length;
+
+        return {
+            wins,
+            losses,
+            totalProfit,
+            volatility: 1 - ((this.config.initialStake * 0.92) / avgProfit), // Assuming 92% payout
+            trend: wins / recent.length,
+            winRate: wins / recent.length
+        };
+    }
+
+    private checkTradingConditions(): boolean {
+        return this.checkMarketConditions() &&
+            this.checkTradingHours() &&
+            this.checkVolatility() &&
+            this.checkSessionDuration();
+    }
+
+    /**
+     * Ensures profit is valid and within bounds
+     * @private
+     * @param {number} rawProfit - Unverified profit amount
+     * @returns {number} Validated profit
+     */
+    private calculateSafeProfit(totalProfit: number, rawProfit: number): number {
+        if (totalProfit !== this.state.totalProfit) {
+            this.logEvent("Profit changed externally", 'error');
+            return this.state.totalProfit;
+        }
+        if (!Number.isFinite(rawProfit)) {
+            this.logEvent("Invalid profit calculation detected", 'error');
+            return this.state.totalProfit;
+        }
+        // Ensure profit doesn't exceed thresholds
+        if (rawProfit > this.config.profitThreshold * 1.5) {
+            return this.config.profitThreshold;
+        }
+
+        return totalProfit + rawProfit;
+    }
+
+    // ==================== Condition Evaluation Methods ====================
+
+    private checkMarketConditions(): boolean {
+        const conditions = this.analyzeMarketConditions();
+        return conditions.volatility <= this.config.maxVolatility &&
+            conditions.trend >= this.config.minTrendStrength &&
+            conditions.winRate >= this.config.minWinRate;
+    }
+
+    public getPerformanceMetrics() {
+        return {
+            sequenceHistory: this.sequenceHistory,
+            dailyPerformance: this.dailyProfitLoss,
+            streakAnalysis: {
+                currentWinStreak: this.state.consecutiveWins,
+                currentLossStreak: this.state.consecutiveLosses
+            }
+        };
+    }
+
+    public getEnhancedMetrics() {
+        return {
+            ...this.getPerformanceMetrics(),
+            winRate: this.stats.totalWins / (this.stats.totalWins + this.stats.totalLosses),
+            recoverySuccessRate: this.sequenceHistory
+                .filter((s: any) => s.inRecovery)
+                .reduce((acc: any, curr: any) => acc + (curr.profit > 0 ? 1 : 0), 0)
+        };
+    }
+
+    public analyzePerformance(): {
+        winRate: number;
+        avgProfit: number;
+        recoverySuccessRate: number;
+        sequenceCompletionRate: number;
+    } {
+        const totalTrades = this.stats.totalWins + this.stats.totalLosses;
+        const winRate = totalTrades > 0 ? this.stats.totalWins / totalTrades : 0;
+
+        const totalProfit = this.recoveryHistory.reduce((sum: number, t: any) => sum + t.profit, 0);
+        const avgProfit = this.recoveryHistory.length > 0 ? totalProfit / this.recoveryHistory.length : 0;
+
+        const recoveryTrades = this.recoveryHistory.filter(t => t.recoveryAttempt > 0);
+        const recoverySuccessRate = recoveryTrades.length > 0 ?
+            recoveryTrades.filter(t => t.outcome === 'win').length / recoveryTrades.length : 0;
+
+        const sequenceCompletionRate = this.sequenceHistory.length > 0 ?
+            this.stats.sequencesCompleted / this.sequenceHistory.length : 0;
+
+        return {
+            winRate,
+            avgProfit,
+            recoverySuccessRate,
+            sequenceCompletionRate
+        };
+    }
+
+
+    public analyzeSequencePerformance(): { winRate: number, avgProfit: number } {
+        const results = this.sequenceHistory.filter((s: any) => s.outcome);
+        const winRate = results.filter((s: any) => s.profit > 0).length / results.length;
+        const avgProfit = results.reduce((sum: number, s: any) => sum + s.profit, 0) / results.length;
+        return { winRate, avgProfit };
+    }
+
     // Add this new method to evaluate sequence safety
+    // In the shouldContinueSequence() method, line ~614:
     private shouldContinueSequence(): boolean {
         // Don't continue if we've hit daily trade limit
         if (this.state.tradesToday >= this.config.maxDailyTrades) return false;
@@ -682,11 +1039,19 @@ export class Enhanced1326Strategy {
         }
 
         // Don't continue if we've had multiple sequence failures today
+        // FIXED: Check seq.profit instead of array indexing
         const failedSequencesToday = this.sequenceHistory.filter(
-            seq => seq[seq.length - 1] < 0
+            (seq: any) => seq.profit < 0  // Changed from seq[seq.length - 1] < 0
         ).length;
 
         return failedSequencesToday < 3; // Max 3 failed sequences per day
+    }
+
+    private monitorSession(): void {
+        if (this.state.tradesToday > 30 && this.dailyProfitLoss < -this.config.lossThreshold * 0.5) {
+            this.logEvent("Stopping after significant losses", 'warn');
+            this.pauseStrategy();
+        }
     }
 
     /**
@@ -720,7 +1085,7 @@ export class Enhanced1326Strategy {
         }
 
         // Check consecutive losses
-        if ( this.state.consecutiveLosses >= this.config.maxRecoveryAttempts ) {
+        if (this.state.consecutiveLosses >= this.config.maxRecoveryAttempts) {
             return {
                 shouldTrade: false,
                 reason: `Max consecutive losses (${this.state.consecutiveLosses})`
@@ -765,7 +1130,7 @@ export class Enhanced1326Strategy {
     private checkDayChange(): void {
         const now: Date = new Date();
         const last: Date = new Date(this.state.lastTradeTimestamp);
-        
+
         if (
             now.getDate() !== last.getDate() ||
             now.getMonth() !== last.getMonth() ||
@@ -812,6 +1177,16 @@ export class Enhanced1326Strategy {
                 );
             }
         }
+
+        if (this.state.inRecovery) {
+            if (outcome && profit > 0) {
+                this.stats.bestRecoveryProfit = Math.max(this.stats.bestRecoveryProfit, profit);
+                this.stats.successfulRecoveries++;
+            } else if (!outcome) {
+                this.stats.worstRecoveryLoss = Math.min(this.stats.worstRecoveryLoss, profit);
+            }
+            this.stats.totalRecoveryAttempts++;
+        }
     }
 
     /**
@@ -831,6 +1206,11 @@ export class Enhanced1326Strategy {
         };
 
         console.log(JSON.stringify(entry, null, 2));
+    }
+
+    public logRecoveryAttempt(): void {
+        this.logEvent(`Recovery attempt ${this.state.recoveryAttempts}/${this.config.maxRecoveryAttempts}`,
+            this.state.recoveryAttempts >= 1 ? 'warn' : 'info');  // Changed > 1 to >= 1
     }
 
     // ==================== Public Interface Methods ====================

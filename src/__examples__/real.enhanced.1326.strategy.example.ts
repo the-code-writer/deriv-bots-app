@@ -1,6 +1,6 @@
-import { DerivTradingBot } from "./deriv-trading-bot";
+import { DerivTradingBot } from "../classes/trader/deriv-trading-bot";
 import { pino } from "pino";
-import { BotConfig } from './types'; 
+import { BotConfig } from '../classes/trader/types'; 
 
 const logger = pino({ name: "DerivTradingBot" });
 // Usage example
@@ -13,11 +13,11 @@ const tradingSession = {
     "accountType": "VRTC1605087 ( USD )",
     "tradingType": "Derivatives 📊",
     "market": "Volatility 75(1s) 📈",
-    "contractType": "Strategy 1️⃣3️⃣2️⃣6️⃣", //"Digits ⬇️6️⃣", "Rise ⬆️", //Digit NOT Random 🎲
-    "stake": 5,
-    "takeProfit": "USD1200",
-    "stopLoss": 5000,
-    "tradeDuration": "3600min ⏱️",
+    "contractType": "Rise ⬆️", //"Digits ⬇️6️⃣",//, "Strategy 1️⃣3️⃣2️⃣6️⃣", , //Digit NOT Random 🎲
+    "stake": 1,
+    "takeProfit": "USD500",
+    "stopLoss": 500,
+    "tradeDuration": "40min ⏱️",
     "updateFrequency": "10sec ⏱️",
     "contractDurationUnits": "Ticks ⏱️",
     "contractDurationValue": "1Tick ⏱️",
@@ -34,7 +34,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // @ts-ignore
-tradingBot.startTrading(tradingSession, false, 'a1-28VUaap8ZFN3G4lMgf5P3S3IPtUQl', sessionID, sessionNumber) //DEMO
-//tradingBot.startTrading(tradingSession, false, 'a1-j54R1Jof4ucqqnB2E8OeyIWoO3dIn') //USD
+tradingBot.startTrading(tradingSession, false, 'a1-lcUQX53IXwGccuqPv19wemArcWyeb', sessionID, sessionNumber) //DEMO
+//tradingBot.startTrading(tradingSession, false, 'a1-wSuCNWZXyFuKsI7JClwwKgDEVTCYq') //USD
     .then(() => logger.info('Trading completed successfully'))
     .catch(error => logger.error('Trading failed', error));
